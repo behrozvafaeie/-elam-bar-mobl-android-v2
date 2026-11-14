@@ -3,6 +3,7 @@ package ir.elambar.mobl
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -15,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -105,14 +107,11 @@ private fun ElaanBarApp() {
                     color = MaterialTheme.colorScheme.primaryContainer,
                     modifier = Modifier.size(88.dp)
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Filled.LocalShipping,
-                            contentDescription = "نشان اعلام بار مبل",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(54.dp)
-                        )
-                    }
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_app_logo),
+                        contentDescription = "نشان اعلام بار مبل",
+                        modifier = Modifier.fillMaxSize().padding(8.dp)
+                    )
                 }
                 Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
                 Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
