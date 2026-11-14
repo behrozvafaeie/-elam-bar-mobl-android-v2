@@ -8,6 +8,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,12 +37,12 @@ jobs:
         run: |
           mkdir -p /home/runner/.android
           if [ ! -s /home/runner/.android/debug.keystore ]; then
-            keytool -genkeypair -v \
-              -keystore /home/runner/.android/debug.keystore \
-              -storepass android \
-              -alias androiddebugkey \
-              -keypass android \
-              -dname "CN=Android Debug,O=Android,C=US" \
+            keytool -genkeypair -v \\
+              -keystore /home/runner/.android/debug.keystore \\
+              -storepass android \\
+              -alias androiddebugkey \\
+              -keypass android \\
+              -dname "CN=Android Debug,O=Android,C=US" \\
               -keyalg RSA -keysize 2048 -validity 10000
           fi
           test -s /home/runner/.android/debug.keystore
@@ -63,23 +64,32 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='7' versionName='1.0.6'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           sha256sum "$APK"
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: elam-bar-mobl-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
       - name: Install and launch APK on Android emulator
+        timeout-minutes: 15
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
           target: google_apis
           arch: x86_64
           profile: pixel_2
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
+          emulator-boot-timeout: 600
           disable-animations: true
           script: |
+            adb wait-for-device
+            for i in $(seq 1 60); do
+              if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\\r')" = "1" ]; then break; fi
+              sleep 5
+            done
+            test "$(adb shell getprop sys.boot_completed | tr -d '\\r')" = "1"
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb shell am force-stop ir.elambar.mobl
             adb shell monkey -p ir.elambar.mobl 1
             sleep 8
             adb shell pidof ir.elambar.mobl
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: elam-bar-mobl-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
