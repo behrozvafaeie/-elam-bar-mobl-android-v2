@@ -32,6 +32,10 @@ import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.DrawerValue
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,6 +80,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
     }
 }
 
@@ -173,6 +178,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         }
     }
     var soundEnabled by remember { mutableStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getBoolean("sound", true)) }
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var textScale by remember { mutableFloatStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getFloat("text_scale", 1f).coerceIn(0.9f, 1.35f)) }
     val currentDensity = androidx.compose.ui.platform.LocalDensity.current
     val scaledDensity = androidx.compose.ui.unit.Density(density = currentDensity.density, fontScale = textScale)
@@ -222,6 +228,46 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     }
 
 
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet {
+                Column(
+                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("منوی برنامه", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                    Text(if (adminLoggedIn) "مدیر ارشد" else if (userLoggedIn) role.label else "مهمان")
+                    HorizontalDivider()
+                    Text("تنظیمات برنامه", style = MaterialTheme.typography.titleMedium)
+                    TextButton(onClick = onNextPalette, modifier = Modifier.fillMaxWidth()) {
+                        Text("تغییر پوسته: " + listOf("روشن", "سبز", "آبی", "تیره", "خودکار")[palette])
+                    }
+                    TextButton(onClick = {
+                        soundEnabled = !soundEnabled
+                        context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putBoolean("sound", soundEnabled).apply()
+                    }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (soundEnabled) "صدای اعلان: روشن" else "صدای اعلان: خاموش")
+                    }
+                    Text("اندازه نوشته‌ها", style = MaterialTheme.typography.titleSmall)
+                    listOf("کوچک" to 0.9f, "متوسط" to 1f, "بزرگ" to 1.15f, "خیلی بزرگ" to 1.3f).forEach { (label, scale) ->
+                        FilterChip(
+                            selected = kotlin.math.abs(textScale - scale) < 0.02f,
+                            onClick = {
+                                textScale = scale
+                                context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putFloat("text_scale", scale).apply()
+                            },
+                            label = { Text(label) }
+                        )
+                    }
+                    HorizontalDivider()
+                    Text("زبان: فارسی")
+                    Text("تقویم: شمسی (در حال تکمیل در بخش‌های تاریخ‌دار)")
+                    TextButton(onClick = { scope.launch { drawerState.close() } }, modifier = Modifier.fillMaxWidth()) { Text("بستن منو") }
+                }
+            }
+        }
+    ) {
     CompositionLocalProvider(
         androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl,
         androidx.compose.ui.platform.LocalDensity provides scaledDensity
@@ -246,25 +292,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 }
                 Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
                 Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onNextPalette) { Text(listOf("تم روشن", "تم سبز", "تم آبی", "تم تیره", "تم خودکار")[palette]) }
-                    TextButton(onClick = {
-                        soundEnabled = !soundEnabled
-                        context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putBoolean("sound", soundEnabled).apply()
-                    }) { Text(if (soundEnabled) "صدای اعلان روشن" else "صدای اعلان خاموش") }
-                }
-                Text("اندازه نوشته‌ها")
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("کوچک" to 0.9f, "متوسط" to 1f, "بزرگ" to 1.15f, "خیلی بزرگ" to 1.3f).forEach { (label, scale) ->
-                        FilterChip(
-                            selected = kotlin.math.abs(textScale - scale) < 0.02f,
-                            onClick = {
-                                textScale = scale
-                                context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putFloat("text_scale", scale).apply()
-                            },
-                            label = { Text(label) }
-                        )
-                    }
+                OutlinedButton(onClick = { scope.launch { drawerState.open() } }, modifier = Modifier.fillMaxWidth()) {
+                    Text("☰  منوی کناری و تنظیمات")
                 }
                 if (adminLoggedIn) {
                     var selectedPanel by remember { mutableStateOf<String?>(null) }
