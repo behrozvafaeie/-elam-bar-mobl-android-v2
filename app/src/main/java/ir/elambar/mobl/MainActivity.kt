@@ -1007,28 +1007,60 @@ private fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>): Stri
 
 private fun fetchMatchedLoads(accessToken: String): String {
     if (accessToken.isBlank()) return "نشست ورود معتبر نیست؛ دوباره وارد شوید."
-    var connection: HttpURLConnection? = null
+    var profileConnection: HttpURLConnection? = null
+    var loadsConnection: HttpURLConnection? = null
     return try {
-        val url = "$SUPABASE_URL/rest/v1/loads?select=origin,destination,cargo_type,vehicle_type,freight_amount,description,loading_type,created_at&status=eq.published&order=created_at.desc&limit=100"
-        connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = 15000
-            readTimeout = 20000
+        val subject = try {
+            val part = accessToken.split(".").getOrNull(1) ?: return "نشست ورود نامعتبر است."
+            val decoded = Base64.decode(part, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+            JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
+        } catch (_: Exception) { "" }
+        if (subject.isBlank()) return "شناسه راننده از نشست دریافت نشد."
+        val profileUrl = "$SUPABASE_URL/rest/v1/drivers?select=vehicle_type,primary_destination,destinations&id=eq.$subject&limit=1"
+        profileConnection = (URL(profileUrl).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"; connectTimeout = 15000; readTimeout = 15000
             setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
             setRequestProperty("Authorization", "Bearer $accessToken")
             setRequestProperty("Accept", "application/json")
         }
-        val code = connection.responseCode
-        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val profileCode = profileConnection.responseCode
+        val profileStream = if (profileCode in 200..299) profileConnection.inputStream else profileConnection.errorStream
+        val profileRows = JSONArray(profileStream?.bufferedReader()?.use { it.readText() }.orEmpty())
+        if (profileCode !in 200..299 || profileRows.length() == 0) return "اطلاعات نوع خودرو و مقصد راننده دریافت نشد."
+        val driver = profileRows.getJSONObject(0)
+        val vehicle = driver.optString("vehicle_type").trim()
+        val destinations = mutableSetOf<String>()
+        val destinationArray = driver.optJSONArray("destinations")
+        if (destinationArray != null) {
+            for (i in 0 until destinationArray.length()) {
+                val value = destinationArray.optString(i).trim()
+                if (value.isNotBlank()) destinations.add(value.lowercase())
+            }
+        }
+        val primary = driver.optString("primary_destination").trim()
+        if (primary.isNotBlank()) destinations.add(primary.lowercase())
+        if (vehicle.isBlank() || destinations.isEmpty()) return "ابتدا نوع خودرو و مقصدهای خود را در پروفایل کامل کنید."
+        val loadsUrl = "$SUPABASE_URL/rest/v1/loads?select=origin,destination,cargo_type,vehicle_type,freight_amount,description,loading_type,created_at&status=eq.published&order=created_at.desc&limit=200"
+        loadsConnection = (URL(loadsUrl).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"; connectTimeout = 15000; readTimeout = 20000
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Accept", "application/json")
+        }
+        val code = loadsConnection.responseCode
+        val stream = if (code in 200..299) loadsConnection.inputStream else loadsConnection.errorStream
         val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
         if (code !in 200..299) return "دریافت بارها ناموفق بود (کد $code). مجوز و اتصال سامانه را بررسی کنید."
         val rows = JSONArray(response)
-        if (rows.length() == 0) return "در حال حاضر بار منتشرشده متناسب با خودرو و مقصدهای شما وجود ندارد."
+        val matching = (0 until rows.length()).map { rows.getJSONObject(it) }.filter { item ->
+            item.optString("vehicle_type").trim().equals(vehicle, ignoreCase = true) &&
+                destinations.contains(item.optString("destination").trim().lowercase())
+        }
+        if (matching.isEmpty()) return "در حال حاضر بار منتشرشده متناسب با خودرو و مقصدهای شما وجود ندارد."
         buildString {
-            append("تعداد بارهای قابل مشاهده: ").append(rows.length()).append("\n\n")
-            for (i in 0 until rows.length()) {
-                val item = rows.getJSONObject(i)
-                append(i + 1).append(". ").append(item.optString("origin", "تهران"))
+            append("تعداد بارهای متناسب با خودرو و مقصد شما: ").append(matching.size).append("\n\n")
+            matching.forEachIndexed { index, item ->
+                append(index + 1).append(". ").append(item.optString("origin", "تهران"))
                     .append(" ← ").append(item.optString("destination"))
                     .append("\nنوع بار: ").append(item.optString("cargo_type"))
                     .append(" | خودرو: ").append(item.optString("vehicle_type"))
@@ -1042,7 +1074,8 @@ private fun fetchMatchedLoads(accessToken: String): String {
     } catch (_: Exception) {
         "ارتباط با سامانه برقرار نشد. اینترنت را بررسی کنید."
     } finally {
-        connection?.disconnect()
+        profileConnection?.disconnect()
+        loadsConnection?.disconnect()
     }
 }
 
