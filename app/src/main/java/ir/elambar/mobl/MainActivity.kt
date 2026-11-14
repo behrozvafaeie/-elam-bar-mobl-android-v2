@@ -1,6 +1,8 @@
 package ir.elambar.mobl
 
 import android.os.Bundle
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.content.Context
 import android.util.Base64
 import android.security.keystore.KeyGenParameterSpec
@@ -46,7 +48,16 @@ private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_rcJe7tZqCkHPgnAXZff
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MaterialTheme { ElaanBarApp() } }
+        setContent {
+            var palette by remember { mutableIntStateOf(0) }
+            val schemes = listOf(
+                lightColorScheme(),
+                lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF176B5B), secondary = androidx.compose.ui.graphics.Color(0xFFB06B32), primaryContainer = androidx.compose.ui.graphics.Color(0xFFD8EFE7)),
+                lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF244B91), secondary = androidx.compose.ui.graphics.Color(0xFF9A5E9E), primaryContainer = androidx.compose.ui.graphics.Color(0xFFDCE6FA)),
+                darkColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF8ECDBA), secondary = androidx.compose.ui.graphics.Color(0xFFFFC18B))
+            )
+            MaterialTheme(colorScheme = schemes[palette]) { ElaanBarApp(palette) { palette = (palette + 1) % schemes.size } }
+        }
     }
 }
 
@@ -62,7 +73,7 @@ private data class LoadDraft(val destination: String, val cargoType: String, val
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String)
 
 @Composable
-private fun ElaanBarApp() {
+private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var role by remember { mutableStateOf(UserRole.DRIVER) }
     var register by remember { mutableStateOf(false) }
     var firstName by remember { mutableStateOf("") }
@@ -106,6 +117,7 @@ private fun ElaanBarApp() {
     var adminPanelLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var soundEnabled by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
         val saved = DeviceSessionStore.load(context)
         if (saved != null) {
@@ -141,6 +153,10 @@ private fun ElaanBarApp() {
                 }
                 Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
                 Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = onNextPalette) { Text(listOf("تم روشن", "تم سبز", "تم آبی", "تم تیره")[palette]) }
+                    TextButton(onClick = { soundEnabled = !soundEnabled }) { Text(if (soundEnabled) "صدای اعلان روشن" else "صدای اعلان خاموش") }
+                }
                 if (adminLoggedIn) {
                     var selectedPanel by remember { mutableStateOf<String?>(null) }
                     val panels = listOf(
@@ -440,6 +456,7 @@ private fun ElaanBarApp() {
                                             userStatus = result.status
                                             userAccessToken = result.accessToken
                                             DeviceSessionStore.save(context, result.refreshToken, role.name)
+                                            if (soundEnabled) playAppTone()
                                         }
                                     }
                                 }
@@ -464,6 +481,10 @@ private fun ElaanBarApp() {
 }
 
 
+
+private fun playAppTone() {
+    try { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 65).startTone(ToneGenerator.TONE_PROP_ACK, 160) } catch (_: Exception) { }
+}
 
 private object DeviceSessionStore {
     private const val PREFS = "elambar_secure_session"
