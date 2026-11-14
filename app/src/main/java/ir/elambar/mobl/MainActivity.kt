@@ -1166,40 +1166,35 @@ private fun fetchCompanyDrivers(accessToken: String, vehicle: String, destinatio
     if (accessToken.isBlank()) return "نشست ورود معتبر نیست."
     var connection: HttpURLConnection? = null
     return try {
-        val encodedVehicle = URLEncoder.encode(vehicle, "UTF-8")
-        val url = SUPABASE_URL + "/rest/v1/drivers?select=first_name,last_name,vehicle_type,primary_destination,destinations&status=eq.approved&vehicle_type=eq." + encodedVehicle + "&limit=100"
-        connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"; connectTimeout = 15000; readTimeout = 20000
+        connection = (URL(SUPABASE_URL + "/rest/v1/rpc/search_approved_drivers").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"; connectTimeout = 15000; readTimeout = 20000; doOutput = true
             setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
             setRequestProperty("Authorization", "Bearer " + accessToken)
+            setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Accept", "application/json")
         }
+        val body = JSONObject().put("p_vehicle_type", vehicle).put("p_destination", destination.trim())
+        connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
         val code = connection.responseCode
         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
         val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-        if (code !in 200..299) return "جست‌وجوی رانندگان ناموفق بود (کد " + code + "). سطح دسترسی شرکت را بررسی کنید."
+        if (code !in 200..299) return "جست‌وجوی رانندگان ناموفق بود (کد $code). فقط شرکت تأییدشده می‌تواند جست‌وجو کند."
         val rows = JSONArray(raw)
-        val target = destination.trim().lowercase()
-        val matched = (0 until rows.length()).map { rows.getJSONObject(it) }.filter { item ->
-            val primary = item.optString("primary_destination").trim().lowercase()
-            val arr = item.optJSONArray("destinations")
-            var found = primary == target
-            if (arr != null) for (i in 0 until arr.length()) if (arr.optString(i).trim().equals(target, ignoreCase = true)) found = true
-            found
-        }
-        if (matched.isEmpty()) return "راننده تأییدشده‌ای با این خودرو و مقصد پیدا نشد."
+        if (rows.length() == 0) return "راننده تأییدشده‌ای با این خودرو و مقصد پیدا نشد."
         buildString {
-            append("رانندگان تأییدشده متناسب: ").append(matched.size).append("\n\n")
-            matched.forEachIndexed { i, item ->
+            append("رانندگان تأییدشده متناسب: ").append(rows.length()).append("\n\n")
+            for (i in 0 until rows.length()) {
+                val item = rows.getJSONObject(i)
                 append(i + 1).append(". ").append(item.optString("first_name")).append(" ").append(item.optString("last_name"))
                 append("\nخودرو: ").append(item.optString("vehicle_type"))
                 append(" | مقصد اصلی: ").append(item.optString("primary_destination")).append("\n\n")
             }
-            append("اطلاعات تماس مستقیم نمایش داده نمی‌شود؛ ارتباط باید از مسیر مجاز داخل برنامه انجام شود.")
+            append("اطلاعات تماس و مدارک خصوصی نمایش داده نمی‌شود.")
         }
     } catch (_: Exception) { "ارتباط با سامانه برقرار نشد." }
     finally { connection?.disconnect() }
 }
+
 
 private fun fetchCompanyLoads(accessToken: String): String {
     if (accessToken.isBlank()) return "نشست ورود معتبر نیست."
