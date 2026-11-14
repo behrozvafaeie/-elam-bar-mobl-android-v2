@@ -43,6 +43,7 @@ private enum class UserRole(val label: String) {
 }
 
 private data class AdminLoginResult(val success: Boolean, val message: String)
+private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "")
 
 @Composable
 private fun ElaanBarApp() {
@@ -51,6 +52,10 @@ private fun ElaanBarApp() {
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
     var mobile by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var userLoggedIn by remember { mutableStateOf(false) }
+    var userDisplayName by remember { mutableStateOf("") }
+    var userStatus by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var companyName by remember { mutableStateOf("") }
@@ -130,6 +135,16 @@ private fun ElaanBarApp() {
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("خروج از حساب") }
+                } else if (userLoggedIn) {
+                    HorizontalDivider()
+                    Text(if (role == UserRole.DRIVER) "پنل راننده" else "پنل شرکت باربری", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
+                    Text("خوش آمدید، $userDisplayName", textAlign = TextAlign.Center)
+                    when (userStatus) {
+                        "pending" -> Text("درخواست شما ثبت شده و در انتظار تأیید مدیر ارشد است. تا زمان تأیید، دسترسی عملیاتی فعال نیست.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
+                        "approved" -> Text("حساب شما تأیید شده است. اتصال بخش‌های عملیاتی این پنل در مرحله بعد تکمیل می‌شود.", textAlign = TextAlign.Center)
+                        else -> Text("وضعیت حساب: $userStatus", textAlign = TextAlign.Center)
+                    }
+                    OutlinedButton(onClick = { userLoggedIn = false; username = ""; password = ""; message = "از حساب خارج شدید." }, modifier = Modifier.fillMaxWidth()) { Text("خروج از حساب") }
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         FilterChip(selected = role == UserRole.DRIVER, onClick = { role = UserRole.DRIVER; register = false; message = "ورود راننده" }, label = { Text("راننده") })
@@ -169,10 +184,9 @@ private fun ElaanBarApp() {
                         )
                     } else {
                         OutlinedTextField(
-                            value = mobile,
-                            onValueChange = { mobile = it.filter { c -> c.isDigit() }.take(11) },
-                            label = { Text("شماره موبایل (مثلاً 0912...)") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                            value = username,
+                            onValueChange = { username = it.trim().lowercase().take(32) },
+                            label = { Text("نام کاربری") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -208,13 +222,26 @@ private fun ElaanBarApp() {
                                         }
                                     }
                                 }
+                            } else if (register) {
+                                message = "ثبت‌نام جدید هنوز به فرم کامل اطلاعات راننده و شرکت متصل نشده است. فعلاً فقط حساب‌های ثبت‌شده امکان ورود دارند."
                             } else {
-                                message = when {
-                                    mobile.length != 11 || !mobile.startsWith("09") -> "شماره موبایل معتبر وارد کنید."
-                                    password.length < 8 -> "رمز عبور باید حداقل ۸ کاراکتر باشد."
-                                    register && (firstName.isBlank() || lastName.isBlank()) -> "نام و نام خانوادگی را کامل کنید."
-                                    register && role == UserRole.COMPANY && companyName.isBlank() -> "نام شرکت را وارد کنید."
-                                    else -> "ورود و ثبت‌نام راننده و شرکت هنوز به احراز هویت متصل نشده است."
+                                when {
+                                    !Regex("^[a-z0-9_.-]{3,32}$").matches(username) -> message = "نام کاربری باید ۳ تا ۳۲ نویسه و فقط شامل حروف انگلیسی، عدد، نقطه، خط تیره یا زیرخط باشد."
+                                    password.isBlank() -> message = "رمز عبور را وارد کنید."
+                                    else -> {
+                                        loading = true
+                                        message = "در حال بررسی نام کاربری و رمز عبور..."
+                                        scope.launch {
+                                            val result = withContext(Dispatchers.IO) { authenticateUser(username, password, role) }
+                                            loading = false
+                                            message = result.message
+                                            if (result.success) {
+                                                userLoggedIn = true
+                                                userDisplayName = result.displayName
+                                                userStatus = result.status
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         },
@@ -226,7 +253,7 @@ private fun ElaanBarApp() {
                     if (role != UserRole.ADMIN) {
                         HorizontalDivider()
                         Text("ورود واقعی مدیر ارشد از بخش «ورود مدیر ارشد» انجام می‌شود.", fontSize = 12.sp, textAlign = TextAlign.Center)
-                        Text("نسخه آزمایشی؛ ورود راننده و شرکت هنوز فعال نشده است.", fontSize = 12.sp, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.error)
+                        Text("ورود راننده و شرکت با نام کاربری و رمز عبور انجام می‌شود؛ تأیید پیامکی در مرحله بعد اضافه خواهد شد.", fontSize = 12.sp, textAlign = TextAlign.Center)
                     }
                 }
             }
@@ -292,6 +319,78 @@ private fun authenticateAdmin(email: String, password: String): AdminLoginResult
         AdminLoginResult(true, "ورود مدیر ارشد با موفقیت انجام شد.")
     } catch (_: Exception) {
         AdminLoginResult(false, "ارتباط با سرور برقرار نشد. اینترنت را بررسی و دوباره تلاش کنید.")
+    } finally {
+        authConnection?.disconnect()
+        profileConnection?.disconnect()
+    }
+}
+
+private fun authenticateUser(username: String, password: String, role: UserRole): UserLoginResult {
+    var authConnection: HttpURLConnection? = null
+    var profileConnection: HttpURLConnection? = null
+    return try {
+        authConnection = (URL("$SUPABASE_URL/functions/v1/username-auth-v2").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 20000
+            doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        val body = JSONObject().put("action", "login").put("username", username.trim().lowercase()).put("password", password).toString()
+        authConnection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+        val authCode = authConnection.responseCode
+        val authStream = if (authCode in 200..299) authConnection.inputStream else authConnection.errorStream
+        val authText = authStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (authCode !in 200..299) {
+            return UserLoginResult(false, "نام کاربری یا رمز عبور صحیح نیست.")
+        }
+        val authJson = JSONObject(authText)
+        val user = authJson.optJSONObject("user") ?: return UserLoginResult(false, "اطلاعات حساب از سرور دریافت نشد.")
+        val session = authJson.optJSONObject("session") ?: return UserLoginResult(false, "نشست ورود از سرور دریافت نشد.")
+        val userId = user.optString("id")
+        val accessToken = session.optString("access_token")
+        val accountType = user.optJSONObject("app_metadata")?.optString("account_type").orEmpty()
+        val expectedType = if (role == UserRole.DRIVER) "driver" else "company"
+        if (accountType != expectedType) return UserLoginResult(false, "این نام کاربری برای نوع حساب انتخاب‌شده ثبت نشده است.")
+        if (userId.isBlank() || accessToken.isBlank()) return UserLoginResult(false, "اطلاعات نشست ورود ناقص است.")
+
+        val table = if (role == UserRole.DRIVER) "drivers" else "companies"
+        val select = if (role == UserRole.DRIVER) "status,first_name,last_name,full_name" else "status,first_name,last_name,company_name,manager_name"
+        val profileUrl = "$SUPABASE_URL/rest/v1/$table?select=$select&id=eq.$userId&limit=1"
+        profileConnection = (URL(profileUrl).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15000
+            readTimeout = 15000
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Accept", "application/json")
+        }
+        val profileCode = profileConnection.responseCode
+        val profileStream = if (profileCode in 200..299) profileConnection.inputStream else profileConnection.errorStream
+        val profileText = profileStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (profileCode !in 200..299) return UserLoginResult(false, "ورود انجام شد، اما دریافت وضعیت حساب ممکن نشد. لطفاً با پشتیبانی تماس بگیرید.")
+        val rows = JSONArray(profileText)
+        if (rows.length() == 0) return UserLoginResult(false, "حساب ورود پیدا شد، اما پرونده راننده یا شرکت در سامانه ثبت نشده است.")
+        val profile = rows.getJSONObject(0)
+        val status = profile.optString("status")
+        val first = profile.optString("first_name")
+        val last = profile.optString("last_name")
+        val displayName = when {
+            role == UserRole.COMPANY && profile.optString("company_name").isNotBlank() -> profile.optString("company_name")
+            (first + last).isNotBlank() -> (first + " " + last).trim()
+            role == UserRole.DRIVER -> profile.optString("full_name", "راننده")
+            else -> profile.optString("manager_name", "شرکت باربری")
+        }
+        when (status) {
+            "blocked" -> UserLoginResult(false, "دسترسی این حساب مسدود شده است.")
+            "rejected" -> UserLoginResult(false, "درخواست حساب شما رد شده است. برای پیگیری با مدیریت تماس بگیرید.")
+            "pending", "approved" -> UserLoginResult(true, if (status == "pending") "ورود انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ورود با موفقیت انجام شد.", displayName, status)
+            else -> UserLoginResult(false, "وضعیت حساب در سامانه معتبر نیست.")
+        }
+    } catch (_: Exception) {
+        UserLoginResult(false, "ارتباط با سامانه برقرار نشد. اینترنت را بررسی و دوباره تلاش کنید.")
     } finally {
         authConnection?.disconnect()
         profileConnection?.disconnect()
