@@ -155,6 +155,7 @@ private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Floa
     var adminRecords by remember { mutableStateOf<List<AdminRecord>>(emptyList()) }
     var adminActionMessage by remember { mutableStateOf("") }
     var adminPanelLoading by remember { mutableStateOf(false) }
+    var selectedPanel by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
@@ -246,6 +247,32 @@ private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Floa
                         settingsOpen = true
                         scope.launch { drawerState.close() }
                     })
+                    if (adminLoggedIn) {
+                        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                        Text("فهرست کاربران تأییدشده", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                        NavigationDrawerItem(label = { Text("شرکت‌های تأییدشده") }, selected = selectedPanel == "شرکت‌های تأییدشده", onClick = {
+                            selectedPanel = "شرکت‌های تأییدشده"
+                            adminPanelData = ""
+                            adminRecords = emptyList()
+                            adminPanelLoading = true
+                            scope.launch {
+                                adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, "شرکت‌های تأییدشده") }
+                                adminPanelLoading = false
+                                drawerState.close()
+                            }
+                        })
+                        NavigationDrawerItem(label = { Text("رانندگان تأییدشده") }, selected = selectedPanel == "رانندگان تأییدشده", onClick = {
+                            selectedPanel = "رانندگان تأییدشده"
+                            adminPanelData = ""
+                            adminRecords = emptyList()
+                            adminPanelLoading = true
+                            scope.launch {
+                                adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, "رانندگان تأییدشده") }
+                                adminPanelLoading = false
+                                drawerState.close()
+                            }
+                        })
+                    }
                     NavigationDrawerItem(label = { Text("بستن منو") }, selected = false, onClick = { scope.launch { drawerState.close() } })
                 }
             }
@@ -304,7 +331,6 @@ private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Floa
                 }
                 androidx.activity.compose.BackHandler(enabled = settingsOpen) { settingsOpen = false }
                 if (adminLoggedIn) {
-                    var selectedPanel by remember { mutableStateOf<String?>(null) }
                     androidx.activity.compose.BackHandler(enabled = selectedPanel != null) { selectedPanel = null }
                     val panels = listOf(
                         "مدیریت رانندگان" to "بررسی فهرست رانندگان، مدارک و وضعیت تأیید",
@@ -414,7 +440,7 @@ private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Floa
                                     if (adminActionMessage.isNotBlank()) Text(adminActionMessage, color = MaterialTheme.colorScheme.secondary)
                                     HorizontalDivider()
                                 }
-                                if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها" || selectedPanel == "مدیریت مدارک") {
+                                if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها" || selectedPanel == "مدیریت مدارک" || selectedPanel == "شرکت‌های تأییدشده" || selectedPanel == "رانندگان تأییدشده") {
                                     adminRecords.forEach { record ->
                                         Card(Modifier.fillMaxWidth()) {
                                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1481,19 +1507,20 @@ private fun fetchMatchedLoads(accessToken: String): String {
 private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRecord> {
     if (accessToken.isBlank()) return emptyList()
     val table = when (panel) {
-        "مدیریت رانندگان" -> "drivers"
-        "مدیریت شرکت‌ها" -> "companies"
+        "مدیریت رانندگان", "رانندگان تأییدشده" -> "drivers"
+        "مدیریت شرکت‌ها", "شرکت‌های تأییدشده" -> "companies"
         "مدیریت مدارک" -> "driver_documents"
         else -> return emptyList()
     }
     var connection: HttpURLConnection? = null
     return try {
         val select = when (table) {
-            "drivers" -> "id,first_name,last_name,full_name,mobile,vehicle_type,primary_destination,status"
-            "companies" -> "id,first_name,last_name,company_name,manager_name,mobile,status"
+            "drivers" -> "id,first_name,last_name,full_name,mobile,vehicle_type,primary_destination,status,created_at"
+            "companies" -> "id,first_name,last_name,company_name,manager_name,mobile,status,created_at"
             else -> "id,driver_id,document_type,storage_path,review_status"
         }
-        val url = "$SUPABASE_URL/rest/v1/$table?select=$select&order=created_at.desc&limit=100"
+        val approvedFilter = if (panel == "رانندگان تأییدشده" || panel == "شرکت‌های تأییدشده") "&status=eq.approved" else ""
+        val url = "$SUPABASE_URL/rest/v1/$table?select=$select&order=created_at.desc&limit=100$approvedFilter"
         connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 15000
@@ -1516,8 +1543,10 @@ private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRec
                 "companies" -> item.optString("manager_name") + " | " + item.optString("mobile")
                 else -> "راننده: " + item.optString("driver_id") + " | " + item.optString("storage_path")
             }
+            val registeredAt = item.optString("created_at")
+            val datedDetail = if (registeredAt.isNotBlank() && registeredAt != "null") detail + " | ثبت: " + formatTehranPersianDate(registeredAt) else detail
             val mediaUrl = if (table == "driver_documents") createSignedDriverDocumentUrl(accessToken, item.optString("storage_path")) else ""
-            AdminRecord(item.optString("id"), title, detail, if (table == "driver_documents") item.optString("review_status") else item.optString("status"), mediaUrl)
+            AdminRecord(item.optString("id"), title, datedDetail, if (table == "driver_documents") item.optString("review_status") else item.optString("status"), mediaUrl)
         }
     } catch (_: Exception) {
         emptyList()
