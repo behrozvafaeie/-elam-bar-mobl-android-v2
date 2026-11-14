@@ -71,7 +71,6 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
       - name: Install and launch APK on Android emulator
-        continue-on-error: true
         timeout-minutes: 15
         uses: reactivecircus/android-emulator-runner@v2
         with:
