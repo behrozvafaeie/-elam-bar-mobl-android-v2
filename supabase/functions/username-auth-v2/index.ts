@@ -47,7 +47,8 @@ Deno.serve(async(req:Request)=>{
    const destinations=Array.isArray(b.destinations)?b.destinations.map((x:unknown)=>String(x).trim()).filter(Boolean):[];
    const digits=(v:string)=>v.replace(/[^۰-۹٠-٩0-9]/g,"").replace(/[۰-۹]/g,(c)=>String("۰۱۲۳۴۵۶۷۸۹".indexOf(c))).replace(/[٠-٩]/g,(c)=>String("٠١٢٣٤٥٦٧٨٩".indexOf(c)));
    const mobileDigits=digits(mobile);
-   const normalizedMobile=mobileDigits.startsWith("0098")?"0"+mobileDigits.slice(4):mobileDigits.startsWith("98")?"0"+mobileDigits.slice(2):mobileDigits.startsWith("9")&&mobileDigits.length===10?"0"+mobileDigits:mobileDigits;\n   const normalizedNationalId=digits(nationalId);
+   const normalizedMobile=mobileDigits.startsWith("0098")?"0"+mobileDigits.slice(4):mobileDigits.startsWith("98")?"0"+mobileDigits.slice(2):mobileDigits.startsWith("9")&&mobileDigits.length===10?"0"+mobileDigits:mobileDigits;
+   const normalizedNationalId=digits(nationalId);
    if(!["company","driver"].includes(accountType))return out({error:"نوع حساب را مشخص کنید: شرکت باربری یا راننده."},400,origin);
    if(!firstName||firstName.length>80||!lastName||lastName.length>100)return out({error:"نام و نام خانوادگی را کامل و معتبر وارد کنید."},400,origin);
    if(!/^09[0-9]{9}$/.test(normalizedMobile))return out({error:"شماره موبایل باید با 09 و ۱۱ رقم وارد شود."},400,origin);
