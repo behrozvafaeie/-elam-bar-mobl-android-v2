@@ -37,12 +37,12 @@ jobs:
         run: |
           mkdir -p /home/runner/.android
           if [ ! -s /home/runner/.android/debug.keystore ]; then
-            keytool -genkeypair -v \\
-              -keystore /home/runner/.android/debug.keystore \\
-              -storepass android \\
-              -alias androiddebugkey \\
-              -keypass android \\
-              -dname "CN=Android Debug,O=Android,C=US" \\
+            keytool -genkeypair -v \
+              -keystore /home/runner/.android/debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US" \
               -keyalg RSA -keysize 2048 -validity 10000
           fi
           test -s /home/runner/.android/debug.keystore
@@ -84,10 +84,10 @@ jobs:
           script: |
             adb wait-for-device
             for i in $(seq 1 60); do
-              if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\\r')" = "1" ]; then break; fi
+              if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then break; fi
               sleep 5
             done
-            test "$(adb shell getprop sys.boot_completed | tr -d '\\r')" = "1"
+            test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1"
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb shell am force-stop ir.elambar.mobl
             adb shell monkey -p ir.elambar.mobl 1
