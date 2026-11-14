@@ -173,6 +173,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         }
     }
     var soundEnabled by remember { mutableStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getBoolean("sound", true)) }
+    var textScale by remember { mutableFloatStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getFloat("text_scale", 1f).coerceIn(0.9f, 1.35f)) }
+    val scaledDensity = androidx.compose.ui.platform.LocalDensity.current.copy(fontScale = textScale)
     LaunchedEffect(Unit) {
         val saved = DeviceSessionStore.load(context)
         if (saved != null) {
@@ -219,7 +221,10 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     }
 
 
-    CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl) {
+    CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl,
+        androidx.compose.ui.platform.LocalDensity provides scaledDensity
+    ) {
         Scaffold { padding ->
             Column(
                 modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp),
@@ -246,6 +251,19 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         soundEnabled = !soundEnabled
                         context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putBoolean("sound", soundEnabled).apply()
                     }) { Text(if (soundEnabled) "صدای اعلان روشن" else "صدای اعلان خاموش") }
+                }
+                Text("اندازه نوشته‌ها")
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("کوچک" to 0.9f, "متوسط" to 1f, "بزرگ" to 1.15f, "خیلی بزرگ" to 1.3f).forEach { (label, scale) ->
+                        FilterChip(
+                            selected = kotlin.math.abs(textScale - scale) < 0.02f,
+                            onClick = {
+                                textScale = scale
+                                context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putFloat("text_scale", scale).apply()
+                            },
+                            label = { Text(label) }
+                        )
+                    }
                 }
                 if (adminLoggedIn) {
                     var selectedPanel by remember { mutableStateOf<String?>(null) }
