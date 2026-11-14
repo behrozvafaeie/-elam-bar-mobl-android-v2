@@ -29,10 +29,32 @@ jobs:
       - name: Restore stable debug signing key
         uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
-          key: android-debug-keystore-v1-${{ runner.os }}
+          path: /home/runner/.android/debug.keystore
+          key: android-debug-keystore-v2-Linux
+      - name: Create stable debug signing key when cache is empty
+        shell: bash
+        run: |
+          mkdir -p /home/runner/.android
+          if [ ! -s /home/runner/.android/debug.keystore ]; then
+            keytool -genkeypair -v \
+              -keystore /home/runner/.android/debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -keyalg RSA -keysize 2048 -validity 10000
+          fi
+          test -s /home/runner/.android/debug.keystore
+      - name: Verify package identity and version
+        shell: bash
+        run: |
+          grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
+          grep -F 'versionCode = 5' app/build.gradle.kts
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
+      - name: Verify APK was produced
+        shell: bash
+        run: test -s app/build/outputs/apk/debug/app-debug.apk
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
