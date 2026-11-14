@@ -9,6 +9,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -58,6 +60,7 @@ private fun ElaanBarApp() {
     var userStatus by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
     var companyName by remember { mutableStateOf("") }
     var activityCity by remember { mutableStateOf("تهران") }
     var officeAddress by remember { mutableStateOf("") }
@@ -246,8 +249,16 @@ private fun ElaanBarApp() {
                         value = password,
                         onValueChange = { password = it },
                         label = { Text("رمز عبور") },
-                        visualTransformation = PasswordVisualTransformation(),
+                        visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        trailingIcon = {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(
+                                    imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                    contentDescription = if (passwordVisible) "مخفی کردن رمز عبور" else "نمایش رمز عبور"
+                                )
+                            }
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
