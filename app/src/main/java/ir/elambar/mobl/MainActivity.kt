@@ -68,7 +68,7 @@ class MainActivity : ComponentActivity() {
                 lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF244B91), secondary = androidx.compose.ui.graphics.Color(0xFF9A5E9E), primaryContainer = androidx.compose.ui.graphics.Color(0xFFDCE6FA)),
                 darkColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF8ECDBA), secondary = androidx.compose.ui.graphics.Color(0xFFFFC18B))
             )
-            CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides baseDensity.copy(fontScale = baseDensity.fontScale * textScale)) {
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(baseDensity.density, baseDensity.fontScale * textScale)) {
                 MaterialTheme(colorScheme = schemes[palette]) {
                     ElaanBarApp(palette, textScale, { value ->
                         textScale = value.coerceIn(0.85f, 1.35f)
@@ -1206,13 +1206,6 @@ private fun authenticateUser(username: String, password: String, role: UserRole)
             else -> UserLoginResult(false, "وضعیت حساب در سامانه معتبر نیست.")
         }
     } catch (_: Exception) {
-        UserLoginResult(false, "ارتباط با سامانه برقرار نشد. اینترنت را بررسی و دوباره تلاش کنید.")
-    } finally {
-        authConnection?.disconnect()
-        profileConnection?.disconnect()
-    }
-}
- {
         UserLoginResult(false, "ارتباط با سامانه برقرار نشد. اینترنت را بررسی و دوباره تلاش کنید.")
     } finally {
         authConnection?.disconnect()
