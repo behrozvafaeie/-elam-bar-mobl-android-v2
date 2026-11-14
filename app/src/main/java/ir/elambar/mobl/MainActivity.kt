@@ -46,7 +46,8 @@ private enum class UserRole(val label: String) {
 
 private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "")
 private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "")
-private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String)\nprivate data class AdminRecord(val id: String, val title: String, val detail: String, val status: String)
+private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String)
+private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String)
 
 @Composable
 private fun ElaanBarApp() {
