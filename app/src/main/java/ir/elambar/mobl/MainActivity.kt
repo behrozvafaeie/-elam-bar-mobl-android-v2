@@ -47,6 +47,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 
 private const val SUPABASE_URL = "https://sckcxtceybwtiecyxqsy.supabase.co"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_rcJe7tZqCkHPgnAXZffzUg_f9ixVbwg"
@@ -97,6 +98,10 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var matchedLoadsLoading by remember { mutableStateOf(false) }
     var companyLoadsText by remember { mutableStateOf("برای مشاهده بارهای ثبت‌شده، بروزرسانی را بزنید.") }
     var companyLoadsLoading by remember { mutableStateOf(false) }
+    var driverSearchDestination by remember { mutableStateOf("") }
+    var driverSearchVehicle by remember { mutableStateOf("وانت مبلی") }
+    var driverSearchResults by remember { mutableStateOf("برای پیدا کردن راننده، مقصد را وارد کنید.") }
+    var driverSearchLoading by remember { mutableStateOf(false) }
     var loadDestination by remember { mutableStateOf("") }
     var loadCargoType by remember { mutableStateOf("اثاثیه منزل") }
     var loadVehicleType by remember { mutableStateOf("وانت مبلی") }
@@ -390,6 +395,22 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     Text(if (companyLoadsLoading) "در حال دریافت..." else "مشاهده و بروزرسانی بارهای من")
                                 }
                                 Text(companyLoadsText, textAlign = TextAlign.Start)
+                                HorizontalDivider()
+                                Text("جست‌وجوی راننده مناسب", style = MaterialTheme.typography.titleMedium)
+                                OutlinedTextField(driverSearchDestination, { driverSearchDestination = it }, label = { Text("مقصد موردنظر") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون بزرگ","خاور مبلی پتو دار","کامیون دربستی کار","سایر خودروهای مبلی").forEach { v ->
+                                    FilterChip(selected = driverSearchVehicle == v, onClick = { driverSearchVehicle = v }, label = { Text(v) })
+                                }
+                                OutlinedButton(enabled = !driverSearchLoading && driverSearchDestination.trim().length >= 2, onClick = {
+                                    driverSearchLoading = true
+                                    scope.launch {
+                                        driverSearchResults = withContext(Dispatchers.IO) { fetchCompanyDrivers(userAccessToken, driverSearchVehicle, driverSearchDestination.trim()) }
+                                        driverSearchLoading = false
+                                    }
+                                }, modifier = Modifier.fillMaxWidth()) {
+                                    Text(if (driverSearchLoading) "در حال جست‌وجو..." else "جست‌وجوی رانندگان تأییدشده")
+                                }
+                                Text(driverSearchResults, textAlign = TextAlign.Start)
                             } else {
                                 Text("بارهای متناسب با نوع خودرو و مقصدهای ثبت‌شده شما", style = MaterialTheme.typography.titleMedium)
                                 OutlinedButton(enabled = !matchedLoadsLoading, onClick = {
@@ -1019,6 +1040,46 @@ private fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>): Stri
     }
 }
 
+
+
+private fun fetchCompanyDrivers(accessToken: String, vehicle: String, destination: String): String {
+    if (accessToken.isBlank()) return "نشست ورود معتبر نیست."
+    var connection: HttpURLConnection? = null
+    return try {
+        val encodedVehicle = URLEncoder.encode(vehicle, "UTF-8")
+        val url = SUPABASE_URL + "/rest/v1/drivers?select=first_name,last_name,vehicle_type,primary_destination,destinations&status=eq.approved&vehicle_type=eq." + encodedVehicle + "&limit=100"
+        connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"; connectTimeout = 15000; readTimeout = 20000
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer " + accessToken)
+            setRequestProperty("Accept", "application/json")
+        }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code !in 200..299) return "جست‌وجوی رانندگان ناموفق بود (کد " + code + "). سطح دسترسی شرکت را بررسی کنید."
+        val rows = JSONArray(raw)
+        val target = destination.trim().lowercase()
+        val matched = (0 until rows.length()).map { rows.getJSONObject(it) }.filter { item ->
+            val primary = item.optString("primary_destination").trim().lowercase()
+            val arr = item.optJSONArray("destinations")
+            var found = primary == target
+            if (arr != null) for (i in 0 until arr.length()) if (arr.optString(i).trim().equals(target, ignoreCase = true)) found = true
+            found
+        }
+        if (matched.isEmpty()) return "راننده تأییدشده‌ای با این خودرو و مقصد پیدا نشد."
+        buildString {
+            append("رانندگان تأییدشده متناسب: ").append(matched.size).append("\n\n")
+            matched.forEachIndexed { i, item ->
+                append(i + 1).append(". ").append(item.optString("first_name")).append(" ").append(item.optString("last_name"))
+                append("\nخودرو: ").append(item.optString("vehicle_type"))
+                append(" | مقصد اصلی: ").append(item.optString("primary_destination")).append("\n\n")
+            }
+            append("اطلاعات تماس مستقیم نمایش داده نمی‌شود؛ ارتباط باید از مسیر مجاز داخل برنامه انجام شود.")
+        }
+    } catch (_: Exception) { "ارتباط با سامانه برقرار نشد." }
+    finally { connection?.disconnect() }
+}
 
 private fun fetchCompanyLoads(accessToken: String): String {
     if (accessToken.isBlank()) return "نشست ورود معتبر نیست."
