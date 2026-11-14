@@ -367,6 +367,7 @@ private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Floa
                                                 loadPublishing = false
                                                 adminActionMessage = result
                                                 if (result.startsWith("ثبت شد")) {
+                                                    if (soundEnabled) playAppTone()
                                                     loadDrafts.clear()
                                                     adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, "مدیریت بارها") }
                                                 }
@@ -556,7 +557,7 @@ private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Floa
                                             val result = withContext(Dispatchers.IO) { publishLoadBatch(userAccessToken, loadDrafts.toList()) }
                                             loadPublishing = false
                                             loadActionMessage = result
-                                            if (result.startsWith("ثبت شد")) loadDrafts.clear()
+                                            if (result.startsWith("ثبت شد")) { if (soundEnabled) playAppTone(); loadDrafts.clear() }
                                         }
                                     }, modifier = Modifier.fillMaxWidth()) { Text(if (loadPublishing) "در حال ثبت..." else "انتشار همه بارهای فهرست") }
                                 }
