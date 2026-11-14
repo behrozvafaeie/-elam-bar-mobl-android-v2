@@ -45,7 +45,8 @@ private enum class UserRole(val label: String) {
 }
 
 private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "")
-private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "")
+private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "")
+private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String)
 
 @Composable
 private fun ElaanBarApp() {
@@ -58,6 +59,18 @@ private fun ElaanBarApp() {
     var userLoggedIn by remember { mutableStateOf(false) }
     var userDisplayName by remember { mutableStateOf("") }
     var userStatus by remember { mutableStateOf("") }
+    var userAccessToken by remember { mutableStateOf("") }
+    var matchedLoadsText by remember { mutableStateOf("برای دریافت بارهای متناسب، دکمه بروزرسانی را بزنید.") }
+    var matchedLoadsLoading by remember { mutableStateOf(false) }
+    var loadDestination by remember { mutableStateOf("") }
+    var loadCargoType by remember { mutableStateOf("اثاثیه منزل") }
+    var loadVehicleType by remember { mutableStateOf("وانت مبلی") }
+    var loadLoadingType by remember { mutableStateOf("روباری") }
+    var loadFreightAmount by remember { mutableStateOf("0") }
+    var loadDescription by remember { mutableStateOf("") }
+    var loadActionMessage by remember { mutableStateOf("") }
+    var loadPublishing by remember { mutableStateOf(false) }
+    val loadDrafts = remember { androidx.compose.runtime.mutableStateListOf<LoadDraft>() }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -181,10 +194,71 @@ private fun ElaanBarApp() {
                     Text("خوش آمدید، $userDisplayName", textAlign = TextAlign.Center)
                     when (userStatus) {
                         "pending" -> Text("درخواست شما ثبت شده و در انتظار تأیید مدیر ارشد است. تا زمان تأیید، دسترسی عملیاتی فعال نیست.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
-                        "approved" -> Text("حساب شما تأیید شده است. اتصال بخش‌های عملیاتی این پنل در مرحله بعد تکمیل می‌شود.", textAlign = TextAlign.Center)
+                        "approved" -> {
+                            Text("حساب شما تأیید شده است.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
+                            if (role == UserRole.COMPANY) {
+                                Text("ثبت گروهی بار از مبدأ تهران", style = MaterialTheme.typography.titleMedium)
+                                OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                OutlinedTextField(loadCargoType, { loadCargoType = it }, label = { Text("نوع بار") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                Text("نوع خودرو")
+                                listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون بزرگ","خاور مبلی پتو دار","کامیون دربستی کار","سایر خودروهای مبلی").forEach { v ->
+                                    FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
+                                }
+                                Text("نوع بارگیری")
+                                listOf("دربست","روباری","نیم بار").forEach { v ->
+                                    FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
+                                }
+                                OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("کرایه (ریال؛ در صورت نامشخص بودن صفر)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
+                                OutlinedButton(onClick = {
+                                    if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || loadFreightAmount.isBlank()) {
+                                        loadActionMessage = "مقصد، نوع بار و کرایه را کامل کنید."
+                                    } else {
+                                        loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadFreightAmount.ifBlank { "0" }, loadDescription.trim()))
+                                        loadDestination = ""
+                                        loadDescription = ""
+                                        loadActionMessage = "بار به فهرست گروهی اضافه شد."
+                                    }
+                                }, modifier = Modifier.fillMaxWidth()) { Text("افزودن بار به فهرست") }
+                                if (loadDrafts.isNotEmpty()) {
+                                    Text("بارهای آماده انتشار: ${loadDrafts.size}", style = MaterialTheme.typography.titleSmall)
+                                    loadDrafts.forEachIndexed { index, draft ->
+                                        Card(Modifier.fillMaxWidth()) {
+                                            Column(Modifier.padding(12.dp)) {
+                                                Text("${index + 1}. تهران ← ${draft.destination}")
+                                                Text("${draft.cargoType} | ${draft.vehicleType} | ${draft.loadingType}")
+                                                Text("کرایه: ${draft.freightAmount}")
+                                                TextButton(onClick = { loadDrafts.removeAt(index) }) { Text("حذف از فهرست") }
+                                            }
+                                        }
+                                    }
+                                    Button(enabled = !loadPublishing, onClick = {
+                                        loadPublishing = true
+                                        loadActionMessage = "در حال ثبت بارها..."
+                                        scope.launch {
+                                            val result = withContext(Dispatchers.IO) { publishLoadBatch(userAccessToken, loadDrafts.toList()) }
+                                            loadPublishing = false
+                                            loadActionMessage = result
+                                            if (result.startsWith("ثبت شد")) loadDrafts.clear()
+                                        }
+                                    }, modifier = Modifier.fillMaxWidth()) { Text(if (loadPublishing) "در حال ثبت..." else "انتشار همه بارهای فهرست") }
+                                }
+                                if (loadActionMessage.isNotBlank()) Text(loadActionMessage, color = MaterialTheme.colorScheme.secondary)
+                            } else {
+                                Text("بارهای متناسب با نوع خودرو و مقصدهای ثبت‌شده شما", style = MaterialTheme.typography.titleMedium)
+                                OutlinedButton(enabled = !matchedLoadsLoading, onClick = {
+                                    matchedLoadsLoading = true
+                                    scope.launch {
+                                        matchedLoadsText = withContext(Dispatchers.IO) { fetchMatchedLoads(userAccessToken) }
+                                        matchedLoadsLoading = false
+                                    }
+                                }, modifier = Modifier.fillMaxWidth()) { Text(if (matchedLoadsLoading) "در حال بروزرسانی..." else "بروزرسانی بارهای قابل دریافت") }
+                                Text(matchedLoadsText, textAlign = TextAlign.Start)
+                            }
+                        }
                         else -> Text("وضعیت حساب: $userStatus", textAlign = TextAlign.Center)
                     }
-                    OutlinedButton(onClick = { userLoggedIn = false; username = ""; password = ""; message = "از حساب خارج شدید." }, modifier = Modifier.fillMaxWidth()) { Text("خروج از حساب") }
+                    OutlinedButton(onClick = { userLoggedIn = false; userAccessToken = ""; username = ""; password = ""; loadDrafts.clear(); message = "از حساب خارج شدید." }, modifier = Modifier.fillMaxWidth()) { Text("خروج از حساب") }
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         FilterChip(selected = role == UserRole.DRIVER, onClick = { role = UserRole.DRIVER; register = false; message = "ورود راننده" }, label = { Text("راننده") })
@@ -310,6 +384,7 @@ private fun ElaanBarApp() {
                                                     userLoggedIn = true
                                                     userDisplayName = loginResult.displayName
                                                     userStatus = loginResult.status
+                                                    userAccessToken = loginResult.accessToken
                                                 } else {
                                                     register = false
                                                 }
@@ -335,6 +410,7 @@ private fun ElaanBarApp() {
                                                 userLoggedIn = true
                                                 userDisplayName = result.displayName
                                                 userStatus = result.status
+                                                userAccessToken = result.accessToken
                                             }
                                         }
                                     }
@@ -594,7 +670,7 @@ private fun authenticateUser(username: String, password: String, role: UserRole)
         when (status) {
             "blocked" -> UserLoginResult(false, "دسترسی این حساب مسدود شده است.")
             "rejected" -> UserLoginResult(false, "درخواست حساب شما رد شده است. برای پیگیری با مدیریت تماس بگیرید.")
-            "pending", "approved" -> UserLoginResult(true, if (status == "pending") "ورود انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ورود با موفقیت انجام شد.", displayName, status)
+            "pending", "approved" -> UserLoginResult(true, if (status == "pending") "ورود انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ورود با موفقیت انجام شد.", displayName, status, accessToken)
             else -> UserLoginResult(false, "وضعیت حساب در سامانه معتبر نیست.")
         }
     } catch (_: Exception) {
@@ -602,5 +678,94 @@ private fun authenticateUser(username: String, password: String, role: UserRole)
     } finally {
         authConnection?.disconnect()
         profileConnection?.disconnect()
+    }
+}
+
+
+private fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>): String {
+    if (accessToken.isBlank()) return "نشست ورود معتبر نیست؛ خارج شوید و دوباره وارد شوید."
+    if (drafts.isEmpty()) return "ابتدا حداقل یک بار به فهرست اضافه کنید."
+    var connection: HttpURLConnection? = null
+    return try {
+        val items = JSONArray()
+        drafts.forEach { d ->
+            items.put(JSONObject()
+                .put("destination", d.destination)
+                .put("cargo_type", d.cargoType)
+                .put("vehicle_type", d.vehicleType)
+                .put("loading_type", d.loadingType)
+                .put("freight_amount", d.freightAmount)
+                .put("description", d.description))
+        }
+        val body = JSONObject()
+            .put("p_items", items)
+            .put("p_publisher_type", "company")
+            .put("p_company_id", JSONObject.NULL)
+        connection = (URL("$SUPABASE_URL/rest/v1/rpc/publish_tehran_load_batch_v2").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 30000
+            doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code in 200..299) {
+            val count = try { JSONArray(response).length() } catch (_: Exception) { drafts.size }
+            "ثبت شد: $count بار از مبدأ تهران منتشر شد."
+        } else {
+            val detail = try { JSONObject(response).optString("message", JSONObject(response).optString("hint", "")) } catch (_: Exception) { "" }
+            "ثبت بار انجام نشد (کد $code). " + detail.ifBlank { "وضعیت تأیید شرکت و مجوز ثبت بار را بررسی کنید." }
+        }
+    } catch (_: Exception) {
+        "ارتباط با سامانه برقرار نشد. اینترنت را بررسی کنید."
+    } finally {
+        connection?.disconnect()
+    }
+}
+
+private fun fetchMatchedLoads(accessToken: String): String {
+    if (accessToken.isBlank()) return "نشست ورود معتبر نیست؛ دوباره وارد شوید."
+    var connection: HttpURLConnection? = null
+    return try {
+        val url = "$SUPABASE_URL/rest/v1/loads?select=origin,destination,cargo_type,vehicle_type,freight_amount,description,loading_type,created_at&status=eq.published&order=created_at.desc&limit=100"
+        connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15000
+            readTimeout = 20000
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Accept", "application/json")
+        }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code !in 200..299) return "دریافت بارها ناموفق بود (کد $code). مجوز و اتصال سامانه را بررسی کنید."
+        val rows = JSONArray(response)
+        if (rows.length() == 0) return "در حال حاضر بار منتشرشده متناسب با خودرو و مقصدهای شما وجود ندارد."
+        buildString {
+            append("تعداد بارهای قابل مشاهده: ").append(rows.length()).append("\n\n")
+            for (i in 0 until rows.length()) {
+                val item = rows.getJSONObject(i)
+                append(i + 1).append(". ").append(item.optString("origin", "تهران"))
+                    .append(" ← ").append(item.optString("destination"))
+                    .append("\nنوع بار: ").append(item.optString("cargo_type"))
+                    .append(" | خودرو: ").append(item.optString("vehicle_type"))
+                    .append("\nبارگیری: ").append(item.optString("loading_type"))
+                    .append(" | کرایه: ").append(item.optString("freight_amount"))
+                val description = item.optString("description")
+                if (description.isNotBlank() && description != "null") append("\nتوضیحات: ").append(description)
+                append("\n\n")
+            }
+        }
+    } catch (_: Exception) {
+        "ارتباط با سامانه برقرار نشد. اینترنت را بررسی کنید."
+    } finally {
+        connection?.disconnect()
     }
 }
