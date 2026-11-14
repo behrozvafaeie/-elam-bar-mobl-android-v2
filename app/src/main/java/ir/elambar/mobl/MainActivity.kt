@@ -99,6 +99,10 @@ private data class AdminLoginResult(val success: Boolean, val message: String, v
 private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "")
 private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String)
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
+private data class CompanyDriver(val id: String, val name: String, val vehicle: String, val destination: String, val destinations: String)
+private data class CompanyDriverDocument(val type: String, val status: String, val createdAt: String, val previewUrl: String, val isPdf: Boolean)
+private data class CompanyDriverSearchResult(val message: String, val drivers: List<CompanyDriver> = emptyList())
+private data class CompanyDriverDocumentsResult(val message: String, val documents: List<CompanyDriverDocument> = emptyList())
 
 @Composable
 private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Float) -> Unit, onNextPalette: () -> Unit) {
@@ -126,6 +130,11 @@ private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Floa
     var driverSearchVehicle by remember { mutableStateOf("وانت مبلی") }
     var driverSearchResults by remember { mutableStateOf("برای پیدا کردن راننده، مقصد را وارد کنید.") }
     var driverSearchLoading by remember { mutableStateOf(false) }
+    var companyDriverItems by remember { mutableStateOf<List<CompanyDriver>>(emptyList()) }
+    var selectedCompanyDriverId by remember { mutableStateOf("") }
+    var selectedCompanyDriverDocs by remember { mutableStateOf<List<CompanyDriverDocument>>(emptyList()) }
+    var companyDriverDocsLoading by remember { mutableStateOf(false) }
+    var companyDriverDocsMessage by remember { mutableStateOf("") }
     var loadDestination by remember { mutableStateOf("") }
     var loadCargoType by remember { mutableStateOf("اثاثیه منزل") }
     var loadVehicleType by remember { mutableStateOf("وانت مبلی") }
@@ -646,13 +655,58 @@ private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Floa
                                 OutlinedButton(enabled = !driverSearchLoading && driverSearchDestination.trim().length >= 2, onClick = {
                                     driverSearchLoading = true
                                     scope.launch {
-                                        driverSearchResults = withContext(Dispatchers.IO) { fetchCompanyDrivers(userAccessToken, driverSearchVehicle, driverSearchDestination.trim()) }
+                                        val search = withContext(Dispatchers.IO) { fetchCompanyDrivers(userAccessToken, driverSearchVehicle, driverSearchDestination.trim()) }
+                                        driverSearchResults = search.message
+                                        companyDriverItems = search.drivers
+                                        selectedCompanyDriverId = ""
+                                        selectedCompanyDriverDocs = emptyList()
+                                        companyDriverDocsMessage = ""
                                         driverSearchLoading = false
                                     }
                                 }, modifier = Modifier.fillMaxWidth()) {
                                     Text(if (driverSearchLoading) "در حال جست‌وجو..." else "جست‌وجوی رانندگان تأییدشده")
                                 }
                                 Text(driverSearchResults, textAlign = TextAlign.Start)
+                                companyDriverItems.forEach { driver ->
+                                    Card(Modifier.fillMaxWidth()) {
+                                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Text(driver.name, style = MaterialTheme.typography.titleMedium)
+                                            Text("خودرو: ${driver.vehicle}")
+                                            Text("مقصد اصلی: ${driver.destination}")
+                                            if (driver.destinations.isNotBlank()) Text("سایر مقصدها: ${driver.destinations}")
+                                            OutlinedButton(enabled = !companyDriverDocsLoading, onClick = {
+                                                selectedCompanyDriverId = driver.id
+                                                selectedCompanyDriverDocs = emptyList()
+                                                companyDriverDocsMessage = "در حال دریافت مدارک..."
+                                                companyDriverDocsLoading = true
+                                                scope.launch {
+                                                    val docs = withContext(Dispatchers.IO) { fetchCompanyDriverDocuments(userAccessToken, driver.id) }
+                                                    if (selectedCompanyDriverId == driver.id) {
+                                                        selectedCompanyDriverDocs = docs.documents
+                                                        companyDriverDocsMessage = docs.message
+                                                    }
+                                                    companyDriverDocsLoading = false
+                                                }
+                                            }) { Text(if (companyDriverDocsLoading && selectedCompanyDriverId == driver.id) "در حال دریافت..." else "مشاهده مدارک") }
+                                            if (selectedCompanyDriverId == driver.id) {
+                                                Text(companyDriverDocsMessage)
+                                                selectedCompanyDriverDocs.forEach { doc ->
+                                                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                                                        Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                            Text(doc.type, style = MaterialTheme.typography.titleSmall)
+                                                            Text("وضعیت مدرک: ${doc.status}")
+                                                            if (doc.createdAt.isNotBlank()) Text("تاریخ ثبت: ${doc.createdAt}")
+                                                            if (doc.previewUrl.isNotBlank() && !doc.isPdf) {
+                                                                AsyncImage(model = doc.previewUrl, contentDescription = "پیش‌نمایش مدرک راننده", modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp))
+                                                            } else if (doc.isPdf) Text("این مدرک PDF است؛ پیش‌نمایش امن داخل برنامه در این نسخه فعال نیست.")
+                                                            else Text("پیش‌نمایش مدرک در دسترس نیست.")
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             } else {
                                 Text("بارهای متناسب با نوع خودرو و مقصدهای ثبت‌شده شما", style = MaterialTheme.typography.titleMedium)
                                 OutlinedButton(enabled = !matchedLoadsLoading, onClick = {
@@ -1360,11 +1414,11 @@ private fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>, publi
 
 
 
-private fun fetchCompanyDrivers(accessToken: String, vehicle: String, destination: String): String {
-    if (accessToken.isBlank()) return "نشست ورود معتبر نیست."
+private fun fetchCompanyDrivers(accessToken: String, vehicle: String, destination: String): CompanyDriverSearchResult {
+    if (accessToken.isBlank()) return CompanyDriverSearchResult("نشست ورود معتبر نیست.")
     var connection: HttpURLConnection? = null
     return try {
-        connection = (URL(SUPABASE_URL + "/rest/v1/rpc/search_approved_drivers").openConnection() as HttpURLConnection).apply {
+        connection = (URL(SUPABASE_URL + "/rest/v1/rpc/search_approved_drivers_v2").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"; connectTimeout = 15000; readTimeout = 20000; doOutput = true
             setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
             setRequestProperty("Authorization", "Bearer " + accessToken)
@@ -1376,23 +1430,49 @@ private fun fetchCompanyDrivers(accessToken: String, vehicle: String, destinatio
         val code = connection.responseCode
         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
         val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-        if (code !in 200..299) return "جست‌وجوی رانندگان ناموفق بود (کد $code). فقط شرکت تأییدشده می‌تواند جست‌وجو کند."
+        if (code !in 200..299) return CompanyDriverSearchResult("جست‌وجوی رانندگان ناموفق بود (کد $code). فقط شرکت تأییدشده می‌تواند جست‌وجو کند.")
         val rows = JSONArray(raw)
-        if (rows.length() == 0) return "راننده تأییدشده‌ای با این خودرو و مقصد پیدا نشد."
-        buildString {
-            append("رانندگان تأییدشده متناسب: ").append(rows.length()).append("\n\n")
-            for (i in 0 until rows.length()) {
-                val item = rows.getJSONObject(i)
-                append(i + 1).append(". ").append(item.optString("first_name")).append(" ").append(item.optString("last_name"))
-                append("\nخودرو: ").append(item.optString("vehicle_type"))
-                append(" | مقصد اصلی: ").append(item.optString("primary_destination")).append("\n\n")
-            }
-            append("اطلاعات تماس و مدارک خصوصی نمایش داده نمی‌شود.")
-        }
-    } catch (_: Exception) { "ارتباط با سامانه برقرار نشد." }
+        if (rows.length() == 0) return CompanyDriverSearchResult("راننده تأییدشده‌ای با این خودرو و مقصد پیدا نشد.")
+        val drivers = (0 until rows.length()).map { i ->
+            val item = rows.getJSONObject(i)
+            val destinations = item.optJSONArray("destinations")
+            val other = if (destinations == null) "" else (0 until destinations.length()).map { destinations.optString(it) }.filter { it.isNotBlank() }.joinToString("، ")
+            CompanyDriver(item.optString("driver_id"), (item.optString("first_name") + " " + item.optString("last_name")).trim(), item.optString("vehicle_type"), item.optString("primary_destination"), other)
+        }.filter { it.id.isNotBlank() }
+        CompanyDriverSearchResult("رانندگان تأییدشده متناسب: ${drivers.size}", drivers)
+    } catch (_: Exception) { CompanyDriverSearchResult("ارتباط با سامانه برقرار نشد.") }
     finally { connection?.disconnect() }
 }
 
+private fun fetchCompanyDriverDocuments(accessToken: String, driverId: String): CompanyDriverDocumentsResult {
+    if (accessToken.isBlank() || driverId.isBlank()) return CompanyDriverDocumentsResult("نشست یا شناسه راننده معتبر نیست.")
+    var connection: HttpURLConnection? = null
+    return try {
+        val url = SUPABASE_URL + "/rest/v1/driver_documents?select=id,document_type,review_status,storage_path,created_at&driver_id=eq." + URLEncoder.encode(driverId, "UTF-8") + "&order=created_at.desc&limit=30"
+        connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"; connectTimeout = 15000; readTimeout = 20000
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer " + accessToken)
+            setRequestProperty("Accept", "application/json")
+        }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code !in 200..299) return CompanyDriverDocumentsResult("دریافت مدارک مجاز نشد (کد $code).")
+        val rows = JSONArray(raw)
+        if (rows.length() == 0) return CompanyDriverDocumentsResult("مدرکی برای این راننده ثبت نشده است.")
+        val docs = (0 until rows.length()).map { i ->
+            val item = rows.getJSONObject(i)
+            val storagePath = item.optString("storage_path")
+            val isPdf = storagePath.lowercase().endsWith(".pdf")
+            val signedUrl = if (isPdf) "" else createSignedDriverDocumentUrl(accessToken, storagePath)
+            val created = item.optString("created_at")
+            CompanyDriverDocument(item.optString("document_type"), item.optString("review_status"), if (created.isNotBlank() && created != "null") formatTehranPersianDate(created) else "", signedUrl, isPdf)
+        }
+        CompanyDriverDocumentsResult("مدارک ثبت‌شده: ${docs.size}", docs)
+    } catch (_: Exception) { CompanyDriverDocumentsResult("ارتباط با سامانه برقرار نشد.") }
+    finally { connection?.disconnect() }
+}
 
 private fun fetchCompanyLoads(accessToken: String): String {
     if (accessToken.isBlank()) return "نشست ورود معتبر نیست."
