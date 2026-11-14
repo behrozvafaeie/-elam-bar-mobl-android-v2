@@ -90,7 +90,9 @@ private fun ElaanBarApp() {
     var loading by remember { mutableStateOf(false) }
     var adminLoggedIn by remember { mutableStateOf(false) }
     var adminAccessToken by remember { mutableStateOf("") }
-    var adminPanelData by remember { mutableStateOf("") }\n    var adminRecords by remember { mutableStateOf<List<AdminRecord>>(emptyList()) }\n    var adminActionMessage by remember { mutableStateOf("") }
+    var adminPanelData by remember { mutableStateOf("") }
+    var adminRecords by remember { mutableStateOf<List<AdminRecord>>(emptyList()) }
+    var adminActionMessage by remember { mutableStateOf("") }
     var adminPanelLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
