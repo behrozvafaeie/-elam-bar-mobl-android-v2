@@ -50,8 +50,8 @@ jobs:
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 9' app/build.gradle.kts
-          grep -F 'versionName = "1.0.8"' app/build.gradle.kts
+          grep -F 'versionCode = 10' app/build.gradle.kts
+          grep -F 'versionName = "1.0.9"' app/build.gradle.kts
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - name: Verify APK was produced
@@ -61,7 +61,7 @@ jobs:
         shell: bash
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='9' versionName='1.0.8'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='10' versionName='1.0.9'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           sha256sum "$APK"
       - name: Upload APK artifact
