@@ -94,6 +94,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var profilePhotoUrl by remember { mutableStateOf("") }
     var profilePhotoUploading by remember { mutableStateOf(false) }
     var profilePhotoMessage by remember { mutableStateOf("") }
+    var selectedDriverDocType by remember { mutableStateOf("کارت هوشمند") }
+    var driverDocUploading by remember { mutableStateOf(false) }
+    var driverDocMessage by remember { mutableStateOf("") }
     var matchedLoadsText by remember { mutableStateOf("برای دریافت بارهای متناسب، دکمه بروزرسانی را بزنید.") }
     var matchedLoadsLoading by remember { mutableStateOf(false) }
     var companyLoadsText by remember { mutableStateOf("برای مشاهده بارهای ثبت‌شده، بروزرسانی را بزنید.") }
@@ -133,6 +136,16 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var adminPanelLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null && userAccessToken.isNotBlank() && role == UserRole.DRIVER) {
+            driverDocUploading = true
+            driverDocMessage = "در حال بارگذاری مدرک..."
+            scope.launch {
+                driverDocMessage = withContext(Dispatchers.IO) { uploadDriverDocument(context, uri, userAccessToken, selectedDriverDocType) }
+                driverDocUploading = false
+            }
+        }
+    }
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null && userAccessToken.isNotBlank()) {
             profilePhotoUploading = true
@@ -331,6 +344,17 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         Text(if (profilePhotoUploading) "در حال بارگذاری..." else "انتخاب عکس پروفایل")
                     }
                     if (profilePhotoMessage.isNotBlank()) Text(profilePhotoMessage, style = MaterialTheme.typography.bodySmall)
+                    if (role == UserRole.DRIVER) {
+                        HorizontalDivider()
+                        Text("مدارک راننده", style = MaterialTheme.typography.titleMedium)
+                        listOf("کارت هوشمند", "کارت ملی", "گواهینامه", "کارت خودرو").forEach { doc ->
+                            FilterChip(selected = selectedDriverDocType == doc, onClick = { selectedDriverDocType = doc }, label = { Text(doc) })
+                        }
+                        OutlinedButton(enabled = !driverDocUploading, onClick = { documentPicker.launch("*/*") }) {
+                            Text(if (driverDocUploading) "در حال بارگذاری..." else "انتخاب و ارسال مدرک")
+                        }
+                        if (driverDocMessage.isNotBlank()) Text(driverDocMessage, style = MaterialTheme.typography.bodySmall)
+                    }
                     when (userStatus) {
                         "pending" -> Text("درخواست شما ثبت شده و در انتظار تأیید مدیر ارشد است. تا زمان تأیید، دسترسی عملیاتی فعال نیست.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
                         "approved" -> {
@@ -552,6 +576,58 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
 }
 
 
+
+
+private fun uploadDriverDocument(context: Context, uri: Uri, token: String, documentType: String): String {
+    var upload: HttpURLConnection? = null
+    var insert: HttpURLConnection? = null
+    var cleanup: HttpURLConnection? = null
+    return try {
+        val payload = token.split(".").getOrNull(1) ?: return "نشست ورود نامعتبر است."
+        val decoded = Base64.decode(payload, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+        val driverId = JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
+        if (driverId.isBlank()) return "شناسه راننده دریافت نشد."
+        val mime = context.contentResolver.getType(uri) ?: return "نوع فایل قابل تشخیص نیست."
+        val allowed = listOf("application/pdf", "image/jpeg", "image/png", "image/webp")
+        if (mime !in allowed) return "فقط PDF، JPG، PNG و WEBP مجاز است."
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return "خواندن فایل انجام نشد."
+        if (bytes.isEmpty() || bytes.size > 10 * 1024 * 1024) return "حجم مدرک باید کمتر از ۱۰ مگابایت باشد."
+        val ext = when(mime) { "application/pdf" -> "pdf"; "image/png" -> "png"; "image/webp" -> "webp"; else -> "jpg" }
+        val safeType = documentType.replace(Regex("[^آ-یA-Za-z0-9_-]"), "_")
+        val path = driverId + "/" + safeType + "-" + UUID.randomUUID().toString() + "." + ext
+        upload = (URL(SUPABASE_URL + "/storage/v1/object/driver-documents/" + path).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"; connectTimeout = 20000; readTimeout = 30000; doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer " + token)
+            setRequestProperty("Content-Type", mime)
+        }
+        upload.outputStream.use { it.write(bytes) }
+        val upCode = upload.responseCode
+        if (upCode !in 200..299) return "بارگذاری مدرک مجاز نشد (کد " + upCode + ")."
+        insert = (URL(SUPABASE_URL + "/rest/v1/driver_documents").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"; connectTimeout = 15000; readTimeout = 20000; doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer " + token)
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Prefer", "return=minimal")
+        }
+        val row = JSONObject().put("driver_id", driverId).put("document_type", documentType)
+            .put("storage_path", path).put("review_status", "pending")
+        insert.outputStream.use { it.write(row.toString().toByteArray(Charsets.UTF_8)) }
+        val insertCode = insert.responseCode
+        if (insertCode !in 200..299) {
+            cleanup = (URL(SUPABASE_URL + "/storage/v1/object/driver-documents/" + path).openConnection() as HttpURLConnection).apply {
+                requestMethod = "DELETE"; connectTimeout = 10000; readTimeout = 10000
+                setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+                setRequestProperty("Authorization", "Bearer " + token)
+            }
+            runCatching { cleanup.responseCode }
+            return "فایل بارگذاری شد اما ثبت پرونده مدرک انجام نشد (کد " + insertCode + ")."
+        }
+        "مدرک با موفقیت ارسال شد و در انتظار بررسی مدیر ارشد است."
+    } catch (_: Exception) { "ارتباط با فضای مدارک برقرار نشد." }
+    finally { upload?.disconnect(); insert?.disconnect(); cleanup?.disconnect() }
+}
 
 private fun profilePhotoPublicUrl(path: String): String {
     if (path.isBlank() || path == "null") return ""
