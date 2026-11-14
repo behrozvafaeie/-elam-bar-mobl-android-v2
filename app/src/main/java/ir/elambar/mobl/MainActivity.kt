@@ -47,6 +47,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.UUID
 import java.net.URLEncoder
 
 private const val SUPABASE_URL = "https://sckcxtceybwtiecyxqsy.supabase.co"
