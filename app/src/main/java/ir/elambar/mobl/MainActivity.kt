@@ -174,7 +174,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     }
     var soundEnabled by remember { mutableStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getBoolean("sound", true)) }
     var textScale by remember { mutableFloatStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getFloat("text_scale", 1f).coerceIn(0.9f, 1.35f)) }
-    val scaledDensity = androidx.compose.ui.platform.LocalDensity.current.copy(fontScale = textScale)
+    val currentDensity = androidx.compose.ui.platform.LocalDensity.current
+    val scaledDensity = androidx.compose.ui.unit.Density(density = currentDensity.density, fontScale = textScale)
     LaunchedEffect(Unit) {
         val saved = DeviceSessionStore.load(context)
         if (saved != null) {
