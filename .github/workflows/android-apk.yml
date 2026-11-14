@@ -1,14 +1,17 @@
 name: Android APK
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "fix/**", "feature/**" ]
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,8 +53,8 @@ jobs:
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 9' app/build.gradle.kts
-          grep -F 'versionName = "1.0.8"' app/build.gradle.kts
+          grep -F 'versionCode = 10' app/build.gradle.kts
+          grep -F 'versionName = "1.0.9"' app/build.gradle.kts
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - name: Verify APK was produced
@@ -61,7 +64,7 @@ jobs:
         shell: bash
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='9' versionName='1.0.8'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='10' versionName='1.0.9'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           sha256sum "$APK"
       - name: Upload APK artifact
@@ -71,25 +74,14 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
       - name: Install and launch APK on Android emulator
-        timeout-minutes: 15
+        timeout-minutes: 22
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
-          target: google_apis
+          target: google_atd
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
-          emulator-boot-timeout: 600
-          disable-animations: true
-          script: |
-            adb wait-for-device
-            for i in $(seq 1 60); do
-              if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then break; fi
-              sleep 5
-            done
-            test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1"
-            adb install -r app/build/outputs/apk/debug/app-debug.apk
-            adb shell am force-stop ir.elambar.mobl
-            adb shell monkey -p ir.elambar.mobl 1
-            sleep 8
-            adb shell pidof ir.elambar.mobl
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -wipe-data -no-metrics
+          emulator-boot-timeout: 900
+          disable-animations: false
+          script: bash .github/scripts/smoke-test-apk.sh

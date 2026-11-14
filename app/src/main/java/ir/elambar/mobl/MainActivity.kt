@@ -29,9 +29,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,16 +66,23 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             var palette by remember { mutableIntStateOf(getSharedPreferences("elambar_ui", MODE_PRIVATE).getInt("palette", 0).coerceIn(0, 3)) }
+            var textScale by remember { mutableFloatStateOf(getSharedPreferences("elambar_ui", MODE_PRIVATE).getFloat("text_scale", 1.0f).coerceIn(0.85f, 1.35f)) }
+            val baseDensity = androidx.compose.ui.platform.LocalDensity.current
             val schemes = listOf(
                 lightColorScheme(),
                 lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF176B5B), secondary = androidx.compose.ui.graphics.Color(0xFFB06B32), primaryContainer = androidx.compose.ui.graphics.Color(0xFFD8EFE7)),
                 lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF244B91), secondary = androidx.compose.ui.graphics.Color(0xFF9A5E9E), primaryContainer = androidx.compose.ui.graphics.Color(0xFFDCE6FA)),
                 darkColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF8ECDBA), secondary = androidx.compose.ui.graphics.Color(0xFFFFC18B))
             )
-            MaterialTheme(colorScheme = schemes[palette]) {
-                ElaanBarApp(palette) {
-                    palette = (palette + 1) % schemes.size
-                    getSharedPreferences("elambar_ui", MODE_PRIVATE).edit().putInt("palette", palette).apply()
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(baseDensity.density, baseDensity.fontScale * textScale)) {
+                MaterialTheme(colorScheme = schemes[palette]) {
+                    ElaanBarApp(palette, textScale, { value ->
+                        textScale = value.coerceIn(0.85f, 1.35f)
+                        getSharedPreferences("elambar_ui", MODE_PRIVATE).edit().putFloat("text_scale", textScale).apply()
+                    }) {
+                        palette = (palette + 1) % schemes.size
+                        getSharedPreferences("elambar_ui", MODE_PRIVATE).edit().putInt("palette", palette).apply()
+                    }
                 }
             }
         }
@@ -88,7 +101,7 @@ private data class LoadDraft(val destination: String, val cargoType: String, val
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
 
 @Composable
-private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
+private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Float) -> Unit, onNextPalette: () -> Unit) {
     var role by remember { mutableStateOf(UserRole.DRIVER) }
     var register by remember { mutableStateOf(true) }
     var firstName by remember { mutableStateOf("") }
@@ -142,6 +155,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var adminRecords by remember { mutableStateOf<List<AdminRecord>>(emptyList()) }
     var adminActionMessage by remember { mutableStateOf("") }
     var adminPanelLoading by remember { mutableStateOf(false) }
+    var selectedPanel by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
@@ -170,6 +184,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         }
     }
     var soundEnabled by remember { mutableStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getBoolean("sound", true)) }
+    var soundVolume by remember { mutableFloatStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getInt("sound_volume", 65).toFloat().coerceIn(0f, 100f)) }
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    var settingsOpen by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val saved = DeviceSessionStore.load(context)
         if (saved != null) {
@@ -217,6 +234,49 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
 
 
     CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl) {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                ModalDrawerSheet {
+                    Text("منوی اعلام بار مبل", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(20.dp))
+                    NavigationDrawerItem(label = { Text("صفحه اصلی") }, selected = !settingsOpen, onClick = {
+                        settingsOpen = false
+                        scope.launch { drawerState.close() }
+                    })
+                    NavigationDrawerItem(label = { Text("تنظیمات برنامه") }, selected = settingsOpen, onClick = {
+                        settingsOpen = true
+                        scope.launch { drawerState.close() }
+                    })
+                    if (adminLoggedIn) {
+                        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                        Text("فهرست کاربران تأییدشده", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                        NavigationDrawerItem(label = { Text("شرکت‌های تأییدشده") }, selected = selectedPanel == "شرکت‌های تأییدشده", onClick = {
+                            selectedPanel = "شرکت‌های تأییدشده"
+                            adminPanelData = ""
+                            adminRecords = emptyList()
+                            adminPanelLoading = true
+                            scope.launch {
+                                adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, "شرکت‌های تأییدشده") }
+                                adminPanelLoading = false
+                                drawerState.close()
+                            }
+                        })
+                        NavigationDrawerItem(label = { Text("رانندگان تأییدشده") }, selected = selectedPanel == "رانندگان تأییدشده", onClick = {
+                            selectedPanel = "رانندگان تأییدشده"
+                            adminPanelData = ""
+                            adminRecords = emptyList()
+                            adminPanelLoading = true
+                            scope.launch {
+                                adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, "رانندگان تأییدشده") }
+                                adminPanelLoading = false
+                                drawerState.close()
+                            }
+                        })
+                    }
+                    NavigationDrawerItem(label = { Text("بستن منو") }, selected = false, onClick = { scope.launch { drawerState.close() } })
+                }
+            }
+        ) {
         Scaffold { padding ->
             Column(
                 modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp),
@@ -237,15 +297,41 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 }
                 Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
                 Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onNextPalette) { Text(listOf("تم روشن", "تم سبز", "تم آبی", "تم تیره")[palette]) }
-                    TextButton(onClick = {
-                        soundEnabled = !soundEnabled
-                        context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putBoolean("sound", soundEnabled).apply()
-                    }) { Text(if (soundEnabled) "صدای اعلان روشن" else "صدای اعلان خاموش") }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                        Icon(Icons.Filled.Menu, contentDescription = "باز کردن منوی کشویی")
+                    }
+                    TextButton(onClick = { settingsOpen = !settingsOpen }) { Text(if (settingsOpen) "بستن تنظیمات" else "تنظیمات برنامه") }
                 }
+                if (settingsOpen) {
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("تنظیمات برنامه", style = MaterialTheme.typography.titleMedium)
+                            Text("اندازه نوشته‌ها: ${(textScale * 100).toInt()}٪")
+                            Slider(value = textScale, onValueChange = onTextScaleChange, valueRange = 0.85f..1.35f, steps = 4)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(onClick = onNextPalette) { Text("تغییر تم: " + listOf("روشن", "سبز", "آبی", "تیره")[palette]) }
+                                TextButton(onClick = {
+                                    soundEnabled = !soundEnabled
+                                    context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putBoolean("sound", soundEnabled).apply()
+                                }) { Text(if (soundEnabled) "صدای اعلان روشن" else "بی‌صدا کردن اعلان‌ها") }
+                            }
+                            Text("بلندی صدای اعلان: ${soundVolume.toInt()}٪")
+                            Slider(value = soundVolume, onValueChange = {
+                                soundVolume = it
+                                context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putInt("sound_volume", it.toInt()).apply()
+                            }, valueRange = 0f..100f, steps = 9, enabled = soundEnabled)
+                            Text("تنظیمات روی همین گوشی ذخیره می‌شود.", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+                androidx.activity.compose.BackHandler(enabled = settingsOpen) { settingsOpen = false }
                 if (adminLoggedIn) {
-                    var selectedPanel by remember { mutableStateOf<String?>(null) }
+                    androidx.activity.compose.BackHandler(enabled = selectedPanel != null) { selectedPanel = null }
                     val panels = listOf(
                         "مدیریت رانندگان" to "بررسی فهرست رانندگان، مدارک و وضعیت تأیید",
                         "مدیریت شرکت‌ها" to "بررسی شرکت‌ها و فعال‌سازی حساب‌ها",
@@ -299,7 +385,62 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 Text("در حال دریافت اطلاعات از سامانه...")
                             } else {
                                 Text(adminPanelData.ifBlank { "اطلاعاتی برای نمایش دریافت نشد." }, textAlign = TextAlign.Start)
-                                if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها" || selectedPanel == "مدیریت مدارک") {
+                                if (selectedPanel == "مدیریت بارها") {
+                                    Text("ثبت بار به نام مدیریت سامانه", style = MaterialTheme.typography.titleMedium)
+                                    Text("ثبت این بار با مجوز مدیر ارشد و بدون انتساب به شرکت انجام می‌شود.", style = MaterialTheme.typography.bodySmall)
+                                    OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("مقصد از تهران") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                    OutlinedTextField(loadCargoType, { loadCargoType = it }, label = { Text("نوع بار") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                    Text("نوع خودرو")
+                                    listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون بزرگ","خاور مبلی پتو دار","کامیون دربستی کار","سایر خودروهای مبلی").forEach { v ->
+                                        FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
+                                    }
+                                    Text("نوع بارگیری")
+                                    listOf("دربست","روباری","نیم بار").forEach { v ->
+                                        FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
+                                    }
+                                    OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("کرایه (ریال؛ در صورت نامشخص بودن صفر)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                    OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
+                                    OutlinedButton(onClick = {
+                                        if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || loadFreightAmount.isBlank()) {
+                                            adminActionMessage = "مقصد، نوع بار و کرایه را کامل کنید."
+                                        } else {
+                                            loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadFreightAmount.ifBlank { "0" }, loadDescription.trim()))
+                                            loadDestination = ""
+                                            loadDescription = ""
+                                            adminActionMessage = "بار به فهرست انتشار مدیریت اضافه شد."
+                                        }
+                                    }, modifier = Modifier.fillMaxWidth()) { Text("افزودن بار به فهرست") }
+                                    if (loadDrafts.isNotEmpty()) {
+                                        Text("بارهای آماده انتشار: ${loadDrafts.size}", style = MaterialTheme.typography.titleSmall)
+                                        loadDrafts.forEachIndexed { index, draft ->
+                                            Card(Modifier.fillMaxWidth()) {
+                                                Column(Modifier.padding(12.dp)) {
+                                                    Text("${index + 1}. تهران ← ${draft.destination}")
+                                                    Text("${draft.cargoType} | ${draft.vehicleType} | ${draft.loadingType}")
+                                                    Text("کرایه: ${draft.freightAmount}")
+                                                    TextButton(onClick = { loadDrafts.removeAt(index) }) { Text("حذف از فهرست") }
+                                                }
+                                            }
+                                        }
+                                        Button(enabled = !loadPublishing, onClick = {
+                                            loadPublishing = true
+                                            adminActionMessage = "در حال ثبت بارهای مدیریت..."
+                                            scope.launch {
+                                                val result = withContext(Dispatchers.IO) { publishLoadBatch(adminAccessToken, loadDrafts.toList(), "admin_system") }
+                                                loadPublishing = false
+                                                adminActionMessage = result
+                                                if (result.startsWith("ثبت شد")) {
+                                                    if (soundEnabled) playAppTone(soundVolume.toInt())
+                                                    loadDrafts.clear()
+                                                    adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, "مدیریت بارها") }
+                                                }
+                                            }
+                                        }, modifier = Modifier.fillMaxWidth()) { Text(if (loadPublishing) "در حال ثبت..." else "انتشار بارهای مدیریت سامانه") }
+                                    }
+                                    if (adminActionMessage.isNotBlank()) Text(adminActionMessage, color = MaterialTheme.colorScheme.secondary)
+                                    HorizontalDivider()
+                                }
+                                if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها" || selectedPanel == "مدیریت مدارک" || selectedPanel == "شرکت‌های تأییدشده" || selectedPanel == "رانندگان تأییدشده") {
                                     adminRecords.forEach { record ->
                                         Card(Modifier.fillMaxWidth()) {
                                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -479,7 +620,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                             val result = withContext(Dispatchers.IO) { publishLoadBatch(userAccessToken, loadDrafts.toList()) }
                                             loadPublishing = false
                                             loadActionMessage = result
-                                            if (result.startsWith("ثبت شد")) loadDrafts.clear()
+                                            if (result.startsWith("ثبت شد")) { if (soundEnabled) playAppTone(soundVolume.toInt()); loadDrafts.clear() }
                                         }
                                     }, modifier = Modifier.fillMaxWidth()) { Text(if (loadPublishing) "در حال ثبت..." else "انتشار همه بارهای فهرست") }
                                 }
@@ -539,7 +680,19 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     )
 
                     if (role != UserRole.ADMIN) {
-                        Text("ثبت‌نام با مشخصات و شماره موبایل؛ ورود مستقیم و نگهداری نشست امن روی همین گوشی.", textAlign = TextAlign.Center)
+                        Text("ورود با نام کاربری و رمز عبور؛ حساب تازه پس از تأیید مدیر ارشد فعال می‌شود.", textAlign = TextAlign.Center)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = register, onClick = { register = true; message = "فرم ثبت‌نام را کامل کنید." }, label = { Text("ثبت‌نام") })
+                            FilterChip(selected = !register, onClick = { register = false; message = "نام کاربری و رمز عبور را وارد کنید." }, label = { Text("ورود") })
+                        }
+                        OutlinedTextField(username, { username = it.trim().lowercase().take(32) }, label = { Text("نام کاربری") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = password, onValueChange = { password = it.take(72) }, label = { Text("رمز عبور (حداقل ۸ نویسه)") },
+                            visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            trailingIcon = { IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                    contentDescription = if (passwordVisible) "مخفی کردن رمز عبور" else "نمایش رمز عبور")
+                            } }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     } else {
                         Text("فقط حساب مدیر ارشد ثبت‌شده در سامانه اجازه ورود به پنل مدیریت را دارد.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
                     }
@@ -606,20 +759,43 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     }
                                 }
                             } else if (register) {
-                                val commonInvalid = firstName.isBlank() || lastName.isBlank() || mobile.isBlank()
+                                val commonInvalid = firstName.isBlank() || lastName.isBlank() || mobile.isBlank() || username.length < 3 || password.length < 8
                                 val typeInvalid = if (role == UserRole.COMPANY) companyName.isBlank() || activityCity.isBlank()
                                     else nationalId.length != 10 || smartCardNumber.isBlank() || licensePlate.isBlank() || primaryDestination.isBlank()
                                 if (commonInvalid || typeInvalid) {
-                                    message = "اطلاعات ثبت‌نام را کامل و صحیح وارد کنید."
+                                    message = "نام، نام خانوادگی، موبایل، نام کاربری، رمز حداقل ۸ نویسه و مشخصات حساب را کامل کنید."
                                 } else {
                                     loading = true
-                                    message = "در حال ثبت پرونده و ورود امن..."
+                                    message = "در حال ساخت حساب امن..."
                                     scope.launch {
-                                        val result = withContext(Dispatchers.IO) {
-                                            registerDeviceAccount(role, firstName, lastName, mobile, companyName, activityCity,
-                                                officeAddress, nationalId, smartCardNumber, vehicleType, licensePlate,
-                                                primaryDestination, destinationsText)
+                                        val created = withContext(Dispatchers.IO) {
+                                            registerUserAccount(username, password, role, firstName, lastName, mobile, companyName, activityCity,
+                                                officeAddress, nationalId, smartCardNumber, vehicleType, licensePlate, primaryDestination, destinationsText)
                                         }
+                                        if (created == "OK") {
+                                            val result = withContext(Dispatchers.IO) { authenticateUser(username, password, role) }
+                                            message = result.message
+                                            if (result.success && result.refreshToken.isNotBlank()) {
+                                                userLoggedIn = true
+                                                userDisplayName = result.displayName
+                                                userStatus = result.status
+                                                userAccessToken = result.accessToken
+                                                profilePhotoUrl = result.photoUrl
+                                                DeviceSessionStore.save(context, result.refreshToken, role.name)
+                                                if (soundEnabled) playAppTone(soundVolume.toInt())
+                                            }
+                                        } else message = created
+                                        loading = false
+                                    }
+                                }
+                            } else {
+                                if (username.length < 3 || password.isBlank()) {
+                                    message = "نام کاربری و رمز عبور را وارد کنید."
+                                } else {
+                                    loading = true
+                                    message = "در حال ورود امن..."
+                                    scope.launch {
+                                        val result = withContext(Dispatchers.IO) { authenticateUser(username, password, role) }
                                         loading = false
                                         message = result.message
                                         if (result.success && result.refreshToken.isNotBlank()) {
@@ -627,27 +803,27 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                             userDisplayName = result.displayName
                                             userStatus = result.status
                                             userAccessToken = result.accessToken
+                                            profilePhotoUrl = result.photoUrl
                                             DeviceSessionStore.save(context, result.refreshToken, role.name)
-                                            if (soundEnabled) playAppTone()
+                                            if (soundEnabled) playAppTone(soundVolume.toInt())
                                         }
                                     }
                                 }
-                            } else {
-                                message = "برای حساب‌های قبلی، ورود با شماره موبایل پس از فعال‌سازی پیامک فعال می‌شود."
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (loading) "لطفاً صبر کنید..." else if (role == UserRole.ADMIN) "ورود مدیر ارشد" else "ثبت‌نام و ورود مستقیم")
+                        Text(if (loading) "لطفاً صبر کنید..." else if (role == UserRole.ADMIN) "ورود مدیر ارشد" else if (register) "ساخت حساب و ورود" else "ورود به حساب")
                     }
                     Text(message, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
                     if (role != UserRole.ADMIN) {
                         HorizontalDivider()
                         Text("ورود واقعی مدیر ارشد از بخش «ورود مدیر ارشد» انجام می‌شود.", fontSize = 12.sp, textAlign = TextAlign.Center)
-                        Text("نشست ورود روی همین گوشی ذخیره می‌شود؛ ورود روی گوشی جدید پس از فعال‌سازی پیامک انجام خواهد شد.", fontSize = 12.sp, textAlign = TextAlign.Center)
+                        Text("نشست ورود به‌صورت رمزگذاری‌شده روی همین گوشی ذخیره می‌شود. بازیابی رمز پیامکی در مرحله بعد فعال می‌شود.", fontSize = 12.sp, textAlign = TextAlign.Center)
                     }
                 }
             }
+        }
         }
     }
 }
@@ -753,8 +929,8 @@ private fun uploadProfilePhoto(context: Context, uri: Uri, token: String, role: 
     finally { upload?.disconnect(); update?.disconnect() }
 }
 
-private fun playAppTone() {
-    try { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 65).startTone(ToneGenerator.TONE_PROP_ACK, 160) } catch (_: Exception) { }
+private fun playAppTone(volume: Int = 65) {
+    try { ToneGenerator(AudioManager.STREAM_NOTIFICATION, volume.coerceIn(0, 100)).startTone(ToneGenerator.TONE_PROP_ACK, 160) } catch (_: Exception) { }
 }
 
 private object DeviceSessionStore {
@@ -792,50 +968,6 @@ private object DeviceSessionStore {
     fun clear(context: Context) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply() }
 }
 
-private fun registerDeviceAccount(role: UserRole, first: String, last: String, mobile: String,
-    companyName: String, city: String, address: String, nationalId: String, smart: String,
-    vehicle: String, plate: String, destination: String, destinationsText: String): UserLoginResult {
-    var auth: HttpURLConnection? = null
-    var profile: HttpURLConnection? = null
-    return try {
-        auth = (URL(SUPABASE_URL + "/functions/v1/device-register").openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"; connectTimeout = 15000; readTimeout = 30000; doOutput = true
-            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY); setRequestProperty("Content-Type","application/json")
-        }
-        val destinations = JSONArray()
-        destinationsText.split(',', '،', '\n').map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(29).forEach { destinations.put(it) }
-        val body = JSONObject().put("action","register").put("account_type",if(role==UserRole.DRIVER)"driver" else "company")
-            .put("first_name",first.trim()).put("last_name",last.trim()).put("mobile",mobile.trim())
-            .put("company_name",companyName.trim()).put("activity_city",city.trim()).put("office_address",address.trim())
-            .put("national_id",nationalId.trim()).put("smart_card_number",smart.trim()).put("vehicle_type",vehicle)
-            .put("license_plate",plate.trim()).put("primary_destination",destination.trim()).put("destinations",destinations)
-        auth.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
-        val code = auth.responseCode
-        val stream = if(code in 200..299) auth.inputStream else auth.errorStream
-        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-        if(code !in 200..299) return UserLoginResult(false, runCatching { JSONObject(raw).optString("error") }.getOrNull().orEmpty().ifBlank { "ثبت‌نام انجام نشد؛ اطلاعات را بررسی کنید." })
-        val response = JSONObject(raw)
-        val session = response.optJSONObject("session") ?: return UserLoginResult(false,"نشست ورود دریافت نشد.")
-        val user = response.optJSONObject("user") ?: return UserLoginResult(false,"اطلاعات حساب دریافت نشد.")
-        val access = session.optString("access_token"); val refresh = session.optString("refresh_token"); val id = user.optString("id")
-        if(access.isBlank() || refresh.isBlank() || id.isBlank()) return UserLoginResult(false,"نشست امن ناقص است.")
-        val table = if(role==UserRole.DRIVER) "drivers" else "companies"
-        val select = if(role==UserRole.DRIVER) "status,first_name,last_name,full_name,profile_photo_path" else "status,first_name,last_name,company_name,manager_name,profile_photo_path"
-        profile = (URL(SUPABASE_URL + "/rest/v1/" + table + "?select=" + select + "&id=eq." + id + "&limit=1").openConnection() as HttpURLConnection).apply {
-            requestMethod="GET"; connectTimeout=15000; readTimeout=15000
-            setRequestProperty("apikey",SUPABASE_PUBLISHABLE_KEY); setRequestProperty("Authorization","Bearer " + access)
-        }
-        val pCode=profile.responseCode; val pStream=if(pCode in 200..299) profile.inputStream else profile.errorStream
-        val rows=JSONArray(pStream?.bufferedReader()?.use{it.readText()}.orEmpty())
-        if(pCode !in 200..299 || rows.length()==0) return UserLoginResult(false,"پرونده ثبت شد اما وضعیت آن قابل دریافت نیست؛ با پشتیبانی تماس بگیرید.")
-        val p=rows.getJSONObject(0); val status=p.optString("status")
-        if(status !in listOf("pending","approved")) return UserLoginResult(false,"وضعیت حساب اجازه ورود نمی‌دهد.")
-        val name=if(role==UserRole.COMPANY) p.optString("company_name").ifBlank { first + " " + last } else first + " " + last
-        UserLoginResult(true,if(status=="pending")"ثبت‌نام انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ثبت‌نام و ورود موفق بود.",name,status,access,refresh,profilePhotoPublicUrl(p.optString("profile_photo_path")))
-    } catch (_:Exception) { UserLoginResult(false,"ارتباط با سامانه برقرار نشد؛ دوباره تلاش کنید.") }
-    finally { auth?.disconnect(); profile?.disconnect() }
-}
-
 private fun restoreDeviceSession(refreshToken: String, role: UserRole): UserLoginResult {
     var auth: HttpURLConnection?=null; var profile: HttpURLConnection?=null
     return try {
@@ -868,11 +1000,32 @@ private fun restoreDeviceSession(refreshToken: String, role: UserRole): UserLogi
     finally { auth?.disconnect(); profile?.disconnect() }
 }
 
+
+private fun formatTehranPersianDate(serverTimestamp: String): String {
+    if (serverTimestamp.isBlank() || serverTimestamp == "null") return "ثبت نشده"
+    return try {
+        val instant = try {
+            java.time.Instant.parse(serverTimestamp)
+        } catch (_: Exception) {
+            java.time.OffsetDateTime.parse(serverTimestamp).toInstant()
+        }
+        val locale = android.icu.util.ULocale.forLocale(java.util.Locale("fa", "IR"))
+        val formatter = android.icu.text.SimpleDateFormat("yyyy/MM/dd HH:mm", locale)
+        formatter.timeZone = android.icu.util.TimeZone.getTimeZone("Asia/Tehran")
+        formatter.calendar = android.icu.util.PersianCalendar(
+            android.icu.util.TimeZone.getTimeZone("Asia/Tehran"), locale
+        )
+        formatter.format(java.util.Date.from(instant))
+    } catch (_: Exception) {
+        "زمان نامعتبر"
+    }
+}
+
 private fun fetchAdminPanelData(accessToken: String, panel: String): String {
     if (accessToken.isBlank()) return "نشست مدیر ارشد معتبر نیست؛ خارج شوید و دوباره وارد شوید."
     val (table, select, title) = when (panel) {
-        "مدیریت رانندگان" -> Triple("drivers", "first_name,last_name,mobile,vehicle_type,primary_destination,status", "رانندگان")
-        "مدیریت شرکت‌ها" -> Triple("companies", "company_name,manager_name,mobile,status", "شرکت‌ها")
+        "مدیریت رانندگان" -> Triple("drivers", "first_name,last_name,mobile,vehicle_type,primary_destination,status,created_at", "رانندگان")
+        "مدیریت شرکت‌ها" -> Triple("companies", "company_name,manager_name,mobile,status,created_at", "شرکت‌ها")
         "مدیریت بارها" -> Triple("loads", "origin,destination,vehicle_type,loading_type,status,created_at", "بارها")
         "مدیریت مدیران" -> Triple("admin_users", "user_id,role,is_blocked,access_expires_at,created_at", "مدیران")
         "مدیریت مدارک" -> Triple("driver_documents", "driver_id,document_type,storage_path,review_status,created_at", "مدارک رانندگان")
@@ -946,6 +1099,16 @@ private fun fetchAdminPanelData(accessToken: String, panel: String): String {
                     }
                     else -> {
                         append(item.optString("setting_key")).append(" = ").append(item.optString("setting_value"))
+                    }
+                }
+                val createdAt = item.optString("created_at")
+                if (createdAt.isNotBlank() && createdAt != "null") {
+                    append(" | تاریخ ثبت: ").append(formatTehranPersianDate(createdAt))
+                }
+                if (panel == "مدیریت مدیران") {
+                    val expiry = item.optString("access_expires_at")
+                    if (expiry.isNotBlank() && expiry != "null") {
+                        append(" | انقضای دسترسی: ").append(formatTehranPersianDate(expiry))
                     }
                 }
                 append("\n")
@@ -1131,10 +1294,12 @@ private fun authenticateUser(username: String, password: String, role: UserRole)
             role == UserRole.DRIVER -> profile.optString("full_name", "راننده")
             else -> profile.optString("manager_name", "شرکت باربری")
         }
+        val refreshToken = session.optString("refresh_token")
+        if (refreshToken.isBlank()) return UserLoginResult(false, "ورود انجام شد، اما توکن نوسازی نشست دریافت نشد. لطفاً دوباره تلاش کنید.")
         when (status) {
             "blocked" -> UserLoginResult(false, "دسترسی این حساب مسدود شده است.")
             "rejected" -> UserLoginResult(false, "درخواست حساب شما رد شده است. برای پیگیری با مدیریت تماس بگیرید.")
-            "pending", "approved" -> UserLoginResult(true, if (status == "pending") "ورود انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ورود با موفقیت انجام شد.", displayName, status, accessToken)
+            "pending", "approved" -> UserLoginResult(true, if (status == "pending") "ورود انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ورود با موفقیت انجام شد.", displayName, status, accessToken, refreshToken)
             else -> UserLoginResult(false, "وضعیت حساب در سامانه معتبر نیست.")
         }
     } catch (_: Exception) {
@@ -1146,7 +1311,7 @@ private fun authenticateUser(username: String, password: String, role: UserRole)
 }
 
 
-private fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>): String {
+private fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>, publisherType: String = "company"): String {
     if (accessToken.isBlank()) return "نشست ورود معتبر نیست؛ خارج شوید و دوباره وارد شوید."
     if (drafts.isEmpty()) return "ابتدا حداقل یک بار به فهرست اضافه کنید."
     var connection: HttpURLConnection? = null
@@ -1163,7 +1328,7 @@ private fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>): Stri
         }
         val body = JSONObject()
             .put("p_items", items)
-            .put("p_publisher_type", "company")
+            .put("p_publisher_type", publisherType)
             .put("p_company_id", JSONObject.NULL)
         connection = (URL("$SUPABASE_URL/rest/v1/rpc/publish_tehran_load_batch_v2").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
@@ -1342,19 +1507,20 @@ private fun fetchMatchedLoads(accessToken: String): String {
 private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRecord> {
     if (accessToken.isBlank()) return emptyList()
     val table = when (panel) {
-        "مدیریت رانندگان" -> "drivers"
-        "مدیریت شرکت‌ها" -> "companies"
+        "مدیریت رانندگان", "رانندگان تأییدشده" -> "drivers"
+        "مدیریت شرکت‌ها", "شرکت‌های تأییدشده" -> "companies"
         "مدیریت مدارک" -> "driver_documents"
         else -> return emptyList()
     }
     var connection: HttpURLConnection? = null
     return try {
         val select = when (table) {
-            "drivers" -> "id,first_name,last_name,full_name,mobile,vehicle_type,primary_destination,status"
-            "companies" -> "id,first_name,last_name,company_name,manager_name,mobile,status"
+            "drivers" -> "id,first_name,last_name,full_name,mobile,vehicle_type,primary_destination,status,created_at"
+            "companies" -> "id,first_name,last_name,company_name,manager_name,mobile,status,created_at"
             else -> "id,driver_id,document_type,storage_path,review_status"
         }
-        val url = "$SUPABASE_URL/rest/v1/$table?select=$select&order=created_at.desc&limit=100"
+        val approvedFilter = if (panel == "رانندگان تأییدشده" || panel == "شرکت‌های تأییدشده") "&status=eq.approved" else ""
+        val url = "$SUPABASE_URL/rest/v1/$table?select=$select&order=created_at.desc&limit=100$approvedFilter"
         connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 15000
@@ -1377,8 +1543,10 @@ private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRec
                 "companies" -> item.optString("manager_name") + " | " + item.optString("mobile")
                 else -> "راننده: " + item.optString("driver_id") + " | " + item.optString("storage_path")
             }
+            val registeredAt = item.optString("created_at")
+            val datedDetail = if (registeredAt.isNotBlank() && registeredAt != "null") detail + " | ثبت: " + formatTehranPersianDate(registeredAt) else detail
             val mediaUrl = if (table == "driver_documents") createSignedDriverDocumentUrl(accessToken, item.optString("storage_path")) else ""
-            AdminRecord(item.optString("id"), title, detail, if (table == "driver_documents") item.optString("review_status") else item.optString("status"), mediaUrl)
+            AdminRecord(item.optString("id"), title, datedDetail, if (table == "driver_documents") item.optString("review_status") else item.optString("status"), mediaUrl)
         }
     } catch (_: Exception) {
         emptyList()
