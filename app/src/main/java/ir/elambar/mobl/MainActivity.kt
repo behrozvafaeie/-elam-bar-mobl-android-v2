@@ -299,6 +299,60 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 Text("در حال دریافت اطلاعات از سامانه...")
                             } else {
                                 Text(adminPanelData.ifBlank { "اطلاعاتی برای نمایش دریافت نشد." }, textAlign = TextAlign.Start)
+                                if (selectedPanel == "مدیریت بارها") {
+                                    Text("ثبت بار به نام مدیریت سامانه", style = MaterialTheme.typography.titleMedium)
+                                    Text("ثبت این بار با مجوز مدیر ارشد و بدون انتساب به شرکت انجام می‌شود.", style = MaterialTheme.typography.bodySmall)
+                                    OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("مقصد از تهران") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                    OutlinedTextField(loadCargoType, { loadCargoType = it }, label = { Text("نوع بار") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                    Text("نوع خودرو")
+                                    listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون بزرگ","خاور مبلی پتو دار","کامیون دربستی کار","سایر خودروهای مبلی").forEach { v ->
+                                        FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
+                                    }
+                                    Text("نوع بارگیری")
+                                    listOf("دربست","روباری","نیم بار").forEach { v ->
+                                        FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
+                                    }
+                                    OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("کرایه (ریال؛ در صورت نامشخص بودن صفر)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                    OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
+                                    OutlinedButton(onClick = {
+                                        if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || loadFreightAmount.isBlank()) {
+                                            adminActionMessage = "مقصد، نوع بار و کرایه را کامل کنید."
+                                        } else {
+                                            loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadFreightAmount.ifBlank { "0" }, loadDescription.trim()))
+                                            loadDestination = ""
+                                            loadDescription = ""
+                                            adminActionMessage = "بار به فهرست انتشار مدیریت اضافه شد."
+                                        }
+                                    }, modifier = Modifier.fillMaxWidth()) { Text("افزودن بار به فهرست") }
+                                    if (loadDrafts.isNotEmpty()) {
+                                        Text("بارهای آماده انتشار: ${loadDrafts.size}", style = MaterialTheme.typography.titleSmall)
+                                        loadDrafts.forEachIndexed { index, draft ->
+                                            Card(Modifier.fillMaxWidth()) {
+                                                Column(Modifier.padding(12.dp)) {
+                                                    Text("${index + 1}. تهران ← ${draft.destination}")
+                                                    Text("${draft.cargoType} | ${draft.vehicleType} | ${draft.loadingType}")
+                                                    Text("کرایه: ${draft.freightAmount}")
+                                                    TextButton(onClick = { loadDrafts.removeAt(index) }) { Text("حذف از فهرست") }
+                                                }
+                                            }
+                                        }
+                                        Button(enabled = !loadPublishing, onClick = {
+                                            loadPublishing = true
+                                            adminActionMessage = "در حال ثبت بارهای مدیریت..."
+                                            scope.launch {
+                                                val result = withContext(Dispatchers.IO) { publishLoadBatch(adminAccessToken, loadDrafts.toList(), "admin_system") }
+                                                loadPublishing = false
+                                                adminActionMessage = result
+                                                if (result.startsWith("ثبت شد")) {
+                                                    loadDrafts.clear()
+                                                    adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, "مدیریت بارها") }
+                                                }
+                                            }
+                                        }, modifier = Modifier.fillMaxWidth()) { Text(if (loadPublishing) "در حال ثبت..." else "انتشار بارهای مدیریت سامانه") }
+                                    }
+                                    if (adminActionMessage.isNotBlank()) Text(adminActionMessage, color = MaterialTheme.colorScheme.secondary)
+                                    HorizontalDivider()
+                                }
                                 if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها" || selectedPanel == "مدیریت مدارک") {
                                     adminRecords.forEach { record ->
                                         Card(Modifier.fillMaxWidth()) {
@@ -1146,7 +1200,7 @@ private fun authenticateUser(username: String, password: String, role: UserRole)
 }
 
 
-private fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>): String {
+private fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>, publisherType: String = "company"): String {
     if (accessToken.isBlank()) return "نشست ورود معتبر نیست؛ خارج شوید و دوباره وارد شوید."
     if (drafts.isEmpty()) return "ابتدا حداقل یک بار به فهرست اضافه کنید."
     var connection: HttpURLConnection? = null
@@ -1163,7 +1217,7 @@ private fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>): Stri
         }
         val body = JSONObject()
             .put("p_items", items)
-            .put("p_publisher_type", "company")
+            .put("p_publisher_type", publisherType)
             .put("p_company_id", JSONObject.NULL)
         connection = (URL("$SUPABASE_URL/rest/v1/rpc/publish_tehran_load_batch_v2").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
