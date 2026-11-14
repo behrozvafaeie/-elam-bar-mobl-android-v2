@@ -95,6 +95,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var profilePhotoMessage by remember { mutableStateOf("") }
     var matchedLoadsText by remember { mutableStateOf("برای دریافت بارهای متناسب، دکمه بروزرسانی را بزنید.") }
     var matchedLoadsLoading by remember { mutableStateOf(false) }
+    var companyLoadsText by remember { mutableStateOf("برای مشاهده بارهای ثبت‌شده، بروزرسانی را بزنید.") }
+    var companyLoadsLoading by remember { mutableStateOf(false) }
     var loadDestination by remember { mutableStateOf("") }
     var loadCargoType by remember { mutableStateOf("اثاثیه منزل") }
     var loadVehicleType by remember { mutableStateOf("وانت مبلی") }
@@ -376,6 +378,18 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     }, modifier = Modifier.fillMaxWidth()) { Text(if (loadPublishing) "در حال ثبت..." else "انتشار همه بارهای فهرست") }
                                 }
                                 if (loadActionMessage.isNotBlank()) Text(loadActionMessage, color = MaterialTheme.colorScheme.secondary)
+                                HorizontalDivider()
+                                Text("بارهای ثبت‌شده شرکت", style = MaterialTheme.typography.titleMedium)
+                                OutlinedButton(enabled = !companyLoadsLoading, onClick = {
+                                    companyLoadsLoading = true
+                                    scope.launch {
+                                        companyLoadsText = withContext(Dispatchers.IO) { fetchCompanyLoads(userAccessToken) }
+                                        companyLoadsLoading = false
+                                    }
+                                }, modifier = Modifier.fillMaxWidth()) {
+                                    Text(if (companyLoadsLoading) "در حال دریافت..." else "مشاهده و بروزرسانی بارهای من")
+                                }
+                                Text(companyLoadsText, textAlign = TextAlign.Start)
                             } else {
                                 Text("بارهای متناسب با نوع خودرو و مقصدهای ثبت‌شده شما", style = MaterialTheme.typography.titleMedium)
                                 OutlinedButton(enabled = !matchedLoadsLoading, onClick = {
@@ -1003,6 +1017,42 @@ private fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>): Stri
     } finally {
         connection?.disconnect()
     }
+}
+
+
+private fun fetchCompanyLoads(accessToken: String): String {
+    if (accessToken.isBlank()) return "نشست ورود معتبر نیست."
+    var connection: HttpURLConnection? = null
+    return try {
+        val payload = accessToken.split(".").getOrNull(1) ?: return "نشست ورود نامعتبر است."
+        val decoded = Base64.decode(payload, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+        val userId = JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
+        if (userId.isBlank()) return "شناسه شرکت دریافت نشد."
+        val url = SUPABASE_URL + "/rest/v1/loads?select=id,origin,destination,cargo_type,vehicle_type,loading_type,freight_amount,status,created_at&publisher_user_id=eq." + userId + "&order=created_at.desc&limit=100"
+        connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"; connectTimeout = 15000; readTimeout = 20000
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer " + accessToken)
+            setRequestProperty("Accept", "application/json")
+        }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code !in 200..299) return "دریافت بارهای شرکت ناموفق بود (کد " + code + ")."
+        val rows = JSONArray(raw)
+        if (rows.length() == 0) return "هنوز باری از این شرکت ثبت نشده است."
+        buildString {
+            append("تعداد بارهای ثبت‌شده: ").append(rows.length()).append("\n\n")
+            for (i in 0 until rows.length()) {
+                val item = rows.getJSONObject(i)
+                append(i + 1).append(". ").append(item.optString("origin")).append(" ← ").append(item.optString("destination"))
+                append("\n").append(item.optString("cargo_type")).append(" | ").append(item.optString("vehicle_type"))
+                append(" | ").append(item.optString("loading_type")).append("\nکرایه: ").append(item.optString("freight_amount"))
+                append(" | وضعیت: ").append(item.optString("status")).append("\n\n")
+            }
+        }
+    } catch (_: Exception) { "ارتباط با سامانه برقرار نشد." }
+    finally { connection?.disconnect() }
 }
 
 private fun fetchMatchedLoads(accessToken: String): String {
