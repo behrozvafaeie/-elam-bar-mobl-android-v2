@@ -133,7 +133,7 @@ private fun ElaanBarApp() {
                             Text("بازگشت به پنل اصلی")
                         }
                         Text(selectedPanel ?: "", fontSize = 21.sp, color = MaterialTheme.colorScheme.primary)
-                        if (selectedPanel in listOf("مدیریت رانندگان", "مدیریت شرکت‌ها", "مدیریت بارها")) {
+                        if (selectedPanel != null && selectedPanel in listOf("مدیریت رانندگان", "مدیریت شرکت‌ها", "مدیریت بارها")) {
                             if (adminPanelLoading) {
                                 CircularProgressIndicator()
                                 Text("در حال دریافت اطلاعات از سامانه...")
@@ -317,7 +317,7 @@ private fun fetchAdminPanelData(accessToken: String, panel: String): String {
         val rows = JSONArray(body)
         if (rows.length() == 0) return "هنوز موردی در فهرست $title ثبت نشده است."
         buildString {
-            append("تعداد موارد نمایش‌داده‌شده: ").append(rows.length()).append("\\n\\n")
+            append("تعداد موارد نمایش‌داده‌شده: ").append(rows.length()).append("\n\n")
             for (i in 0 until rows.length()) {
                 val item = rows.getJSONObject(i)
                 append(i + 1).append(". ")
@@ -341,7 +341,7 @@ private fun fetchAdminPanelData(accessToken: String, panel: String): String {
                         append(" | ").append(item.optString("status"))
                     }
                 }
-                append("\\n")
+                append("\n")
             }
             append("\\nفقط مشاهده اطلاعات فعال است؛ تغییر وضعیت و حذف تا تکمیل کنترل‌های امنیتی غیرفعال است.")
         }
