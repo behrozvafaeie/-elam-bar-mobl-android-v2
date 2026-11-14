@@ -186,10 +186,12 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         "مدیریت رانندگان" to "بررسی فهرست رانندگان، مدارک و وضعیت تأیید",
                         "مدیریت شرکت‌ها" to "بررسی شرکت‌ها و فعال‌سازی حساب‌ها",
                         "مدیریت بارها" to "مشاهده و مدیریت بارهای ثبت‌شده",
-                        "مدیریت مدیران" to "مدیریت مدیران و سطح دسترسی",
-                        "گفتگوها" to "اتاق گفتگوی عمومی و پیام‌های خصوصی",
-                        "گزارش‌ها" to "گزارش فعالیت‌ها و آمار سامانه",
-                        "تنظیمات و امنیت" to "تنظیمات سامانه و کنترل‌های امنیتی"
+                        "مدیریت مدیران" to "مشاهده نقش‌ها و وضعیت مدیران",
+                        "مدیریت مدارک" to "بررسی مدارک بارگذاری‌شده رانندگان",
+                        "گفتگوها" to "مشاهده گفتگوهای ثبت‌شده",
+                        "شکایات" to "بررسی شکایات ثبت‌شده",
+                        "گزارش‌ها" to "گزارش فعالیت‌ها و رویدادهای سامانه",
+                        "تنظیمات و امنیت" to "مشاهده تنظیمات و وضعیت امنیتی"
                     )
                     HorizontalDivider()
                     Text("پنل مدیر ارشد", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
@@ -203,7 +205,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     adminPanelData = ""
                                     adminRecords = emptyList()
                                     adminActionMessage = ""
-                                    if (title in listOf("مدیریت رانندگان", "مدیریت شرکت‌ها", "مدیریت بارها")) {
+                                    if (title in listOf("مدیریت رانندگان", "مدیریت شرکت‌ها", "مدیریت بارها", "مدیریت مدیران", "مدیریت مدارک", "گفتگوها", "شکایات", "گزارش‌ها", "تنظیمات و امنیت")) {
                                         adminPanelLoading = true
                                         scope.launch {
                                             adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, title) }
@@ -227,7 +229,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             Text("بازگشت به پنل اصلی")
                         }
                         Text(selectedPanel ?: "", fontSize = 21.sp, color = MaterialTheme.colorScheme.primary)
-                        if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها" || selectedPanel == "مدیریت بارها") {
+                        if (selectedPanel != null) {
                             if (adminPanelLoading) {
                                 CircularProgressIndicator()
                                 Text("در حال دریافت اطلاعات از سامانه...")
@@ -684,11 +686,17 @@ private fun fetchAdminPanelData(accessToken: String, panel: String): String {
         "مدیریت رانندگان" -> Triple("drivers", "first_name,last_name,mobile,vehicle_type,primary_destination,status", "رانندگان")
         "مدیریت شرکت‌ها" -> Triple("companies", "company_name,manager_name,mobile,status", "شرکت‌ها")
         "مدیریت بارها" -> Triple("loads", "origin,destination,vehicle_type,loading_type,status,created_at", "بارها")
+        "مدیریت مدیران" -> Triple("admin_users", "user_id,role,is_blocked,access_expires_at,created_at", "مدیران")
+        "مدیریت مدارک" -> Triple("driver_documents", "driver_id,document_type,storage_path,review_status,created_at", "مدارک رانندگان")
+        "گفتگوها" -> Triple("conversations", "id,load_id,company_id,driver_id,created_at,last_message_at", "گفتگوها")
+        "شکایات" -> Triple("load_complaints", "load_id,reporter_user_id,reported_user_id,subject,status,admin_note,created_at", "شکایات")
+        "گزارش‌ها" -> Triple("admin_audit_logs", "actor_user_id,target_user_id,action,details,created_at", "گزارش فعالیت‌ها")
+        "تنظیمات و امنیت" -> Triple("app_settings", "setting_key,setting_value,updated_at,updated_by", "تنظیمات")
         else -> return "این بخش هنوز آماده نیست."
     }
     var connection: HttpURLConnection? = null
     return try {
-        val url = "$SUPABASE_URL/rest/v1/$table?select=$select&order=created_at.desc&limit=100"
+        val url = "$SUPABASE_URL/rest/v1/$table?select=$select&limit=100"
         connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 15000
@@ -721,16 +729,40 @@ private fun fetchAdminPanelData(accessToken: String, panel: String): String {
                         append(" | ").append(item.optString("mobile"))
                         append(" | ").append(item.optString("status"))
                     }
-                    else -> {
+                    "مدیریت بارها" -> {
                         append(item.optString("origin")).append(" ← ").append(item.optString("destination"))
-                        append(" | ").append(item.optString("vehicle_type"))
-                        append(" | ").append(item.optString("loading_type"))
+                        append(" | ").append(item.optString("vehicle_type")).append(" | ").append(item.optString("loading_type"))
                         append(" | ").append(item.optString("status"))
+                    }
+                    "مدیریت مدیران" -> {
+                        append(item.optString("role")).append(" | شناسه: ").append(item.optString("user_id"))
+                        append(" | مسدود: ").append(item.optString("is_blocked"))
+                        append(" | پایان دسترسی: ").append(item.optString("access_expires_at"))
+                    }
+                    "مدیریت مدارک" -> {
+                        append(item.optString("document_type")).append(" | راننده: ").append(item.optString("driver_id"))
+                        append(" | وضعیت بررسی: ").append(item.optString("review_status"))
+                    }
+                    "گفتگوها" -> {
+                        append("شناسه گفتگو: ").append(item.optString("id"))
+                        append(" | شرکت: ").append(item.optString("company_id")).append(" | راننده: ").append(item.optString("driver_id"))
+                    }
+                    "شکایات" -> {
+                        append(item.optString("subject")).append(" | وضعیت: ").append(item.optString("status"))
+                        append(" | بار: ").append(item.optString("load_id"))
+                        if (item.optString("admin_note").isNotBlank()) append(" | یادداشت: ").append(item.optString("admin_note"))
+                    }
+                    "گزارش‌ها" -> {
+                        append(item.optString("action")).append(" | مدیر: ").append(item.optString("actor_user_id"))
+                        append(" | هدف: ").append(item.optString("target_user_id"))
+                    }
+                    else -> {
+                        append(item.optString("setting_key")).append(" = ").append(item.optString("setting_value"))
                     }
                 }
                 append("\n")
             }
-            append("\\nفقط مشاهده اطلاعات فعال است؛ تغییر وضعیت و حذف تا تکمیل کنترل‌های امنیتی غیرفعال است.")
+            append("\\nاین بخش به سامانه متصل است و فعلاً حالت مشاهده دارد؛ عملیات تغییردهنده پس از تکمیل کنترل دسترسی فعال می‌شود.")
         }
     } catch (_: Exception) {
         "ارتباط با سامانه برقرار نشد. اینترنت را بررسی کنید."
