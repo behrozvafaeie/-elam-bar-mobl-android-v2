@@ -1063,12 +1063,13 @@ private fun formatTehranPersianDate(serverTimestamp: String): String {
         } catch (_: Exception) {
             java.time.OffsetDateTime.parse(serverTimestamp).toInstant()
         }
-        val locale = android.icu.util.ULocale.forLocale(java.util.Locale("fa", "IR"))
-        val formatter = android.icu.text.SimpleDateFormat("yyyy/MM/dd HH:mm", locale)
-        formatter.timeZone = android.icu.util.TimeZone.getTimeZone("Asia/Tehran")
-        formatter.calendar = android.icu.util.PersianCalendar(
-            android.icu.util.TimeZone.getTimeZone("Asia/Tehran"), locale
-        )
+        val tehranZone = android.icu.util.TimeZone.getTimeZone("Asia/Tehran")
+        val persianLocale = android.icu.util.ULocale
+            .forLocale(java.util.Locale("fa", "IR"))
+            .setKeywordValue("calendar", "persian")
+        val formatter = android.icu.text.SimpleDateFormat("yyyy/MM/dd HH:mm", persianLocale)
+        formatter.timeZone = tehranZone
+        formatter.calendar = android.icu.util.Calendar.getInstance(tehranZone, persianLocale)
         formatter.format(java.util.Date.from(instant))
     } catch (_: Exception) {
         "زمان نامعتبر"
