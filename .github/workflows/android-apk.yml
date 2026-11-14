@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - name: Checkout
@@ -71,20 +71,25 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
       - name: Install and launch APK on Android emulator
-        timeout-minutes: 15
+        timeout-minutes: 12
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 34
           target: google_apis
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
-          emulator-boot-timeout: 900
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -wipe-data -no-metrics
+          emulator-boot-timeout: 600
           disable-animations: true
           script: |
             adb wait-for-device
-            for i in $(seq 1 60); do if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then break; fi; sleep 5; done
-            test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1"
+            adb shell getprop sys.boot_completed | tr -d '\r' | grep -q '^1
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb shell am force-stop ir.elambar.mobl
+            adb shell monkey -p ir.elambar.mobl 1
+            sleep 8
+            adb shell pidof ir.elambar.mobl
+
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb shell am force-stop ir.elambar.mobl
             adb shell monkey -p ir.elambar.mobl 1
