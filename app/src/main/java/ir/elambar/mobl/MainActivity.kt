@@ -59,6 +59,14 @@ private fun ElaanBarApp() {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var companyName by remember { mutableStateOf("") }
+    var activityCity by remember { mutableStateOf("تهران") }
+    var officeAddress by remember { mutableStateOf("") }
+    var nationalId by remember { mutableStateOf("") }
+    var smartCardNumber by remember { mutableStateOf("") }
+    var vehicleType by remember { mutableStateOf("وانت مبلی") }
+    var licensePlate by remember { mutableStateOf("") }
+    var primaryDestination by remember { mutableStateOf("") }
+    var destinationsText by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("برای ادامه، نوع حساب را انتخاب کنید.") }
     var loading by remember { mutableStateOf(false) }
     var adminLoggedIn by remember { mutableStateOf(false) }
@@ -197,8 +205,21 @@ private fun ElaanBarApp() {
                     if (register && role != UserRole.ADMIN) {
                         OutlinedTextField(firstName, { firstName = it }, label = { Text("نام") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(lastName, { lastName = it }, label = { Text("نام خانوادگی") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(mobile, { mobile = it }, label = { Text("شماره موبایل (09...)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth())
                         if (role == UserRole.COMPANY) {
                             OutlinedTextField(companyName, { companyName = it }, label = { Text("نام شرکت باربری") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(activityCity, { activityCity = it }, label = { Text("شهر محل فعالیت") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(officeAddress, { officeAddress = it }, label = { Text("نشانی دفتر (اختیاری)") }, modifier = Modifier.fillMaxWidth())
+                        } else {
+                            OutlinedTextField(nationalId, { nationalId = it.filter { c -> c.isDigit() }.take(10) }, label = { Text("کد ملی ۱۰ رقمی") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(smartCardNumber, { smartCardNumber = it }, label = { Text("شماره کارت هوشمند") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            Text("نوع خودرو")
+                            listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون بزرگ","خاور مبلی پتو دار","کامیون دربستی کار","سایر خودروهای مبلی").forEach { v ->
+                                FilterChip(selected = vehicleType == v, onClick = { vehicleType = v }, label = { Text(v) })
+                            }
+                            OutlinedTextField(licensePlate, { licensePlate = it }, label = { Text("شماره پلاک") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(primaryDestination, { primaryDestination = it }, label = { Text("مقصد اصلی") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(destinationsText, { destinationsText = it }, label = { Text("مقصدهای دیگر (با ویرگول جدا کنید)") }, modifier = Modifier.fillMaxWidth())
                         }
                     }
 
@@ -252,7 +273,42 @@ private fun ElaanBarApp() {
                                     }
                                 }
                             } else if (register) {
-                                message = "ثبت‌نام جدید هنوز به فرم کامل اطلاعات راننده و شرکت متصل نشده است. فعلاً فقط حساب‌های ثبت‌شده امکان ورود دارند."
+                                valRequiredRegistration@ run {
+                                    val commonInvalid = firstName.isBlank() || lastName.isBlank() || mobile.isBlank()
+                                    val typeInvalid = if (role == UserRole.COMPANY) companyName.isBlank() || activityCity.isBlank()
+                                        else nationalId.length != 10 || smartCardNumber.isBlank() || licensePlate.isBlank() || primaryDestination.isBlank()
+                                    if (commonInvalid || typeInvalid || !Regex("^[a-z0-9_.-]{3,32}$").matches(username) || password.length < 8) {
+                                        message = "اطلاعات ثبت‌نام را کامل کنید؛ رمز حداقل ۸ نویسه و نام کاربری معتبر باشد."
+                                    } else {
+                                        loading = true
+                                        message = "در حال ثبت اطلاعات و ساخت پرونده..."
+                                        scope.launch {
+                                            val registrationMessage = withContext(Dispatchers.IO) {
+                                                registerUserAccount(
+                                                    username, password, role, firstName, lastName, mobile,
+                                                    companyName, activityCity, officeAddress, nationalId,
+                                                    smartCardNumber, vehicleType, licensePlate, primaryDestination,
+                                                    destinationsText
+                                                )
+                                            }
+                                            if (registrationMessage == "OK") {
+                                                val loginResult = withContext(Dispatchers.IO) { authenticateUser(username, password, role) }
+                                                loading = false
+                                                message = if (loginResult.success) loginResult.message else "ثبت‌نام انجام شد؛ اکنون از بخش ورود وارد شوید. " + loginResult.message
+                                                if (loginResult.success) {
+                                                    userLoggedIn = true
+                                                    userDisplayName = loginResult.displayName
+                                                    userStatus = loginResult.status
+                                                } else {
+                                                    register = false
+                                                }
+                                            } else {
+                                                loading = false
+                                                message = registrationMessage
+                                            }
+                                        }
+                                    }
+                                }
                             } else {
                                 when {
                                     !Regex("^[a-z0-9_.-]{3,32}$").matches(username) -> message = "نام کاربری باید ۳ تا ۳۲ نویسه و فقط شامل حروف انگلیسی، عدد، نقطه، خط تیره یا زیرخط باشد."
@@ -345,6 +401,56 @@ private fun fetchAdminPanelData(accessToken: String, panel: String): String {
             }
             append("\\nفقط مشاهده اطلاعات فعال است؛ تغییر وضعیت و حذف تا تکمیل کنترل‌های امنیتی غیرفعال است.")
         }
+    } catch (_: Exception) {
+        "ارتباط با سامانه برقرار نشد. اینترنت را بررسی کنید."
+    } finally {
+        connection?.disconnect()
+    }
+}
+
+private fun registerUserAccount(
+    username: String, password: String, role: UserRole, firstName: String, lastName: String,
+    mobile: String, companyName: String, activityCity: String, officeAddress: String,
+    nationalId: String, smartCardNumber: String, vehicleType: String, licensePlate: String,
+    primaryDestination: String, destinationsText: String
+): String {
+    var connection: HttpURLConnection? = null
+    return try {
+        val url = "$SUPABASE_URL/functions/v1/username-auth-v2"
+        connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 25000
+            doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        val accountType = if (role == UserRole.DRIVER) "driver" else "company"
+        val destinations = JSONArray()
+        destinationsText.split(',', '،', '\n').map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(29).forEach { destinations.put(it) }
+        val body = JSONObject()
+            .put("action", "register")
+            .put("account_type", accountType)
+            .put("username", username.trim().lowercase())
+            .put("password", password)
+            .put("first_name", firstName.trim())
+            .put("last_name", lastName.trim())
+            .put("mobile", mobile.trim())
+            .put("company_name", companyName.trim())
+            .put("activity_city", activityCity.trim())
+            .put("office_address", officeAddress.trim())
+            .put("national_id", nationalId.trim())
+            .put("smart_card_number", smartCardNumber.trim())
+            .put("vehicle_type", vehicleType)
+            .put("license_plate", licensePlate.trim())
+            .put("primary_destination", primaryDestination.trim())
+            .put("destinations", destinations)
+        connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code in 200..299) "OK" else JSONObject(text).optString("error", "ثبت‌نام انجام نشد؛ اطلاعات را بررسی کنید.")
     } catch (_: Exception) {
         "ارتباط با سامانه برقرار نشد. اینترنت را بررسی کنید."
     } finally {
