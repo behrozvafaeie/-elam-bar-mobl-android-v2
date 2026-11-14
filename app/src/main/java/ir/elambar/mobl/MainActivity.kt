@@ -29,9 +29,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -177,6 +183,8 @@ private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Floa
         }
     }
     var soundEnabled by remember { mutableStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getBoolean("sound", true)) }
+    var soundVolume by remember { mutableFloatStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getInt("sound_volume", 65).toFloat().coerceIn(0f, 100f)) }
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
     var settingsOpen by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val saved = DeviceSessionStore.load(context)
@@ -225,6 +233,23 @@ private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Floa
 
 
     CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl) {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                ModalDrawerSheet {
+                    Text("منوی اعلام بار مبل", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(20.dp))
+                    NavigationDrawerItem(label = { Text("صفحه اصلی") }, selected = !settingsOpen, onClick = {
+                        settingsOpen = false
+                        scope.launch { drawerState.close() }
+                    })
+                    NavigationDrawerItem(label = { Text("تنظیمات برنامه") }, selected = settingsOpen, onClick = {
+                        settingsOpen = true
+                        scope.launch { drawerState.close() }
+                    })
+                    NavigationDrawerItem(label = { Text("بستن منو") }, selected = false, onClick = { scope.launch { drawerState.close() } })
+                }
+            }
+        ) {
         Scaffold { padding ->
             Column(
                 modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp),
@@ -245,7 +270,14 @@ private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Floa
                 }
                 Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
                 Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                        Icon(Icons.Filled.Menu, contentDescription = "باز کردن منوی کشویی")
+                    }
                     TextButton(onClick = { settingsOpen = !settingsOpen }) { Text(if (settingsOpen) "بستن تنظیمات" else "تنظیمات برنامه") }
                 }
                 if (settingsOpen) {
@@ -261,6 +293,11 @@ private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Floa
                                     context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putBoolean("sound", soundEnabled).apply()
                                 }) { Text(if (soundEnabled) "صدای اعلان روشن" else "بی‌صدا کردن اعلان‌ها") }
                             }
+                            Text("بلندی صدای اعلان: ${soundVolume.toInt()}٪")
+                            Slider(value = soundVolume, onValueChange = {
+                                soundVolume = it
+                                context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putInt("sound_volume", it.toInt()).apply()
+                            }, valueRange = 0f..100f, steps = 9, enabled = soundEnabled)
                             Text("تنظیمات روی همین گوشی ذخیره می‌شود.", style = MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -367,7 +404,7 @@ private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Floa
                                                 loadPublishing = false
                                                 adminActionMessage = result
                                                 if (result.startsWith("ثبت شد")) {
-                                                    if (soundEnabled) playAppTone()
+                                                    if (soundEnabled) playAppTone(soundVolume.toInt())
                                                     loadDrafts.clear()
                                                     adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, "مدیریت بارها") }
                                                 }
@@ -761,6 +798,7 @@ private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Floa
                 }
             }
         }
+        }
     }
 }
 
@@ -865,8 +903,8 @@ private fun uploadProfilePhoto(context: Context, uri: Uri, token: String, role: 
     finally { upload?.disconnect(); update?.disconnect() }
 }
 
-private fun playAppTone() {
-    try { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 65).startTone(ToneGenerator.TONE_PROP_ACK, 160) } catch (_: Exception) { }
+private fun playAppTone(volume: Int = 65) {
+    try { ToneGenerator(AudioManager.STREAM_NOTIFICATION, volume.coerceIn(0, 100)).startTone(ToneGenerator.TONE_PROP_ACK, 160) } catch (_: Exception) { }
 }
 
 private object DeviceSessionStore {
@@ -1199,10 +1237,12 @@ private fun authenticateUser(username: String, password: String, role: UserRole)
             role == UserRole.DRIVER -> profile.optString("full_name", "راننده")
             else -> profile.optString("manager_name", "شرکت باربری")
         }
+        val refreshToken = session.optString("refresh_token")
+        if (refreshToken.isBlank()) return UserLoginResult(false, "ورود انجام شد، اما توکن نوسازی نشست دریافت نشد. لطفاً دوباره تلاش کنید.")
         when (status) {
             "blocked" -> UserLoginResult(false, "دسترسی این حساب مسدود شده است.")
             "rejected" -> UserLoginResult(false, "درخواست حساب شما رد شده است. برای پیگیری با مدیریت تماس بگیرید.")
-            "pending", "approved" -> UserLoginResult(true, if (status == "pending") "ورود انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ورود با موفقیت انجام شد.", displayName, status, accessToken)
+            "pending", "approved" -> UserLoginResult(true, if (status == "pending") "ورود انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ورود با موفقیت انجام شد.", displayName, status, accessToken, refreshToken)
             else -> UserLoginResult(false, "وضعیت حساب در سامانه معتبر نیست.")
         }
     } catch (_: Exception) {
