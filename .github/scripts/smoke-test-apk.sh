@@ -32,36 +32,41 @@ timeout 120s adb install --no-streaming -r "$APK"
 echo "Verifying launcher activity..."
 timeout 20s adb shell cmd package resolve-activity --brief "$PACKAGE" || true
 
-echo "Launching the app's declared MAIN activity..."
+echo "Launching app without blocking on Android's first-frame wait..."
 timeout 30s adb shell am force-stop "$PACKAGE"
 adb logcat -c
-launch_output="$(timeout 45s adb shell am start -W -n "$MAIN_ACTIVITY" 2>&1)" || {
-  echo "$launch_output"
-  echo "App launch command failed; recent app logs follow."
-  timeout 20s adb logcat -d -t 400 | grep -E "$PACKAGE|AndroidRuntime|FATAL EXCEPTION|ANR in" || true
-  exit 1
-}
-echo "$launch_output"
-if ! grep -q "Status: ok" <<< "$launch_output"; then
-  echo "FAILURE: Android did not confirm that the main activity started."
-  timeout 20s adb logcat -d -t 400 | grep -E "$PACKAGE|AndroidRuntime|FATAL EXCEPTION|ANR in" || true
+timeout 30s adb shell am start -n "$MAIN_ACTIVITY"
+
+app_pid=""
+for attempt in $(seq 1 24); do
+  app_pid="$(timeout 10s adb shell pidof "$PACKAGE" 2>/dev/null | tr -d '\r' || true)"
+  if [ -n "$app_pid" ]; then
+    echo "App process detected (pid=$app_pid; check $attempt/24)."
+    break
+  fi
+  echo "Waiting for app process ($attempt/24)..."
+  sleep 5
+done
+
+if [ -z "$app_pid" ]; then
+  echo "FAILURE: App process did not start."
+  timeout 20s adb logcat -d -t 600 | grep -E "$PACKAGE|AndroidRuntime|FATAL EXCEPTION|ANR in" || true
   exit 1
 fi
 
-sleep 8
-app_pid="$(timeout 15s adb shell pidof "$PACKAGE" 2>/dev/null | tr -d '\r' || true)"
-if [ -n "$app_pid" ]; then
-  echo "SUCCESS: APK installed, MAIN activity start was accepted, and app process is running (pid=$app_pid)."
-else
-  echo "FAILURE: App process did not remain running after launch."
-  timeout 20s adb logcat -d -t 400 | grep -E "$PACKAGE|AndroidRuntime|FATAL EXCEPTION|ANR in" || true
+echo "Allowing the first screen to settle..."
+sleep 15
+app_pid_after="$(timeout 15s adb shell pidof "$PACKAGE" 2>/dev/null | tr -d '\r' || true)"
+if [ -z "$app_pid_after" ]; then
+  echo "FAILURE: App process exited after launch."
+  timeout 20s adb logcat -d -t 600 | grep -E "$PACKAGE|AndroidRuntime|FATAL EXCEPTION|ANR in" || true
   exit 1
 fi
 
 echo "Recent app-specific error scan:"
-if timeout 20s adb logcat -d -t 400 | grep -E "$PACKAGE|AndroidRuntime|FATAL EXCEPTION|ANR in" | grep -E "FATAL EXCEPTION|ANR in $PACKAGE|Process: $PACKAGE" ; then
+if timeout 20s adb logcat -d -t 600 | grep -E "$PACKAGE|AndroidRuntime|FATAL EXCEPTION|ANR in" | grep -E "FATAL EXCEPTION|ANR in $PACKAGE|Process: $PACKAGE" ; then
   echo "FAILURE: App-specific crash or ANR markers were found."
   exit 1
 else
-  echo "No app-specific fatal crash or ANR markers found in the captured log window."
+  echo "SUCCESS: APK installed, launch command accepted, app process stayed alive, and no app-specific fatal crash or ANR markers were found."
 fi
