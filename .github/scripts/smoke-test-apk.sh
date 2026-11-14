@@ -3,42 +3,38 @@ set -euo pipefail
 
 APK="app/build/outputs/apk/debug/app-debug.apk"
 
-wait_for_package_manager() {
-  local count=0
-  while [ "$count" -lt 90 ]; do
-    local booted
-    booted="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
-    if [ "$booted" = "1" ] && adb shell cmd package list packages >/dev/null 2>&1; then
-      return 0
-    fi
-    count=$((count + 1))
-    sleep 5
-  done
-  return 1
-}
-
-attempt=1
-while [ "$attempt" -le 3 ]; do
-  echo "APK install/launch attempt $attempt of 3"
-  if wait_for_package_manager &&
-     adb install --no-streaming -r "$APK" &&
-     adb shell am force-stop ir.elambar.mobl &&
-     adb shell monkey -p ir.elambar.mobl 1 &&
-     sleep 8 &&
-     adb shell pidof ir.elambar.mobl; then
-    echo "APK installed and app process is running."
-    exit 0
+echo "Waiting for Android framework services..."
+ready=0
+for attempt in $(seq 1 72); do
+  booted="$(timeout 8s adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+  packages="$(timeout 8s adb shell cmd package list packages 2>/dev/null | head -n 1 || true)"
+  settings="$(timeout 8s adb shell settings get system screen_off_timeout 2>/dev/null | tr -d '\r' || true)"
+  if [ "$booted" = "1" ] && [ -n "$packages" ] && [ -n "$settings" ] && [[ "$settings" != *"Can't find service"* ]]; then
+    ready=1
+    echo "Android package manager and settings service are ready."
+    break
   fi
-
-  echo "Attempt $attempt failed; checking/restarting emulator before retry."
-  if [ "$attempt" -lt 3 ]; then
-    adb reboot || true
-    sleep 10
-    adb wait-for-device || true
-  fi
-  attempt=$((attempt + 1))
+  echo "Framework not ready yet (check $attempt/72); boot=$booted settings=$settings"
+  sleep 5
 done
 
-echo "APK installation or launch failed after 3 attempts."
-adb devices -l || true
-exit 1
+if [ "$ready" -ne 1 ]; then
+  echo "Android framework services did not become ready."
+  adb devices -l || true
+  exit 1
+fi
+
+echo "Installing APK..."
+timeout 120s adb install --no-streaming -r "$APK"
+
+echo "Launching app..."
+timeout 30s adb shell am force-stop ir.elambar.mobl
+timeout 30s adb shell monkey -p ir.elambar.mobl 1
+sleep 8
+if timeout 20s adb shell pidof ir.elambar.mobl; then
+  echo "SUCCESS: APK installed and app process is running."
+else
+  echo "FAILURE: App process did not remain running after launch."
+  timeout 20s adb logcat -d -t 250 || true
+  exit 1
+fi
