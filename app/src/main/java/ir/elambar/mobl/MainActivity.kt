@@ -549,14 +549,13 @@ private fun uploadProfilePhoto(context: Context, uri: Uri, token: String, role: 
         val uploadCode = upload.responseCode
         if (uploadCode !in 200..299) return "بارگذاری تصویر مجاز نشد (کد " + uploadCode + ")."
         val table = if (role == UserRole.DRIVER) "drivers" else "companies"
-        update = (URL(SUPABASE_URL + "/rest/v1/" + table + "?id=eq." + subject).openConnection() as HttpURLConnection).apply {
-            requestMethod = "PATCH"; connectTimeout = 15000; readTimeout = 20000; doOutput = true
+        update = (URL(SUPABASE_URL + "/rest/v1/rpc/set_my_profile_photo_path").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"; connectTimeout = 15000; readTimeout = 20000; doOutput = true
             setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
             setRequestProperty("Authorization", "Bearer " + token)
             setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("Prefer", "return=minimal")
         }
-        update.outputStream.use { it.write(JSONObject().put("profile_photo_path", path).toString().toByteArray(Charsets.UTF_8)) }
+        update.outputStream.use { it.write(JSONObject().put("p_path", path).toString().toByteArray(Charsets.UTF_8)) }
         val updateCode = update.responseCode
         if (updateCode !in 200..299) return "تصویر بارگذاری شد اما ذخیره نشانی پروفایل ناموفق بود (کد " + updateCode + ")."
         profilePhotoPublicUrl(path) + "?v=" + System.currentTimeMillis()
