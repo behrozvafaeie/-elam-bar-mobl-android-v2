@@ -1,7 +1,7 @@
 name: Android APK
 on:
   push:
-    branches: [ "main", "fix/admin-load-and-apk-artifact" ]
+    branches: [ "main", "fix/**", "feature/**" ]
   workflow_dispatch:
 permissions:
   contents: read
