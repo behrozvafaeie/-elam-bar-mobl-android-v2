@@ -19,6 +19,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import java.security.KeyStore
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
@@ -83,7 +84,7 @@ private enum class UserRole(val label: String) {
 private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "")
 private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "")
 private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String)
-private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String)
+private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
 
 @Composable
 private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
@@ -142,6 +143,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var adminPanelLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null && userAccessToken.isNotBlank() && role == UserRole.DRIVER) {
             driverDocUploading = true
@@ -271,6 +273,14 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                 Text(record.title, style = MaterialTheme.typography.titleSmall)
                                                 Text(record.detail, style = MaterialTheme.typography.bodySmall)
                                                 Text("وضعیت: ${record.status}")
+                                                if (selectedPanel == "مدیریت مدارک" && record.mediaUrl.isNotBlank()) {
+                                                    val lowerUrl = record.mediaUrl.substringBefore("?").lowercase()
+                                                    if (lowerUrl.endsWith(".jpg") || lowerUrl.endsWith(".jpeg") || lowerUrl.endsWith(".png") || lowerUrl.endsWith(".webp")) {
+                                                        AsyncImage(model = record.mediaUrl, contentDescription = "مدرک راننده", modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp))
+                                                    } else {
+                                                        OutlinedButton(onClick = { runCatching { uriHandler.openUri(record.mediaUrl) } }) { Text("بازکردن فایل مدرک") }
+                                                    }
+                                                }
                                                 if (selectedPanel == "مدیریت مدارک") {
                                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                         if (record.status != "approved") {
@@ -1339,13 +1349,37 @@ private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRec
                 "companies" -> item.optString("manager_name") + " | " + item.optString("mobile")
                 else -> "راننده: " + item.optString("driver_id") + " | " + item.optString("storage_path")
             }
-            AdminRecord(item.optString("id"), title, detail, if (table == "driver_documents") item.optString("review_status") else item.optString("status"))
+            val mediaUrl = if (table == "driver_documents") createSignedDriverDocumentUrl(accessToken, item.optString("storage_path")) else ""
+            AdminRecord(item.optString("id"), title, detail, if (table == "driver_documents") item.optString("review_status") else item.optString("status"), mediaUrl)
         }
     } catch (_: Exception) {
         emptyList()
     } finally {
         connection?.disconnect()
     }
+}
+
+
+private fun createSignedDriverDocumentUrl(accessToken: String, path: String): String {
+    if (accessToken.isBlank() || path.isBlank()) return ""
+    var connection: HttpURLConnection? = null
+    return try {
+        val encodedPath = path.split("/").joinToString("/") { URLEncoder.encode(it, "UTF-8").replace("+", "%20") }
+        connection = (URL(SUPABASE_URL + "/storage/v1/object/sign/driver-documents/" + encodedPath).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"; connectTimeout = 10000; readTimeout = 15000; doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer " + accessToken)
+            setRequestProperty("Content-Type", "application/json")
+        }
+        connection.outputStream.use { it.write(JSONObject().put("expiresIn", 900).toString().toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code !in 200..299) return ""
+        val signed = JSONObject(raw).optString("signedURL")
+        if (signed.isBlank()) "" else if (signed.startsWith("http")) signed else SUPABASE_URL + signed
+    } catch (_: Exception) { "" }
+    finally { connection?.disconnect() }
 }
 
 private fun updateDriverDocumentStatus(accessToken: String, id: String, status: String): String {
