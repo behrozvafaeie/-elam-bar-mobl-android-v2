@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -182,6 +183,38 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
             } else { DeviceSessionStore.clear(context); message = "نشست قبلی منقضی شده است؛ ورود مجدد نیازمند احراز شماره است." }
         }
     }
+
+    // Refresh device sessions before the normal one-hour access-token expiry.
+    LaunchedEffect(userLoggedIn) {
+        if (userLoggedIn) {
+            while (true) {
+                delay(40 * 60 * 1000L)
+                val saved = DeviceSessionStore.load(context)
+                if (saved == null) {
+                    userLoggedIn = false
+                    userAccessToken = ""
+                    message = "نشست امن پیدا نشد؛ دوباره وارد شوید."
+                    break
+                }
+                val savedRole = if (saved.second == "COMPANY") UserRole.COMPANY else UserRole.DRIVER
+                val refreshed = withContext(Dispatchers.IO) { restoreDeviceSession(saved.first, savedRole) }
+                if (refreshed.success && refreshed.accessToken.isNotBlank() && refreshed.refreshToken.isNotBlank()) {
+                    userAccessToken = refreshed.accessToken
+                    userStatus = refreshed.status
+                    userDisplayName = refreshed.displayName
+                    profilePhotoUrl = refreshed.photoUrl
+                    DeviceSessionStore.save(context, refreshed.refreshToken, savedRole.name)
+                } else {
+                    DeviceSessionStore.clear(context)
+                    userLoggedIn = false
+                    userAccessToken = ""
+                    message = "نشست منقضی شده یا حساب غیرفعال شده است؛ دوباره وارد شوید."
+                    break
+                }
+            }
+        }
+    }
+
 
     CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl) {
         Scaffold { padding ->
