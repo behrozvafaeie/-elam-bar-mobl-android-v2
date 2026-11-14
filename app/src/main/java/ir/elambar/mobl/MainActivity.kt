@@ -516,6 +516,54 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
 
 
 
+private fun profilePhotoPublicUrl(path: String): String {
+    if (path.isBlank() || path == "null") return ""
+    if (path.startsWith("http")) return path
+    return SUPABASE_URL + "/storage/v1/object/public/profile-photos/" + path
+}
+
+private fun uploadProfilePhoto(context: Context, uri: Uri, token: String, role: UserRole): String {
+    var upload: HttpURLConnection? = null
+    var update: HttpURLConnection? = null
+    return try {
+        val subject = try {
+            val part = token.split(".").getOrNull(1) ?: return "نشست ورود نامعتبر است."
+            val decoded = Base64.decode(part, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+            JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
+        } catch (_: Exception) { "" }
+        if (subject.isBlank()) return "شناسه حساب از نشست دریافت نشد."
+        val mime = context.contentResolver.getType(uri) ?: return "نوع تصویر قابل تشخیص نیست."
+        if (mime !in listOf("image/jpeg", "image/png", "image/webp")) return "فقط تصویر JPG، PNG یا WEBP مجاز است."
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return "خواندن تصویر انجام نشد."
+        if (bytes.isEmpty() || bytes.size > 2 * 1024 * 1024) return "حجم تصویر باید کمتر از ۲ مگابایت باشد."
+        val ext = when (mime) { "image/png" -> "png"; "image/webp" -> "webp"; else -> "jpg" }
+        val path = subject + "/profile." + ext
+        upload = (URL(SUPABASE_URL + "/storage/v1/object/profile-photos/" + path).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"; connectTimeout = 20000; readTimeout = 30000; doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer " + token)
+            setRequestProperty("Content-Type", mime)
+            setRequestProperty("x-upsert", "true")
+        }
+        upload.outputStream.use { it.write(bytes) }
+        val uploadCode = upload.responseCode
+        if (uploadCode !in 200..299) return "بارگذاری تصویر مجاز نشد (کد " + uploadCode + ")."
+        val table = if (role == UserRole.DRIVER) "drivers" else "companies"
+        update = (URL(SUPABASE_URL + "/rest/v1/" + table + "?id=eq." + subject).openConnection() as HttpURLConnection).apply {
+            requestMethod = "PATCH"; connectTimeout = 15000; readTimeout = 20000; doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer " + token)
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Prefer", "return=minimal")
+        }
+        update.outputStream.use { it.write(JSONObject().put("profile_photo_path", path).toString().toByteArray(Charsets.UTF_8)) }
+        val updateCode = update.responseCode
+        if (updateCode !in 200..299) return "تصویر بارگذاری شد اما ذخیره نشانی پروفایل ناموفق بود (کد " + updateCode + ")."
+        profilePhotoPublicUrl(path) + "?v=" + System.currentTimeMillis()
+    } catch (_: Exception) { "ارتباط با فضای تصاویر برقرار نشد." }
+    finally { upload?.disconnect(); update?.disconnect() }
+}
+
 private fun playAppTone() {
     try { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 65).startTone(ToneGenerator.TONE_PROP_ACK, 160) } catch (_: Exception) { }
 }
@@ -583,7 +631,7 @@ private fun registerDeviceAccount(role: UserRole, first: String, last: String, m
         val access = session.optString("access_token"); val refresh = session.optString("refresh_token"); val id = user.optString("id")
         if(access.isBlank() || refresh.isBlank() || id.isBlank()) return UserLoginResult(false,"نشست امن ناقص است.")
         val table = if(role==UserRole.DRIVER) "drivers" else "companies"
-        val select = if(role==UserRole.DRIVER) "status,first_name,last_name,full_name" else "status,first_name,last_name,company_name,manager_name"
+        val select = if(role==UserRole.DRIVER) "status,first_name,last_name,full_name,profile_photo_path" else "status,first_name,last_name,company_name,manager_name,profile_photo_path"
         profile = (URL(SUPABASE_URL + "/rest/v1/" + table + "?select=" + select + "&id=eq." + id + "&limit=1").openConnection() as HttpURLConnection).apply {
             requestMethod="GET"; connectTimeout=15000; readTimeout=15000
             setRequestProperty("apikey",SUPABASE_PUBLISHABLE_KEY); setRequestProperty("Authorization","Bearer " + access)
@@ -594,7 +642,7 @@ private fun registerDeviceAccount(role: UserRole, first: String, last: String, m
         val p=rows.getJSONObject(0); val status=p.optString("status")
         if(status !in listOf("pending","approved")) return UserLoginResult(false,"وضعیت حساب اجازه ورود نمی‌دهد.")
         val name=if(role==UserRole.COMPANY) p.optString("company_name").ifBlank { first + " " + last } else first + " " + last
-        UserLoginResult(true,if(status=="pending")"ثبت‌نام انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ثبت‌نام و ورود موفق بود.",name,status,access,refresh)
+        UserLoginResult(true,if(status=="pending")"ثبت‌نام انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ثبت‌نام و ورود موفق بود.",name,status,access,refresh,profilePhotoPublicUrl(p.optString("profile_photo_path")))
     } catch (_:Exception) { UserLoginResult(false,"ارتباط با سامانه برقرار نشد؛ دوباره تلاش کنید.") }
     finally { auth?.disconnect(); profile?.disconnect() }
 }
@@ -614,7 +662,7 @@ private fun restoreDeviceSession(refreshToken: String, role: UserRole): UserLogi
         val access=json.optString("access_token"); val fresh=json.optString("refresh_token"); val id=user.optString("id")
         if(access.isBlank()||fresh.isBlank()||id.isBlank()) return UserLoginResult(false,"نشست جدید ناقص است.")
         val table=if(role==UserRole.DRIVER)"drivers" else "companies"
-        val select=if(role==UserRole.DRIVER)"status,first_name,last_name,full_name" else "status,first_name,last_name,company_name,manager_name"
+        val select=if(role==UserRole.DRIVER)"status,first_name,last_name,full_name,profile_photo_path" else "status,first_name,last_name,company_name,manager_name,profile_photo_path"
         profile=(URL(SUPABASE_URL + "/rest/v1/" + table + "?select=" + select + "&id=eq." + id + "&limit=1").openConnection() as HttpURLConnection).apply{
             requestMethod="GET";connectTimeout=15000;readTimeout=15000
             setRequestProperty("apikey",SUPABASE_PUBLISHABLE_KEY);setRequestProperty("Authorization","Bearer " + access)
@@ -626,7 +674,7 @@ private fun restoreDeviceSession(refreshToken: String, role: UserRole): UserLogi
         val p=rows.getJSONObject(0);val status=p.optString("status")
         if(status !in listOf("pending","approved"))return UserLoginResult(false,"دسترسی حساب فعال نیست.")
         val name=if(role==UserRole.COMPANY)p.optString("company_name").ifBlank{p.optString("first_name")+" "+p.optString("last_name")} else (p.optString("first_name")+" "+p.optString("last_name")).trim()
-        UserLoginResult(true,"نشست قبلی بازیابی شد.",name,status,access,fresh)
+        UserLoginResult(true,"نشست قبلی بازیابی شد.",name,status,access,fresh,profilePhotoPublicUrl(p.optString("profile_photo_path")))
     } catch (_:Exception) { UserLoginResult(false,"ارتباط با سامانه برقرار نشد.") }
     finally { auth?.disconnect(); profile?.disconnect() }
 }
