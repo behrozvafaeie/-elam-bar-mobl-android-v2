@@ -84,10 +84,43 @@ private fun ElaanBarApp() {
                 Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
                 Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
                 if (adminLoggedIn) {
+                    var selectedPanel by remember { mutableStateOf<String?>(null) }
+                    val panels = listOf(
+                        "مدیریت رانندگان" to "بررسی فهرست رانندگان، مدارک و وضعیت تأیید",
+                        "مدیریت شرکت‌ها" to "بررسی شرکت‌ها و فعال‌سازی حساب‌ها",
+                        "مدیریت بارها" to "مشاهده و مدیریت بارهای ثبت‌شده",
+                        "مدیریت مدیران" to "مدیریت مدیران و سطح دسترسی",
+                        "گفتگوها" to "اتاق گفتگوی عمومی و پیام‌های خصوصی",
+                        "گزارش‌ها" to "گزارش فعالیت‌ها و آمار سامانه",
+                        "تنظیمات و امنیت" to "تنظیمات سامانه و کنترل‌های امنیتی"
+                    )
                     HorizontalDivider()
-                    Text("ورود مدیر ارشد موفق بود", fontSize = 22.sp, color = MaterialTheme.colorScheme.primary)
-                    Text("حساب اصلی شما تأیید شد. بخش‌های عملیاتی پنل مدیریت در مرحله بعد تکمیل می‌شوند.", textAlign = TextAlign.Center)
-                    Button(
+                    Text("پنل مدیر ارشد", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
+                    Text("خوش آمدید؛ ورود شما با نقش مدیر ارشد اصلی تأیید شده است.", textAlign = TextAlign.Center)
+                    if (selectedPanel == null) {
+                        panels.forEach { (title, subtitle) ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = { selectedPanel = title },
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                                    Text(title, style = MaterialTheme.typography.titleMedium)
+                                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    } else {
+                        TextButton(onClick = { selectedPanel = null }, modifier = Modifier.align(Alignment.Start)) {
+                            Text("بازگشت به پنل اصلی")
+                        }
+                        Text(selectedPanel ?: "", fontSize = 21.sp, color = MaterialTheme.colorScheme.primary)
+                        Text(
+                            "صفحه این بخش در برنامه اضافه شده، اما اتصال اطلاعات و عملیات واقعی آن هنوز تکمیل نشده است. برای جلوگیری از نمایش اطلاعات نادرست، فعلاً داده‌ای در این قسمت نشان داده نمی‌شود.",
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    OutlinedButton(
                         onClick = {
                             adminLoggedIn = false
                             email = ""
