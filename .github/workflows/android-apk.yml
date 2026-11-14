@@ -26,6 +26,11 @@ jobs:
           packages: 'platform-tools'
       - name: Install Android build packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Restore stable debug signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore-v1-${{ runner.os }}
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - name: Upload APK
