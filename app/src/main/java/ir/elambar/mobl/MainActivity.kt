@@ -256,7 +256,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 Text("در حال دریافت اطلاعات از سامانه...")
                             } else {
                                 Text(adminPanelData.ifBlank { "اطلاعاتی برای نمایش دریافت نشد." }, textAlign = TextAlign.Start)
-                                if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها") {
+                                if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها" || selectedPanel == "مدیریت مدارک") {
                                     adminRecords.forEach { record ->
                                         Card(Modifier.fillMaxWidth()) {
                                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -306,7 +306,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     scope.launch {
                                         val panel = selectedPanel ?: ""
                                         adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, panel) }
-                                        if (panel == "مدیریت رانندگان" || panel == "مدیریت شرکت‌ها") {
+                                        if (panel == "مدیریت رانندگان" || panel == "مدیریت شرکت‌ها" || panel == "مدیریت مدارک") {
                                             adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, panel) }
                                         }
                                         adminPanelLoading = false
@@ -1273,13 +1273,16 @@ private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRec
     val table = when (panel) {
         "مدیریت رانندگان" -> "drivers"
         "مدیریت شرکت‌ها" -> "companies"
+        "مدیریت مدارک" -> "driver_documents"
         else -> return emptyList()
     }
     var connection: HttpURLConnection? = null
     return try {
-        val select = if (table == "drivers")
-            "id,first_name,last_name,full_name,mobile,vehicle_type,primary_destination,status"
-        else "id,first_name,last_name,company_name,manager_name,mobile,status"
+        val select = when (table) {
+            "drivers" -> "id,first_name,last_name,full_name,mobile,vehicle_type,primary_destination,status"
+            "companies" -> "id,first_name,last_name,company_name,manager_name,mobile,status"
+            else -> "id,driver_id,document_type,storage_path,review_status"
+        }
         val url = "$SUPABASE_URL/rest/v1/$table?select=$select&order=created_at.desc&limit=100"
         connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
@@ -1293,13 +1296,17 @@ private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRec
         val rows = JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
         (0 until rows.length()).map { i ->
             val item = rows.getJSONObject(i)
-            val title = if (table == "drivers")
-                (item.optString("first_name") + " " + item.optString("last_name")).trim().ifBlank { item.optString("full_name") }
-            else item.optString("company_name")
-            val detail = if (table == "drivers")
-                "${item.optString("mobile")} | ${item.optString("vehicle_type")} | ${item.optString("primary_destination")}"
-            else "${item.optString("manager_name")} | ${item.optString("mobile")}"
-            AdminRecord(item.optString("id"), title, detail, item.optString("status"))
+            val title = when (table) {
+                "drivers" -> (item.optString("first_name") + " " + item.optString("last_name")).trim().ifBlank { item.optString("full_name") }
+                "companies" -> item.optString("company_name")
+                else -> item.optString("document_type")
+            }
+            val detail = when (table) {
+                "drivers" -> item.optString("mobile") + " | " + item.optString("vehicle_type") + " | " + item.optString("primary_destination")
+                "companies" -> item.optString("manager_name") + " | " + item.optString("mobile")
+                else -> "راننده: " + item.optString("driver_id") + " | " + item.optString("storage_path")
+            }
+            AdminRecord(item.optString("id"), title, detail, if (table == "driver_documents") item.optString("review_status") else item.optString("status"))
         }
     } catch (_: Exception) {
         emptyList()
