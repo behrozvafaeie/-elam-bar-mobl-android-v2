@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,6 +18,16 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+
+private const val SUPABASE_URL = "https://sckcxtceybwtiecyxqsy.supabase.co"
+private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_rcJe7tZqCkHPgnAXZffzUg_f9ixVbwg"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -25,8 +37,12 @@ class MainActivity : ComponentActivity() {
 }
 
 private enum class UserRole(val label: String) {
-    DRIVER("راننده"), COMPANY("شرکت باربری")
+    DRIVER("راننده"),
+    COMPANY("شرکت باربری"),
+    ADMIN("مدیر ارشد")
 }
+
+private data class AdminLoginResult(val success: Boolean, val message: String)
 
 @Composable
 private fun ElaanBarApp() {
@@ -35,9 +51,13 @@ private fun ElaanBarApp() {
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
     var mobile by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var companyName by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("برای ادامه، نوع حساب را انتخاب کنید.") }
+    var loading by remember { mutableStateOf(false) }
+    var adminLoggedIn by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl) {
         Scaffold { padding ->
@@ -46,53 +66,201 @@ private fun ElaanBarApp() {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Spacer(Modifier.height(24.dp))
-                Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
-                Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FilterChip(selected = role == UserRole.DRIVER, onClick = { role = UserRole.DRIVER }, label = { Text("ورود راننده") })
-                    FilterChip(selected = role == UserRole.COMPANY, onClick = { role = UserRole.COMPANY }, label = { Text("ورود شرکت باربری") })
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    TextButton(onClick = { register = false; message = "ورود به حساب" }) { Text("ورود") }
-                    TextButton(onClick = { register = true; message = "ثبت‌نام؛ حساب پس از بررسی مدیر ارشد فعال می‌شود." }) { Text("ثبت‌نام") }
-                }
-                if (register) {
-                    OutlinedTextField(firstName, { firstName = it }, label = { Text("نام") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(lastName, { lastName = it }, label = { Text("نام خانوادگی") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    if (role == UserRole.COMPANY) {
-                        OutlinedTextField(companyName, { companyName = it }, label = { Text("نام شرکت باربری") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(12.dp))
+                Surface(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(88.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Filled.LocalShipping,
+                            contentDescription = "نشان اعلام بار مبل",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(54.dp)
+                        )
                     }
                 }
-                OutlinedTextField(
-                    mobile, { mobile = it.filter { c -> c.isDigit() }.take(11) },
-                    label = { Text("شماره موبایل (مثلاً 0912...)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    singleLine = true, modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    password, { password = it }, label = { Text("رمز عبور") },
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    singleLine = true, modifier = Modifier.fillMaxWidth()
-                )
-                Button(
-                    onClick = {
-                        message = when {
-                            mobile.length != 11 || !mobile.startsWith("09") -> "شماره موبایل معتبر وارد کنید."
-                            password.length < 8 -> "رمز عبور باید حداقل ۸ کاراکتر باشد."
-                            register && (firstName.isBlank() || lastName.isBlank()) -> "نام و نام خانوادگی را کامل کنید."
-                            register && role == UserRole.COMPANY && companyName.isBlank() -> "نام شرکت را وارد کنید."
-                            else -> "صفحه نمایشی آماده است؛ اتصال ورود و ثبت‌نام به احراز هویت امن Supabase در مرحله بعد فعال می‌شود."
+                Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
+                Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
+                if (adminLoggedIn) {
+                    HorizontalDivider()
+                    Text("ورود مدیر ارشد موفق بود", fontSize = 22.sp, color = MaterialTheme.colorScheme.primary)
+                    Text("حساب اصلی شما تأیید شد. بخش‌های عملیاتی پنل مدیریت در مرحله بعد تکمیل می‌شوند.", textAlign = TextAlign.Center)
+                    Button(
+                        onClick = {
+                            adminLoggedIn = false
+                            email = ""
+                            password = ""
+                            message = "از حساب مدیر ارشد خارج شدید."
+                            role = UserRole.ADMIN
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("خروج از حساب") }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        FilterChip(selected = role == UserRole.DRIVER, onClick = { role = UserRole.DRIVER; register = false; message = "ورود راننده" }, label = { Text("راننده") })
+                        FilterChip(selected = role == UserRole.COMPANY, onClick = { role = UserRole.COMPANY; register = false; message = "ورود شرکت باربری" }, label = { Text("شرکت") })
+                    }
+                    FilterChip(
+                        selected = role == UserRole.ADMIN,
+                        onClick = { role = UserRole.ADMIN; register = false; message = "ورود مدیر ارشد با ایمیل و رمز عبور" },
+                        label = { Text("ورود مدیر ارشد") }
+                    )
+
+                    if (role != UserRole.ADMIN) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            TextButton(onClick = { register = false; message = "ورود به حساب" }) { Text("ورود") }
+                            TextButton(onClick = { register = true; message = "ثبت‌نام؛ حساب پس از بررسی مدیر ارشد فعال می‌شود." }) { Text("ثبت‌نام") }
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text(if (register) "ارسال درخواست ثبت‌نام" else "ورود به حساب") }
-                Text(message, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
-                HorizontalDivider()
-                Text("نسخه اولیه آزمایشی — هنوز برای ورود واقعی و ثبت بار عملیاتی آماده نیست.", fontSize = 12.sp, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.error)
+                    } else {
+                        Text("فقط حساب مدیر ارشد ثبت‌شده در سامانه اجازه ورود به پنل مدیریت را دارد.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
+                    }
+
+                    if (register && role != UserRole.ADMIN) {
+                        OutlinedTextField(firstName, { firstName = it }, label = { Text("نام") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(lastName, { lastName = it }, label = { Text("نام خانوادگی") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        if (role == UserRole.COMPANY) {
+                            OutlinedTextField(companyName, { companyName = it }, label = { Text("نام شرکت باربری") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+
+                    if (role == UserRole.ADMIN) {
+                        OutlinedTextField(
+                            value = email,
+                            onValueChange = { email = it.trim() },
+                            label = { Text("ایمیل مدیر ارشد") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        OutlinedTextField(
+                            value = mobile,
+                            onValueChange = { mobile = it.filter { c -> c.isDigit() }.take(11) },
+                            label = { Text("شماره موبایل (مثلاً 0912...)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("رمز عبور") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Button(
+                        enabled = !loading,
+                        onClick = {
+                            if (role == UserRole.ADMIN) {
+                                when {
+                                    !android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() -> message = "ایمیل معتبر وارد کنید."
+                                    password.isBlank() -> message = "رمز عبور را وارد کنید."
+                                    else -> {
+                                        loading = true
+                                        message = "در حال بررسی حساب مدیر ارشد..."
+                                        scope.launch {
+                                            val result = withContext(Dispatchers.IO) {
+                                                authenticateAdmin(email.trim(), password)
+                                            }
+                                            loading = false
+                                            message = result.message
+                                            if (result.success) adminLoggedIn = true
+                                        }
+                                    }
+                                }
+                            } else {
+                                message = when {
+                                    mobile.length != 11 || !mobile.startsWith("09") -> "شماره موبایل معتبر وارد کنید."
+                                    password.length < 8 -> "رمز عبور باید حداقل ۸ کاراکتر باشد."
+                                    register && (firstName.isBlank() || lastName.isBlank()) -> "نام و نام خانوادگی را کامل کنید."
+                                    register && role == UserRole.COMPANY && companyName.isBlank() -> "نام شرکت را وارد کنید."
+                                    else -> "ورود و ثبت‌نام راننده و شرکت هنوز به احراز هویت متصل نشده است."
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (loading) "لطفاً صبر کنید..." else if (role == UserRole.ADMIN) "ورود مدیر ارشد" else if (register) "ارسال درخواست ثبت‌نام" else "ورود به حساب")
+                    }
+                    Text(message, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
+                    if (role != UserRole.ADMIN) {
+                        HorizontalDivider()
+                        Text("ورود واقعی مدیر ارشد از بخش «ورود مدیر ارشد» انجام می‌شود.", fontSize = 12.sp, textAlign = TextAlign.Center)
+                        Text("نسخه آزمایشی؛ ورود راننده و شرکت هنوز فعال نشده است.", fontSize = 12.sp, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.error)
+                    }
+                }
             }
         }
+    }
+}
+
+private fun authenticateAdmin(email: String, password: String): AdminLoginResult {
+    var authConnection: HttpURLConnection? = null
+    var profileConnection: HttpURLConnection? = null
+    return try {
+        authConnection = (URL("$SUPABASE_URL/auth/v1/token?grant_type=password").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 15000
+            doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Content-Type", "application/json")
+        }
+        val loginBody = JSONObject().put("email", email).put("password", password).toString()
+        authConnection.outputStream.use { it.write(loginBody.toByteArray(Charsets.UTF_8)) }
+        val authCode = authConnection.responseCode
+        val authStream = if (authCode in 200..299) authConnection.inputStream else authConnection.errorStream
+        val authText = authStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (authCode !in 200..299) {
+            return AdminLoginResult(false, "ایمیل یا رمز عبور صحیح نیست، یا ورود ایمیلی در سامانه نیاز به بررسی دارد.")
+        }
+
+        val authJson = JSONObject(authText)
+        val accessToken = authJson.optString("access_token")
+        val userId = authJson.optJSONObject("user")?.optString("id").orEmpty()
+        if (accessToken.isBlank() || userId.isBlank()) {
+            return AdminLoginResult(false, "پاسخ ورود از سرور کامل نبود. دوباره تلاش کنید.")
+        }
+
+        val profileUrl = "$SUPABASE_URL/rest/v1/admin_users?select=role,is_blocked&user_id=eq.$userId&limit=1"
+        profileConnection = (URL(profileUrl).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15000
+            readTimeout = 15000
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Accept", "application/json")
+        }
+        val profileCode = profileConnection.responseCode
+        val profileStream = if (profileCode in 200..299) profileConnection.inputStream else profileConnection.errorStream
+        val profileText = profileStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (profileCode !in 200..299) {
+            return AdminLoginResult(false, "ورود انجام شد اما بررسی سطح دسترسی ممکن نشد. تنظیمات امنیتی باید بررسی شود.")
+        }
+
+        val rows = JSONArray(profileText)
+        if (rows.length() == 0) {
+            return AdminLoginResult(false, "این حساب در فهرست مدیران ثبت نشده است.")
+        }
+        val admin = rows.getJSONObject(0)
+        if (admin.optBoolean("is_blocked", false)) {
+            return AdminLoginResult(false, "دسترسی این حساب مدیر مسدود شده است.")
+        }
+        if (admin.optString("role") != "super_admin") {
+            return AdminLoginResult(false, "این حساب دسترسی مدیر ارشد اصلی را ندارد.")
+        }
+        AdminLoginResult(true, "ورود مدیر ارشد با موفقیت انجام شد.")
+    } catch (_: Exception) {
+        AdminLoginResult(false, "ارتباط با سرور برقرار نشد. اینترنت را بررسی و دوباره تلاش کنید.")
+    } finally {
+        authConnection?.disconnect()
+        profileConnection?.disconnect()
     }
 }
