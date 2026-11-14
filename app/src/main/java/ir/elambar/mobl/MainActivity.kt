@@ -46,7 +46,7 @@ private enum class UserRole(val label: String) {
 
 private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "")
 private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "")
-private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String)
+private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String)\nprivate data class AdminRecord(val id: String, val title: String, val detail: String, val status: String)
 
 @Composable
 private fun ElaanBarApp() {
@@ -87,7 +87,7 @@ private fun ElaanBarApp() {
     var loading by remember { mutableStateOf(false) }
     var adminLoggedIn by remember { mutableStateOf(false) }
     var adminAccessToken by remember { mutableStateOf("") }
-    var adminPanelData by remember { mutableStateOf("") }
+    var adminPanelData by remember { mutableStateOf("") }\n    var adminRecords by remember { mutableStateOf<List<AdminRecord>>(emptyList()) }\n    var adminActionMessage by remember { mutableStateOf("") }
     var adminPanelLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -136,10 +136,15 @@ private fun ElaanBarApp() {
                                 onClick = {
                                     selectedPanel = title
                                     adminPanelData = ""
+                                    adminRecords = emptyList()
+                                    adminActionMessage = ""
                                     if (title in listOf("مدیریت رانندگان", "مدیریت شرکت‌ها", "مدیریت بارها")) {
                                         adminPanelLoading = true
                                         scope.launch {
                                             adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, title) }
+                                            if (title == "مدیریت رانندگان" || title == "مدیریت شرکت‌ها") {
+                                                adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, title) }
+                                            }
                                             adminPanelLoading = false
                                         }
                                     }
@@ -163,10 +168,59 @@ private fun ElaanBarApp() {
                                 Text("در حال دریافت اطلاعات از سامانه...")
                             } else {
                                 Text(adminPanelData.ifBlank { "اطلاعاتی برای نمایش دریافت نشد." }, textAlign = TextAlign.Start)
+                                if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها") {
+                                    adminRecords.forEach { record ->
+                                        Card(Modifier.fillMaxWidth()) {
+                                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                Text(record.title, style = MaterialTheme.typography.titleSmall)
+                                                Text(record.detail, style = MaterialTheme.typography.bodySmall)
+                                                Text("وضعیت: ${record.status}")
+                                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    if (record.status != "approved") {
+                                                        Button(onClick = {
+                                                            adminPanelLoading = true
+                                                            scope.launch {
+                                                                adminActionMessage = withContext(Dispatchers.IO) { updateMemberStatus(adminAccessToken, selectedPanel ?: "", record.id, "approved") }
+                                                                adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, selectedPanel ?: "") }
+                                                                adminPanelLoading = false
+                                                            }
+                                                        }) { Text("تأیید حساب") }
+                                                    }
+                                                    if (record.status != "blocked") {
+                                                        OutlinedButton(onClick = {
+                                                            adminPanelLoading = true
+                                                            scope.launch {
+                                                                adminActionMessage = withContext(Dispatchers.IO) { updateMemberStatus(adminAccessToken, selectedPanel ?: "", record.id, "blocked") }
+                                                                adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, selectedPanel ?: "") }
+                                                                adminPanelLoading = false
+                                                            }
+                                                        }) { Text("مسدودسازی") }
+                                                    }
+                                                    if (record.status == "blocked") {
+                                                        Button(onClick = {
+                                                            adminPanelLoading = true
+                                                            scope.launch {
+                                                                adminActionMessage = withContext(Dispatchers.IO) { updateMemberStatus(adminAccessToken, selectedPanel ?: "", record.id, "approved") }
+                                                                adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, selectedPanel ?: "") }
+                                                                adminPanelLoading = false
+                                                            }
+                                                        }) { Text("رفع مسدودی") }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (adminRecords.isEmpty()) Text("فهرست حساب‌ها خالی است یا دسترسی مشاهده ندارید.")
+                                    if (adminActionMessage.isNotBlank()) Text(adminActionMessage, color = MaterialTheme.colorScheme.secondary)
+                                }
                                 OutlinedButton(onClick = {
                                     adminPanelLoading = true
                                     scope.launch {
-                                        adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, selectedPanel ?: "") }
+                                        val panel = selectedPanel ?: ""
+                                        adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, panel) }
+                                        if (panel == "مدیریت رانندگان" || panel == "مدیریت شرکت‌ها") {
+                                            adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, panel) }
+                                        }
                                         adminPanelLoading = false
                                     }
                                 }) { Text("بروزرسانی") }
@@ -765,6 +819,77 @@ private fun fetchMatchedLoads(accessToken: String): String {
         }
     } catch (_: Exception) {
         "ارتباط با سامانه برقرار نشد. اینترنت را بررسی کنید."
+    } finally {
+        connection?.disconnect()
+    }
+}
+
+
+private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRecord> {
+    if (accessToken.isBlank()) return emptyList()
+    val table = when (panel) {
+        "مدیریت رانندگان" -> "drivers"
+        "مدیریت شرکت‌ها" -> "companies"
+        else -> return emptyList()
+    }
+    var connection: HttpURLConnection? = null
+    return try {
+        val select = if (table == "drivers")
+            "id,first_name,last_name,full_name,mobile,vehicle_type,primary_destination,status"
+        else "id,first_name,last_name,company_name,manager_name,mobile,status"
+        val url = "$SUPABASE_URL/rest/v1/$table?select=$select&order=created_at.desc&limit=100"
+        connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15000
+            readTimeout = 20000
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Accept", "application/json")
+        }
+        if (connection.responseCode !in 200..299) return emptyList()
+        val rows = JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
+        (0 until rows.length()).map { i ->
+            val item = rows.getJSONObject(i)
+            val title = if (table == "drivers")
+                (item.optString("first_name") + " " + item.optString("last_name")).trim().ifBlank { item.optString("full_name") }
+            else item.optString("company_name")
+            val detail = if (table == "drivers")
+                "${item.optString("mobile")} | ${item.optString("vehicle_type")} | ${item.optString("primary_destination")}"
+            else "${item.optString("manager_name")} | ${item.optString("mobile")}"
+            AdminRecord(item.optString("id"), title, detail, item.optString("status"))
+        }
+    } catch (_: Exception) {
+        emptyList()
+    } finally {
+        connection?.disconnect()
+    }
+}
+
+private fun updateMemberStatus(accessToken: String, panel: String, id: String, status: String): String {
+    if (accessToken.isBlank() || id.isBlank()) return "نشست مدیر معتبر نیست."
+    val table = when (panel) {
+        "مدیریت رانندگان" -> "drivers"
+        "مدیریت شرکت‌ها" -> "companies"
+        else -> return "این عملیات برای این بخش تعریف نشده است."
+    }
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL("$SUPABASE_URL/rest/v1/$table?id=eq.$id").openConnection() as HttpURLConnection).apply {
+            requestMethod = "PATCH"
+            connectTimeout = 15000
+            readTimeout = 20000
+            doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Prefer", "return=minimal")
+        }
+        connection.outputStream.use { it.write(JSONObject().put("status", status).toString().toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        if (code in 200..299) "وضعیت حساب با موفقیت به «$status» تغییر کرد."
+        else "تغییر وضعیت انجام نشد (کد $code). مجوز edit مدیر ارشد را بررسی کنید."
+    } catch (_: Exception) {
+        "ارتباط با سامانه برقرار نشد."
     } finally {
         connection?.disconnect()
     }
