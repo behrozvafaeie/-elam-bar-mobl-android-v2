@@ -230,7 +230,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         adminPanelLoading = true
                                         scope.launch {
                                             adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, title) }
-                                            if (title == "مدیریت رانندگان" || title == "مدیریت شرکت‌ها") {
+                                            if (title == "مدیریت رانندگان" || title == "مدیریت شرکت‌ها" || title == "مدیریت مدارک") {
                                                 adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, title) }
                                             }
                                             adminPanelLoading = false
@@ -323,7 +323,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                             }
                                         }
                                     }
-                                    if (adminRecords.isEmpty()) Text("فهرست حساب‌ها خالی است یا دسترسی مشاهده ندارید.")
+                                    if (adminRecords.isEmpty()) Text(if (selectedPanel == "مدیریت مدارک") "مدرکی ثبت نشده یا مجوز مشاهده ندارید." else "فهرست حساب‌ها خالی است یا دسترسی مشاهده ندارید.")
                                     if (adminActionMessage.isNotBlank()) Text(adminActionMessage, color = MaterialTheme.colorScheme.secondary)
                                 }
                                 OutlinedButton(onClick = {
