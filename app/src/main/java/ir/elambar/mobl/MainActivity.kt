@@ -42,7 +42,7 @@ private enum class UserRole(val label: String) {
     ADMIN("مدیر ارشد")
 }
 
-private data class AdminLoginResult(val success: Boolean, val message: String)
+private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "")
 private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "")
 
 @Composable
@@ -62,6 +62,9 @@ private fun ElaanBarApp() {
     var message by remember { mutableStateOf("برای ادامه، نوع حساب را انتخاب کنید.") }
     var loading by remember { mutableStateOf(false) }
     var adminLoggedIn by remember { mutableStateOf(false) }
+    var adminAccessToken by remember { mutableStateOf("") }
+    var adminPanelData by remember { mutableStateOf("") }
+    var adminPanelLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl) {
@@ -106,7 +109,17 @@ private fun ElaanBarApp() {
                         panels.forEach { (title, subtitle) ->
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                onClick = { selectedPanel = title },
+                                onClick = {
+                                    selectedPanel = title
+                                    adminPanelData = ""
+                                    if (title in listOf("مدیریت رانندگان", "مدیریت شرکت‌ها", "مدیریت بارها")) {
+                                        adminPanelLoading = true
+                                        scope.launch {
+                                            adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, title) }
+                                            adminPanelLoading = false
+                                        }
+                                    }
+                                },
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                             ) {
                                 Column(Modifier.fillMaxWidth().padding(16.dp)) {
@@ -120,10 +133,26 @@ private fun ElaanBarApp() {
                             Text("بازگشت به پنل اصلی")
                         }
                         Text(selectedPanel ?: "", fontSize = 21.sp, color = MaterialTheme.colorScheme.primary)
-                        Text(
-                            "صفحه این بخش در برنامه اضافه شده، اما اتصال اطلاعات و عملیات واقعی آن هنوز تکمیل نشده است. برای جلوگیری از نمایش اطلاعات نادرست، فعلاً داده‌ای در این قسمت نشان داده نمی‌شود.",
-                            textAlign = TextAlign.Center
-                        )
+                        if (selectedPanel in listOf("مدیریت رانندگان", "مدیریت شرکت‌ها", "مدیریت بارها")) {
+                            if (adminPanelLoading) {
+                                CircularProgressIndicator()
+                                Text("در حال دریافت اطلاعات از سامانه...")
+                            } else {
+                                Text(adminPanelData.ifBlank { "اطلاعاتی برای نمایش دریافت نشد." }, textAlign = TextAlign.Start)
+                                OutlinedButton(onClick = {
+                                    adminPanelLoading = true
+                                    scope.launch {
+                                        adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, selectedPanel ?: "") }
+                                        adminPanelLoading = false
+                                    }
+                                }) { Text("بروزرسانی") }
+                            }
+                        } else {
+                            Text(
+                                "این بخش در نسخه بعدی تکمیل می‌شود. فعلاً عملیات مدیریتی تغییردهنده اطلاعات فعال نشده است.",
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                     OutlinedButton(
                         onClick = {
@@ -218,7 +247,7 @@ private fun ElaanBarApp() {
                                             }
                                             loading = false
                                             message = result.message
-                                            if (result.success) adminLoggedIn = true
+                                            if (result.success) { adminAccessToken = result.accessToken; adminLoggedIn = true }
                                         }
                                     }
                                 }
@@ -258,6 +287,68 @@ private fun ElaanBarApp() {
                 }
             }
         }
+    }
+}
+
+
+private fun fetchAdminPanelData(accessToken: String, panel: String): String {
+    if (accessToken.isBlank()) return "نشست مدیر ارشد معتبر نیست؛ خارج شوید و دوباره وارد شوید."
+    val (table, select, title) = when (panel) {
+        "مدیریت رانندگان" -> Triple("drivers", "first_name,last_name,mobile,vehicle_type,primary_destination,status", "رانندگان")
+        "مدیریت شرکت‌ها" -> Triple("companies", "company_name,manager_name,mobile,status", "شرکت‌ها")
+        "مدیریت بارها" -> Triple("loads", "origin,destination,vehicle_type,loading_type,status,created_at", "بارها")
+        else -> return "این بخش هنوز آماده نیست."
+    }
+    var connection: HttpURLConnection? = null
+    return try {
+        val url = "$SUPABASE_URL/rest/v1/$table?select=$select&order=created_at.desc&limit=100"
+        connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15000
+            readTimeout = 20000
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Accept", "application/json")
+        }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code !in 200..299) return "دریافت اطلاعات $title ناموفق بود (کد $code). سطح دسترسی یا اتصال سامانه باید بررسی شود."
+        val rows = JSONArray(body)
+        if (rows.length() == 0) return "هنوز موردی در فهرست $title ثبت نشده است."
+        buildString {
+            append("تعداد موارد نمایش‌داده‌شده: ").append(rows.length()).append("\\n\\n")
+            for (i in 0 until rows.length()) {
+                val item = rows.getJSONObject(i)
+                append(i + 1).append(". ")
+                when (panel) {
+                    "مدیریت رانندگان" -> {
+                        append(item.optString("first_name")).append(" ").append(item.optString("last_name"))
+                        append(" | ").append(item.optString("vehicle_type"))
+                        append(" | ").append(item.optString("primary_destination"))
+                        append(" | ").append(item.optString("status"))
+                    }
+                    "مدیریت شرکت‌ها" -> {
+                        append(item.optString("company_name"))
+                        append(" | مسئول: ").append(item.optString("manager_name"))
+                        append(" | ").append(item.optString("mobile"))
+                        append(" | ").append(item.optString("status"))
+                    }
+                    else -> {
+                        append(item.optString("origin")).append(" ← ").append(item.optString("destination"))
+                        append(" | ").append(item.optString("vehicle_type"))
+                        append(" | ").append(item.optString("loading_type"))
+                        append(" | ").append(item.optString("status"))
+                    }
+                }
+                append("\\n")
+            }
+            append("\\nفقط مشاهده اطلاعات فعال است؛ تغییر وضعیت و حذف تا تکمیل کنترل‌های امنیتی غیرفعال است.")
+        }
+    } catch (_: Exception) {
+        "ارتباط با سامانه برقرار نشد. اینترنت را بررسی کنید."
+    } finally {
+        connection?.disconnect()
     }
 }
 
@@ -316,7 +407,7 @@ private fun authenticateAdmin(email: String, password: String): AdminLoginResult
         if (admin.optString("role") != "super_admin") {
             return AdminLoginResult(false, "این حساب دسترسی مدیر ارشد اصلی را ندارد.")
         }
-        AdminLoginResult(true, "ورود مدیر ارشد با موفقیت انجام شد.")
+        AdminLoginResult(true, "ورود مدیر ارشد با موفقیت انجام شد.", accessToken)
     } catch (_: Exception) {
         AdminLoginResult(false, "ارتباط با سرور برقرار نشد. اینترنت را بررسی و دوباره تلاش کنید.")
     } finally {
