@@ -263,7 +263,31 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                 Text(record.title, style = MaterialTheme.typography.titleSmall)
                                                 Text(record.detail, style = MaterialTheme.typography.bodySmall)
                                                 Text("وضعیت: ${record.status}")
-                                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                if (selectedPanel == "مدیریت مدارک") {
+                                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                        if (record.status != "approved") {
+                                                            Button(onClick = {
+                                                                adminPanelLoading = true
+                                                                scope.launch {
+                                                                    adminActionMessage = withContext(Dispatchers.IO) { updateDriverDocumentStatus(adminAccessToken, record.id, "approved") }
+                                                                    adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, "مدیریت مدارک") }
+                                                                    adminPanelLoading = false
+                                                                }
+                                                            }) { Text("تأیید مدرک") }
+                                                        }
+                                                        if (record.status != "rejected") {
+                                                            OutlinedButton(onClick = {
+                                                                adminPanelLoading = true
+                                                                scope.launch {
+                                                                    adminActionMessage = withContext(Dispatchers.IO) { updateDriverDocumentStatus(adminAccessToken, record.id, "rejected") }
+                                                                    adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, "مدیریت مدارک") }
+                                                                    adminPanelLoading = false
+                                                                }
+                                                            }) { Text("رد مدرک") }
+                                                        }
+                                                    }
+                                                } else {
+                                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                     if (record.status != "approved") {
                                                         Button(onClick = {
                                                             adminPanelLoading = true
@@ -294,6 +318,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                             }
                                                         }) { Text("رفع مسدودی") }
                                                     }
+                                                }
                                                 }
                                             }
                                         }
@@ -1313,6 +1338,24 @@ private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRec
     } finally {
         connection?.disconnect()
     }
+}
+
+private fun updateDriverDocumentStatus(accessToken: String, id: String, status: String): String {
+    if (accessToken.isBlank() || id.isBlank() || status !in listOf("approved", "rejected")) return "درخواست تغییر وضعیت مدرک معتبر نیست."
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL(SUPABASE_URL + "/rest/v1/driver_documents?id=eq." + id).openConnection() as HttpURLConnection).apply {
+            requestMethod = "PATCH"; connectTimeout = 15000; readTimeout = 20000; doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer " + accessToken)
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Prefer", "return=minimal")
+        }
+        connection.outputStream.use { it.write(JSONObject().put("review_status", status).toString().toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        if (code in 200..299) "وضعیت مدرک تغییر کرد." else "تغییر وضعیت مدرک انجام نشد (کد " + code + ")."
+    } catch (_: Exception) { "ارتباط با سامانه برقرار نشد." }
+    finally { connection?.disconnect() }
 }
 
 private fun updateMemberStatus(accessToken: String, panel: String, id: String, status: String): String {
