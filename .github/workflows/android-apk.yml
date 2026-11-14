@@ -11,7 +11,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -74,7 +74,7 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
       - name: Install and launch APK on Android emulator
-        timeout-minutes: 12
+        timeout-minutes: 15
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
@@ -82,6 +82,47 @@ jobs:
           arch: x86_64
           profile: pixel_2
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -wipe-data -no-metrics
-          emulator-boot-timeout: 600
+          emulator-boot-timeout: 900
           disable-animations: false
-          script: adb wait-for-device && adb install --no-streaming -r app/build/outputs/apk/debug/app-debug.apk && adb shell am force-stop ir.elambar.mobl && adb shell monkey -p ir.elambar.mobl 1 && sleep 8 && adb shell pidof ir.elambar.mobl
+          script: |
+            set -eu
+            APK=app/build/outputs/apk/debug/app-debug.apk
+
+            wait_for_package_manager() {
+              count=0
+              while [ "$count" -lt 90 ]; do
+                booted="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+                if [ "$booted" = "1" ] && adb shell cmd package list packages >/dev/null 2>&1; then
+                  return 0
+                fi
+                count=$((count + 1))
+                sleep 5
+              done
+              return 1
+            }
+
+            attempt=1
+            while [ "$attempt" -le 3 ]; do
+              echo "APK install/launch attempt $attempt of 3"
+              if wait_for_package_manager && \
+                 adb install --no-streaming -r "$APK" && \
+                 adb shell am force-stop ir.elambar.mobl && \
+                 adb shell monkey -p ir.elambar.mobl 1 && \
+                 sleep 8 && \
+                 adb shell pidof ir.elambar.mobl; then
+                echo "APK installed and app process is running."
+                exit 0
+              fi
+
+              echo "Attempt $attempt failed; checking/restarting emulator before retry."
+              if [ "$attempt" -lt 3 ]; then
+                adb reboot || true
+                sleep 10
+                adb wait-for-device || true
+              fi
+              attempt=$((attempt + 1))
+            done
+
+            echo "APK installation or launch failed after 3 attempts."
+            adb devices -l || true
+            exit 1
