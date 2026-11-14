@@ -57,14 +57,19 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            var palette by remember { mutableIntStateOf(0) }
+            var palette by remember { mutableIntStateOf(getSharedPreferences("elambar_ui", MODE_PRIVATE).getInt("palette", 0).coerceIn(0, 3)) }
             val schemes = listOf(
                 lightColorScheme(),
                 lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF176B5B), secondary = androidx.compose.ui.graphics.Color(0xFFB06B32), primaryContainer = androidx.compose.ui.graphics.Color(0xFFD8EFE7)),
                 lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF244B91), secondary = androidx.compose.ui.graphics.Color(0xFF9A5E9E), primaryContainer = androidx.compose.ui.graphics.Color(0xFFDCE6FA)),
                 darkColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF8ECDBA), secondary = androidx.compose.ui.graphics.Color(0xFFFFC18B))
             )
-            MaterialTheme(colorScheme = schemes[palette]) { ElaanBarApp(palette) { palette = (palette + 1) % schemes.size } }
+            MaterialTheme(colorScheme = schemes[palette]) {
+                ElaanBarApp(palette) {
+                    palette = (palette + 1) % schemes.size
+                    getSharedPreferences("elambar_ui", MODE_PRIVATE).edit().putInt("palette", palette).apply()
+                }
+            }
         }
     }
 }
@@ -161,7 +166,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
             }
         }
     }
-    var soundEnabled by remember { mutableStateOf(true) }
+    var soundEnabled by remember { mutableStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getBoolean("sound", true)) }
     LaunchedEffect(Unit) {
         val saved = DeviceSessionStore.load(context)
         if (saved != null) {
@@ -199,7 +204,10 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = onNextPalette) { Text(listOf("تم روشن", "تم سبز", "تم آبی", "تم تیره")[palette]) }
-                    TextButton(onClick = { soundEnabled = !soundEnabled }) { Text(if (soundEnabled) "صدای اعلان روشن" else "صدای اعلان خاموش") }
+                    TextButton(onClick = {
+                        soundEnabled = !soundEnabled
+                        context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putBoolean("sound", soundEnabled).apply()
+                    }) { Text(if (soundEnabled) "صدای اعلان روشن" else "صدای اعلان خاموش") }
                 }
                 if (adminLoggedIn) {
                     var selectedPanel by remember { mutableStateOf<String?>(null) }
