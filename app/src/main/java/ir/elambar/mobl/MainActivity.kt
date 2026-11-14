@@ -90,7 +90,7 @@ private data class AdminRecord(val id: String, val title: String, val detail: St
 @Composable
 private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var role by remember { mutableStateOf(UserRole.DRIVER) }
-    var register by remember { mutableStateOf(true) }
+    var register by remember { mutableStateOf(false) }
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
     var mobile by remember { mutableStateOf("") }
@@ -544,6 +544,41 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         Text("فقط حساب مدیر ارشد ثبت‌شده در سامانه اجازه ورود به پنل مدیریت را دارد.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
                     }
 
+                    if (role != UserRole.ADMIN) {
+                        TextButton(onClick = {
+                            register = !register
+                            message = if (register) "فرم ثبت‌نام را تکمیل کنید." else "نام کاربری و رمز عبور را وارد کنید."
+                        }) {
+                            Text(if (register) "قبلاً حساب دارید؟ ورود" else "حساب ندارید؟ ثبت‌نام")
+                        }
+                    }
+
+                    if (!register && role != UserRole.ADMIN) {
+                        OutlinedTextField(
+                            value = username,
+                            onValueChange = { username = it.trim() },
+                            label = { Text("نام کاربری") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            label = { Text("رمز عبور") },
+                            visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Icon(
+                                        imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                        contentDescription = if (passwordVisible) "مخفی کردن رمز عبور" else "نمایش رمز عبور"
+                                    )
+                                }
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
                     if (register && role != UserRole.ADMIN) {
                         OutlinedTextField(firstName, { firstName = it }, label = { Text("نام") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(lastName, { lastName = it }, label = { Text("نام خانوادگی") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -633,7 +668,27 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     }
                                 }
                             } else {
-                                message = "برای حساب‌های قبلی، ورود با شماره موبایل پس از فعال‌سازی پیامک فعال می‌شود."
+                                if (username.isBlank() || password.isBlank()) {
+                                    message = "نام کاربری و رمز عبور را وارد کنید."
+                                } else {
+                                    loading = true
+                                    message = "در حال بررسی اطلاعات ورود..."
+                                    scope.launch {
+                                        val result = withContext(Dispatchers.IO) {
+                                            authenticateUser(username, password, role)
+                                        }
+                                        loading = false
+                                        message = result.message
+                                        if (result.success && result.accessToken.isNotBlank() && result.refreshToken.isNotBlank()) {
+                                            userLoggedIn = true
+                                            userDisplayName = result.displayName
+                                            userStatus = result.status
+                                            userAccessToken = result.accessToken
+                                            profilePhotoUrl = result.photoUrl
+                                            DeviceSessionStore.save(context, result.refreshToken, role.name)
+                                        }
+                                    }
+                                }
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
@@ -1099,10 +1154,11 @@ private fun authenticateUser(username: String, password: String, role: UserRole)
         val session = authJson.optJSONObject("session") ?: return UserLoginResult(false, "نشست ورود از سرور دریافت نشد.")
         val userId = user.optString("id")
         val accessToken = session.optString("access_token")
+        val refreshToken = session.optString("refresh_token")
         val accountType = user.optJSONObject("app_metadata")?.optString("account_type").orEmpty()
         val expectedType = if (role == UserRole.DRIVER) "driver" else "company"
         if (accountType != expectedType) return UserLoginResult(false, "این نام کاربری برای نوع حساب انتخاب‌شده ثبت نشده است.")
-        if (userId.isBlank() || accessToken.isBlank()) return UserLoginResult(false, "اطلاعات نشست ورود ناقص است.")
+        if (userId.isBlank() || accessToken.isBlank() || refreshToken.isBlank()) return UserLoginResult(false, "اطلاعات نشست ورود ناقص است.")
 
         val table = if (role == UserRole.DRIVER) "drivers" else "companies"
         val select = if (role == UserRole.DRIVER) "status,first_name,last_name,full_name" else "status,first_name,last_name,company_name,manager_name"
@@ -1134,7 +1190,14 @@ private fun authenticateUser(username: String, password: String, role: UserRole)
         when (status) {
             "blocked" -> UserLoginResult(false, "دسترسی این حساب مسدود شده است.")
             "rejected" -> UserLoginResult(false, "درخواست حساب شما رد شده است. برای پیگیری با مدیریت تماس بگیرید.")
-            "pending", "approved" -> UserLoginResult(true, if (status == "pending") "ورود انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ورود با موفقیت انجام شد.", displayName, status, accessToken)
+            "pending", "approved" -> UserLoginResult(
+                success = true,
+                message = if (status == "pending") "ورود انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ورود با موفقیت انجام شد.",
+                displayName = displayName,
+                status = status,
+                accessToken = accessToken,
+                refreshToken = refreshToken
+            )
             else -> UserLoginResult(false, "وضعیت حساب در سامانه معتبر نیست.")
         }
     } catch (_: Exception) {
