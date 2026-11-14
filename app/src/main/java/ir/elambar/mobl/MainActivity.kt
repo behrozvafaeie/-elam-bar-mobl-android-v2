@@ -133,7 +133,7 @@ private fun ElaanBarApp() {
                             Text("بازگشت به پنل اصلی")
                         }
                         Text(selectedPanel ?: "", fontSize = 21.sp, color = MaterialTheme.colorScheme.primary)
-                        if (selectedPanel != null && selectedPanel in listOf("مدیریت رانندگان", "مدیریت شرکت‌ها", "مدیریت بارها")) {
+                        if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها" || selectedPanel == "مدیریت بارها") {
                             if (adminPanelLoading) {
                                 CircularProgressIndicator()
                                 Text("در حال دریافت اطلاعات از سامانه...")
