@@ -60,16 +60,23 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             var palette by remember { mutableIntStateOf(getSharedPreferences("elambar_ui", MODE_PRIVATE).getInt("palette", 0).coerceIn(0, 3)) }
+            var textScale by remember { mutableFloatStateOf(getSharedPreferences("elambar_ui", MODE_PRIVATE).getFloat("text_scale", 1.0f).coerceIn(0.85f, 1.35f)) }
+            val baseDensity = androidx.compose.ui.platform.LocalDensity.current
             val schemes = listOf(
                 lightColorScheme(),
                 lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF176B5B), secondary = androidx.compose.ui.graphics.Color(0xFFB06B32), primaryContainer = androidx.compose.ui.graphics.Color(0xFFD8EFE7)),
                 lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF244B91), secondary = androidx.compose.ui.graphics.Color(0xFF9A5E9E), primaryContainer = androidx.compose.ui.graphics.Color(0xFFDCE6FA)),
                 darkColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF8ECDBA), secondary = androidx.compose.ui.graphics.Color(0xFFFFC18B))
             )
-            MaterialTheme(colorScheme = schemes[palette]) {
-                ElaanBarApp(palette) {
-                    palette = (palette + 1) % schemes.size
-                    getSharedPreferences("elambar_ui", MODE_PRIVATE).edit().putInt("palette", palette).apply()
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides baseDensity.copy(fontScale = baseDensity.fontScale * textScale)) {
+                MaterialTheme(colorScheme = schemes[palette]) {
+                    ElaanBarApp(palette, textScale, { value ->
+                        textScale = value.coerceIn(0.85f, 1.35f)
+                        getSharedPreferences("elambar_ui", MODE_PRIVATE).edit().putFloat("text_scale", textScale).apply()
+                    }) {
+                        palette = (palette + 1) % schemes.size
+                        getSharedPreferences("elambar_ui", MODE_PRIVATE).edit().putInt("palette", palette).apply()
+                    }
                 }
             }
         }
@@ -88,7 +95,7 @@ private data class LoadDraft(val destination: String, val cargoType: String, val
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
 
 @Composable
-private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
+private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Float) -> Unit, onNextPalette: () -> Unit) {
     var role by remember { mutableStateOf(UserRole.DRIVER) }
     var register by remember { mutableStateOf(true) }
     var firstName by remember { mutableStateOf("") }
@@ -170,6 +177,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         }
     }
     var soundEnabled by remember { mutableStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getBoolean("sound", true)) }
+    var settingsOpen by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val saved = DeviceSessionStore.load(context)
         if (saved != null) {
@@ -238,14 +246,29 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
                 Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onNextPalette) { Text(listOf("تم روشن", "تم سبز", "تم آبی", "تم تیره")[palette]) }
-                    TextButton(onClick = {
-                        soundEnabled = !soundEnabled
-                        context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putBoolean("sound", soundEnabled).apply()
-                    }) { Text(if (soundEnabled) "صدای اعلان روشن" else "صدای اعلان خاموش") }
+                    TextButton(onClick = { settingsOpen = !settingsOpen }) { Text(if (settingsOpen) "بستن تنظیمات" else "تنظیمات برنامه") }
                 }
+                if (settingsOpen) {
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("تنظیمات برنامه", style = MaterialTheme.typography.titleMedium)
+                            Text("اندازه نوشته‌ها: ${(textScale * 100).toInt()}٪")
+                            Slider(value = textScale, onValueChange = onTextScaleChange, valueRange = 0.85f..1.35f, steps = 4)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(onClick = onNextPalette) { Text("تغییر تم: " + listOf("روشن", "سبز", "آبی", "تیره")[palette]) }
+                                TextButton(onClick = {
+                                    soundEnabled = !soundEnabled
+                                    context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putBoolean("sound", soundEnabled).apply()
+                                }) { Text(if (soundEnabled) "صدای اعلان روشن" else "بی‌صدا کردن اعلان‌ها") }
+                            }
+                            Text("تنظیمات روی همین گوشی ذخیره می‌شود.", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+                androidx.activity.compose.BackHandler(enabled = settingsOpen) { settingsOpen = false }
                 if (adminLoggedIn) {
                     var selectedPanel by remember { mutableStateOf<String?>(null) }
+                    androidx.activity.compose.BackHandler(enabled = selectedPanel != null) { selectedPanel = null }
                     val panels = listOf(
                         "مدیریت رانندگان" to "بررسی فهرست رانندگان، مدارک و وضعیت تأیید",
                         "مدیریت شرکت‌ها" to "بررسی شرکت‌ها و فعال‌سازی حساب‌ها",
