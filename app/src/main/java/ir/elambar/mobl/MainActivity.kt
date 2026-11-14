@@ -89,7 +89,7 @@ private data class AdminRecord(val id: String, val title: String, val detail: St
 @Composable
 private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var role by remember { mutableStateOf(UserRole.DRIVER) }
-    var register by remember { mutableStateOf(false) }
+    var register by remember { mutableStateOf(true) }
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
     var mobile by remember { mutableStateOf("") }
