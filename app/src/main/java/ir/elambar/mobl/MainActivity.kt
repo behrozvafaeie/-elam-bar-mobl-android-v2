@@ -594,7 +594,7 @@ private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Floa
                                             val result = withContext(Dispatchers.IO) { publishLoadBatch(userAccessToken, loadDrafts.toList()) }
                                             loadPublishing = false
                                             loadActionMessage = result
-                                            if (result.startsWith("ثبت شد")) { if (soundEnabled) playAppTone(); loadDrafts.clear() }
+                                            if (result.startsWith("ثبت شد")) { if (soundEnabled) playAppTone(soundVolume.toInt()); loadDrafts.clear() }
                                         }
                                     }, modifier = Modifier.fillMaxWidth()) { Text(if (loadPublishing) "در حال ثبت..." else "انتشار همه بارهای فهرست") }
                                 }
@@ -756,7 +756,7 @@ private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Floa
                                                 userAccessToken = result.accessToken
                                                 profilePhotoUrl = result.photoUrl
                                                 DeviceSessionStore.save(context, result.refreshToken, role.name)
-                                                if (soundEnabled) playAppTone()
+                                                if (soundEnabled) playAppTone(soundVolume.toInt())
                                             }
                                         } else message = created
                                         loading = false
@@ -779,7 +779,7 @@ private fun ElaanBarApp(palette: Int, textScale: Float, onTextScaleChange: (Floa
                                             userAccessToken = result.accessToken
                                             profilePhotoUrl = result.photoUrl
                                             DeviceSessionStore.save(context, result.refreshToken, role.name)
-                                            if (soundEnabled) playAppTone()
+                                            if (soundEnabled) playAppTone(soundVolume.toInt())
                                         }
                                     }
                                 }
