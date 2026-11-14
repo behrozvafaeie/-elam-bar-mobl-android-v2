@@ -1,6 +1,12 @@
 package ir.elambar.mobl
 
 import android.os.Bundle
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import coil.compose.AsyncImage
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.content.Context
@@ -68,7 +74,7 @@ private enum class UserRole(val label: String) {
 }
 
 private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "")
-private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "")
+private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "")
 private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String)
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String)
 
@@ -84,6 +90,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var userDisplayName by remember { mutableStateOf("") }
     var userStatus by remember { mutableStateOf("") }
     var userAccessToken by remember { mutableStateOf("") }
+    var profilePhotoUrl by remember { mutableStateOf("") }
+    var profilePhotoUploading by remember { mutableStateOf(false) }
+    var profilePhotoMessage by remember { mutableStateOf("") }
     var matchedLoadsText by remember { mutableStateOf("برای دریافت بارهای متناسب، دکمه بروزرسانی را بزنید.") }
     var matchedLoadsLoading by remember { mutableStateOf(false) }
     var loadDestination by remember { mutableStateOf("") }
@@ -117,6 +126,20 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var adminPanelLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null && userAccessToken.isNotBlank()) {
+            profilePhotoUploading = true
+            profilePhotoMessage = "در حال بارگذاری تصویر پروفایل..."
+            scope.launch {
+                val uploaded = withContext(Dispatchers.IO) { uploadProfilePhoto(context, uri, userAccessToken, role) }
+                profilePhotoUploading = false
+                if (uploaded.startsWith("https://")) {
+                    profilePhotoUrl = uploaded
+                    profilePhotoMessage = "تصویر پروفایل ذخیره شد."
+                } else profilePhotoMessage = uploaded
+            }
+        }
+    }
     var soundEnabled by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
         val saved = DeviceSessionStore.load(context)
@@ -125,7 +148,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
             val restored = withContext(Dispatchers.IO) { restoreDeviceSession(saved.first, savedRole) }
             if (restored.success && restored.refreshToken.isNotBlank()) {
                 role = savedRole; userLoggedIn = true; userDisplayName = restored.displayName
-                userStatus = restored.status; userAccessToken = restored.accessToken
+                userStatus = restored.status; userAccessToken = restored.accessToken; profilePhotoUrl = restored.photoUrl
                 DeviceSessionStore.save(context, restored.refreshToken, savedRole.name)
                 message = "نشست امن قبلی بازیابی شد."
             } else { DeviceSessionStore.clear(context); message = "نشست قبلی منقضی شده است؛ ورود مجدد نیازمند احراز شماره است." }
@@ -288,6 +311,17 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     HorizontalDivider()
                     Text(if (role == UserRole.DRIVER) "پنل راننده" else "پنل شرکت باربری", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
                     Text("خوش آمدید، $userDisplayName", textAlign = TextAlign.Center)
+                    if (profilePhotoUrl.isNotBlank()) {
+                        AsyncImage(model = profilePhotoUrl, contentDescription = "عکس پروفایل", modifier = Modifier.size(104.dp).clip(CircleShape))
+                    } else {
+                        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(104.dp)) {
+                            Box(contentAlignment = Alignment.Center) { Text("عکس پروفایل") }
+                        }
+                    }
+                    OutlinedButton(enabled = !profilePhotoUploading, onClick = { photoPicker.launch("image/*") }) {
+                        Text(if (profilePhotoUploading) "در حال بارگذاری..." else "انتخاب عکس پروفایل")
+                    }
+                    if (profilePhotoMessage.isNotBlank()) Text(profilePhotoMessage, style = MaterialTheme.typography.bodySmall)
                     when (userStatus) {
                         "pending" -> Text("درخواست شما ثبت شده و در انتظار تأیید مدیر ارشد است. تا زمان تأیید، دسترسی عملیاتی فعال نیست.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
                         "approved" -> {
