@@ -49,7 +49,8 @@ jobs:
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 6' app/build.gradle.kts
+          grep -F 'versionCode = 7' app/build.gradle.kts
+          grep -F 'versionName = "1.0.6"' app/build.gradle.kts
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - name: Verify APK was produced
