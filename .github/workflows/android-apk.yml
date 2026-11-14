@@ -84,9 +84,7 @@ jobs:
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -wipe-data -no-metrics
           emulator-boot-timeout: 900
           disable-animations: false
-          script: |
-            set -eu
-            APK=app/build/outputs/apk/debug/app-debug.apk
+          script: bash .github/scripts/smoke-test-apk.sh
 
             wait_for_package_manager() {
               count=0
