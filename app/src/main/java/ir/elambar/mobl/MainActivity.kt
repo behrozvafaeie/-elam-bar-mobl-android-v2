@@ -974,11 +974,32 @@ private fun restoreDeviceSession(refreshToken: String, role: UserRole): UserLogi
     finally { auth?.disconnect(); profile?.disconnect() }
 }
 
+
+private fun formatTehranPersianDate(serverTimestamp: String): String {
+    if (serverTimestamp.isBlank() || serverTimestamp == "null") return "ثبت نشده"
+    return try {
+        val instant = try {
+            java.time.Instant.parse(serverTimestamp)
+        } catch (_: Exception) {
+            java.time.OffsetDateTime.parse(serverTimestamp).toInstant()
+        }
+        val locale = android.icu.util.ULocale.forLocale(java.util.Locale("fa", "IR"))
+        val formatter = android.icu.text.SimpleDateFormat("yyyy/MM/dd HH:mm", locale)
+        formatter.timeZone = android.icu.util.TimeZone.getTimeZone("Asia/Tehran")
+        formatter.calendar = android.icu.util.PersianCalendar(
+            android.icu.util.TimeZone.getTimeZone("Asia/Tehran"), locale
+        )
+        formatter.format(java.util.Date.from(instant))
+    } catch (_: Exception) {
+        "زمان نامعتبر"
+    }
+}
+
 private fun fetchAdminPanelData(accessToken: String, panel: String): String {
     if (accessToken.isBlank()) return "نشست مدیر ارشد معتبر نیست؛ خارج شوید و دوباره وارد شوید."
     val (table, select, title) = when (panel) {
-        "مدیریت رانندگان" -> Triple("drivers", "first_name,last_name,mobile,vehicle_type,primary_destination,status", "رانندگان")
-        "مدیریت شرکت‌ها" -> Triple("companies", "company_name,manager_name,mobile,status", "شرکت‌ها")
+        "مدیریت رانندگان" -> Triple("drivers", "first_name,last_name,mobile,vehicle_type,primary_destination,status,created_at", "رانندگان")
+        "مدیریت شرکت‌ها" -> Triple("companies", "company_name,manager_name,mobile,status,created_at", "شرکت‌ها")
         "مدیریت بارها" -> Triple("loads", "origin,destination,vehicle_type,loading_type,status,created_at", "بارها")
         "مدیریت مدیران" -> Triple("admin_users", "user_id,role,is_blocked,access_expires_at,created_at", "مدیران")
         "مدیریت مدارک" -> Triple("driver_documents", "driver_id,document_type,storage_path,review_status,created_at", "مدارک رانندگان")
@@ -1052,6 +1073,16 @@ private fun fetchAdminPanelData(accessToken: String, panel: String): String {
                     }
                     else -> {
                         append(item.optString("setting_key")).append(" = ").append(item.optString("setting_value"))
+                    }
+                }
+                val createdAt = item.optString("created_at")
+                if (createdAt.isNotBlank() && createdAt != "null") {
+                    append(" | تاریخ ثبت: ").append(formatTehranPersianDate(createdAt))
+                }
+                if (panel == "مدیریت مدیران") {
+                    val expiry = item.optString("access_expires_at")
+                    if (expiry.isNotBlank() && expiry != "null") {
+                        append(" | انقضای دسترسی: ").append(formatTehranPersianDate(expiry))
                     }
                 }
                 append("\n")
