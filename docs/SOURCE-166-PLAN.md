@@ -3,7 +3,7 @@
 ## مبنای کار
 - نقطه شروع: اجرای ۱۶۵، commit `e97f611de6232c22edf6417af282cb7f55890407`.
 - شاخه توسعه: `work/source-166`.
-- نسخه اپ: `1.0.18` / `versionCode 19`.
+- نسخه اپ: `1.0.19` / `versionCode 19`.
 - شاخه‌های پشتیبان که نباید حذف شوند: `stable/base-run-165`، `stable/base-run-162` و `fix/v152-login-vehicle-validation`.
 
 ## موجود در سورس پایه ۱۶۵
