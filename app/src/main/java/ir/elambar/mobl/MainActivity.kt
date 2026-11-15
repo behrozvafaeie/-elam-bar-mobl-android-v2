@@ -1191,7 +1191,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (loading) "لطفاً صبر کنید..." else if (role == UserRole.ADMIN) "ورود مدیر ارشد" else "ساخت حساب و ورود")
+                        Text(if (loading) "لطفاً صبر کنید..." else if (role == UserRole.ADMIN) "ورود مدیر ارشد" else if (register) "ساخت حساب" else "ورود به حساب")
                     }
                     Text(message, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
                     if (role != UserRole.ADMIN) {
