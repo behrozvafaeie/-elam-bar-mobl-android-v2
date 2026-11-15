@@ -66,6 +66,16 @@ private fun companyJwtUserId(token: String): String = runCatching {
     JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
 }.getOrDefault("")
 
+private fun normalizeCompanyDigits(value: String): String = buildString {
+    value.forEach { ch ->
+        append(when (ch) {
+            in '۰'..'۹' -> ('0'.code + (ch - '۰')).toChar()
+            in '٠'..'٩' -> ('0'.code + (ch - '٠')).toChar()
+            else -> ch
+        })
+    }
+}
+
 private class CompanyLoadRepository(private val token: String) {
     private fun enc(value: String) = URLEncoder.encode(value, "UTF-8")
 
@@ -125,8 +135,12 @@ private class CompanyLoadRepository(private val token: String) {
     fun update(item: CompanyLoadItem, draft: CompanyLoadDraft): String {
         if (token.isBlank()) return "نشست معتبر نیست."
         if (item.status != "published" || item.assignedDriverId != null) return "این بار پس از انتخاب راننده قابل ویرایش نیست."
-        if (draft.destination.trim().length < 2 || draft.cargoType.trim().length < 2 || draft.vehicleType.isBlank()) return "مقصد، نوع بار و خودرو را کامل کنید."
-        val amount = if (draft.freightAmount.isBlank()) 0L else draft.freightAmount.trim().toLongOrNull() ?: return "مبلغ کرایه معتبر نیست."
+        if (draft.destination.trim().length !in 2..100 || draft.cargoType.trim().length !in 2..160) return "مقصد یا نوع بار باید کامل و در محدوده مجاز باشد."
+        val allowedVehicles = setOf("کامیون مبلی", "کامیون ۶ متری", "وانت", "وانت مبلی", "کامیونت مبلی", "کامیون بزرگ", "خاور مبلی پتو دار", "کامیون دربستی کار", "سایر خودروهای مبلی")
+        if (draft.vehicleType !in allowedVehicles) return "نوع خودرو را از فهرست معتبر سامانه انتخاب کنید."
+        if (draft.loadingType !in setOf("روباری", "دربست", "نیم بار")) return "نوع بارگیری معتبر نیست."
+        val normalizedAmount = normalizeCompanyDigits(draft.freightAmount.trim())
+        val amount = if (normalizedAmount.isBlank()) 0L else normalizedAmount.toLongOrNull() ?: return "مبلغ کرایه معتبر نیست."
         if (amount < 0) return "مبلغ کرایه معتبر نیست."
         val body = JSONObject()
             .put("destination", draft.destination.trim())
@@ -213,11 +227,11 @@ internal fun CompanyLoadManagement(accessToken: String) {
             title = { Text("ویرایش بار") },
             text = {
                 Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedTextField(draft.destination, { draft = draft.copy(destination = it) }, label = { Text("مقصد") }, singleLine = true)
-                    OutlinedTextField(draft.cargoType, { draft = draft.copy(cargoType = it) }, label = { Text("نوع بار") }, singleLine = true)
+                    OutlinedTextField(draft.destination, { draft = draft.copy(destination = it.take(100)) }, label = { Text("مقصد") }, singleLine = true)
+                    OutlinedTextField(draft.cargoType, { draft = draft.copy(cargoType = it.take(160)) }, label = { Text("نوع بار") }, singleLine = true)
                     OutlinedTextField(draft.vehicleType, { draft = draft.copy(vehicleType = it) }, label = { Text("نوع خودرو") }, singleLine = true)
                     OutlinedTextField(draft.loadingType, { draft = draft.copy(loadingType = it) }, label = { Text("نوع بارگیری: دربست / روباری / نیم بار") }, singleLine = true)
-                    OutlinedTextField(draft.freightAmount, { draft = draft.copy(freightAmount = it.filter(Char::isDigit)) }, label = { Text("کرایه به تومان؛ خالی یعنی توافقی") }, singleLine = true)
+                    OutlinedTextField(draft.freightAmount, { draft = draft.copy(freightAmount = it.filter(Char::isDigit).take(15)) }, label = { Text("کرایه به تومان؛ خالی یعنی توافقی") }, singleLine = true)
                     OutlinedTextField(draft.description, { draft = draft.copy(description = it.take(3000)) }, label = { Text("توضیحات") }, minLines = 2)
                 }
             },
