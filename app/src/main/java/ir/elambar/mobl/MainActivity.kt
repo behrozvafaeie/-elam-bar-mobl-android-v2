@@ -1042,7 +1042,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         OutlinedTextField(
                             value = username,
                             onValueChange = { username = it.trim().lowercase().take(32) },
-                            label = { Text("نام کاربری (حداقل ۴ نویسه)") },
+                            label = { Text("نام کاربری (حداقل ۳ نویسه)") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1128,7 +1128,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     }
                                 }
                             } else if (register) {
-                                val commonInvalid = username.length < 4 || password.length < 8 ||
+                                val commonInvalid = username.length < 3 || password.length < 8 ||
                                     firstName.isBlank() || lastName.isBlank() ||
                                     !mobile.matches(Regex("^09\\d{9}$"))
                                 val typeInvalid = if (role == UserRole.COMPANY) companyName.isBlank() || activityCity.isBlank()
