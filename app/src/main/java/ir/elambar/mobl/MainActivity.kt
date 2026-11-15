@@ -94,6 +94,7 @@ private data class UserLoginResult(val success: Boolean, val message: String, va
 private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String)
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var role by remember { mutableStateOf(UserRole.DRIVER) }
