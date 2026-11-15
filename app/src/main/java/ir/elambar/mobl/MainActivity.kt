@@ -282,7 +282,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             Text(if (adminLoggedIn) "پنل " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" } else if (userLoggedIn) "پنل کاربر" else "سامانه اعلام بار", color = MaterialTheme.colorScheme.onPrimaryContainer)
                         }
                     }
-                    if (userLoggedIn) {
+                    if (userLoggedIn || adminLoggedIn) {
                         NavigationDrawerItem(
                             label = { Text("پروفایل من") },
                             selected = showProfile,
@@ -430,7 +430,21 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 }
                 Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
                 Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
-                if (adminLoggedIn) {
+                if (showProfile && adminLoggedIn) {
+                    HorizontalDivider()
+                    Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge) {
+                        Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(104.dp)) {
+                                Box(contentAlignment = Alignment.Center) { Text("مدیر", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer) }
+                            }
+                            Text("پروفایل مدیر", style = MaterialTheme.typography.headlineSmall)
+                            Text(when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }, style = MaterialTheme.typography.titleMedium)
+                            if (email.isNotBlank()) Text(email, style = MaterialTheme.typography.bodyMedium)
+                            Text("سطح دسترسی این حساب توسط مدیر ارشد اصلی تعیین می‌شود.", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                        }
+                    }
+                    OutlinedButton(onClick = { showProfile = false }, modifier = Modifier.fillMaxWidth()) { Text("بازگشت به پنل مدیریت") }
+                } else if (adminLoggedIn) {
                     HorizontalDivider()
                     Text("پنل مدیریت", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
                     Text("خوش آمدید؛ سطح دسترسی: " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }, textAlign = TextAlign.Center)
@@ -760,24 +774,21 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             }
                             Text(userDisplayName.ifBlank { "کاربر اعلام بار مبل" }, style = MaterialTheme.typography.headlineSmall)
                             Text(if (role == UserRole.DRIVER) "پروفایل راننده" else "پروفایل شرکت باربری", style = MaterialTheme.typography.titleMedium)
-                            AssistChip(
-                                onClick = {},
-                                label = {
-                                    Text(
-                                        when (userStatus) {
-                                            "approved" -> "حساب تأیید شده"
-                                            "pending" -> "در انتظار تأیید"
-                                            else -> "وضعیت حساب: $userStatus"
-                                        }
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = if (userStatus == "approved") Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
-                                        contentDescription = null
-                                    )
-                                }
-                            )
+                            Surface(
+                                shape = MaterialTheme.shapes.large,
+                                color = MaterialTheme.colorScheme.surface,
+                                tonalElevation = 2.dp
+                            ) {
+                                Text(
+                                    when (userStatus) {
+                                        "approved" -> "✓ حساب تأیید شده"
+                                        "pending" -> "در انتظار تأیید مدیر"
+                                        else -> "وضعیت حساب: $userStatus"
+                                    },
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                            }
                         }
                     }
                     Card(modifier = Modifier.fillMaxWidth()) {
