@@ -150,7 +150,7 @@ internal fun CommunicationScreen(accessToken: String, onClose: () -> Unit) {
                             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = if (mine) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)) {
                                 Column(Modifier.fillMaxWidth().padding(10.dp), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
                                     Text(if (mine) "شما" else "طرف گفتگو", style = MaterialTheme.typography.labelSmall)
-                                    if (item.type == "audio" && item.attachmentPath.isNotBlank()) {
+                                    if (item.type == "voice" && item.attachmentPath.isNotBlank()) {
                                         TextButton(enabled = playingMessageId != item.id, onClick = {
                                             playingMessageId = item.id
                                             scope.launch {
