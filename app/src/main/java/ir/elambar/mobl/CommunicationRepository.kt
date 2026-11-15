@@ -37,13 +37,14 @@ internal class CommunicationRepository(
     private val supabaseUrl: String = "https://sckcxtceybwtiecyxqsy.supabase.co",
     private val publishableKey: String = "sb_publishable_rcJe7tZqCkHPgnAXZffzUg_f9ixVbwg"
 ) {
-    fun conversationsFor(userId: String): Pair<String?, List<ChatConversation>> {
+    fun conversationsFor(userId: String, isSuperAdmin: Boolean = false): Pair<String?, List<ChatConversation>> {
         if (accessToken.isBlank() || userId.isBlank()) return "نشست معتبر نیست." to emptyList()
         val companyRows = request(
             "GET",
-            "conversations?select=id,load_id,company_id,driver_id,last_message_at&company_id=eq.${enc(userId)}&order=last_message_at.desc.nullslast&limit=100"
+            if (isSuperAdmin) "conversations?select=id,load_id,company_id,driver_id,last_message_at&order=last_message_at.desc.nullslast&limit=200"
+            else "conversations?select=id,load_id,company_id,driver_id,last_message_at&company_id=eq.${enc(userId)}&order=last_message_at.desc.nullslast&limit=100"
         )
-        val driverRows = request(
+        val driverRows = if (isSuperAdmin) 200 to "[]" else request(
             "GET",
             "conversations?select=id,load_id,company_id,driver_id,last_message_at&driver_id=eq.${enc(userId)}&order=last_message_at.desc.nullslast&limit=100"
         )
