@@ -11,7 +11,7 @@ import java.net.URLEncoder
  *
  * All access is performed with the signed-in user's access token. Supabase RLS remains
  * authoritative; this class deliberately does not use a service-role key or bypass RLS.
- * The current database policies permit text messages only and restrict conversations
+ * The current database policies restrict conversations
  * to the assigned company/driver pair.
  */
 internal data class ChatConversation(
@@ -120,7 +120,7 @@ internal class CommunicationRepository(
             val uploadCode = upload.responseCode
             if (uploadCode !in 200..299) return "بارگذاری ویس توسط سیاست امنیتی فضای گفتگو رد شد (کد $uploadCode)."
             val payload = JSONObject().put("conversation_id", conversationId).put("sender_user_id", senderUserId)
-                .put("message_type", "audio").put("body", "پیام صوتی").put("attachment_path", path)
+                .put("message_type", "voice").put("body", "پیام صوتی").put("attachment_path", path)
             val (code, _) = request("POST", "messages", payload)
             if (code in 200..299) "پیام صوتی ارسال شد." else "فایل بارگذاری شد اما ثبت پیام توسط سیاست امنیتی سامانه رد شد."
         } catch (_: Exception) { "ارتباط برای ارسال پیام صوتی برقرار نشد." }
