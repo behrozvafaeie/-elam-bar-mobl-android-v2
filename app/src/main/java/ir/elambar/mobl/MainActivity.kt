@@ -110,6 +110,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var profilePhotoUrl by remember { mutableStateOf("") }
     var profilePhotoUploading by remember { mutableStateOf(false) }
     var profilePhotoMessage by remember { mutableStateOf("") }
+    var showProfile by remember { mutableStateOf(false) }
     var selectedDriverDocType by remember { mutableStateOf("کارت هوشمند") }
     var driverDocUploading by remember { mutableStateOf(false) }
     var driverDocMessage by remember { mutableStateOf("") }
@@ -280,6 +281,14 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             Text("اعلام بار مبل", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
                             Text(if (adminLoggedIn) "پنل " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" } else if (userLoggedIn) "پنل کاربر" else "سامانه اعلام بار", color = MaterialTheme.colorScheme.onPrimaryContainer)
                         }
+                    }
+                    if (userLoggedIn) {
+                        NavigationDrawerItem(
+                            label = { Text("پروفایل من") },
+                            selected = showProfile,
+                            onClick = { showProfile = true; scope.launch { drawerState.close() } },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                     Text("بخش‌های مدیریتی", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                     if (adminLoggedIn) {
@@ -720,6 +729,100 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("خروج از حساب") }
+                } else if (userLoggedIn && showProfile) {
+                    HorizontalDivider()
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(22.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            if (profilePhotoUrl.isNotBlank()) {
+                                AsyncImage(
+                                    model = profilePhotoUrl,
+                                    contentDescription = "عکس پروفایل",
+                                    modifier = Modifier.size(116.dp).clip(CircleShape)
+                                )
+                            } else {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    modifier = Modifier.size(116.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text("عکس شما", style = MaterialTheme.typography.titleMedium)
+                                    }
+                                }
+                            }
+                            Text(userDisplayName.ifBlank { "کاربر اعلام بار مبل" }, style = MaterialTheme.typography.headlineSmall)
+                            Text(if (role == UserRole.DRIVER) "پروفایل راننده" else "پروفایل شرکت باربری", style = MaterialTheme.typography.titleMedium)
+                            AssistChip(
+                                onClick = {},
+                                label = {
+                                    Text(
+                                        when (userStatus) {
+                                            "approved" -> "حساب تأیید شده"
+                                            "pending" -> "در انتظار تأیید"
+                                            else -> "وضعیت حساب: $userStatus"
+                                        }
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = if (userStatus == "approved") Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                                        contentDescription = null
+                                    )
+                                }
+                            )
+                        }
+                    }
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("تصویر پروفایل", style = MaterialTheme.typography.titleMedium)
+                            Text("عکس دلخواه را از گالری گوشی انتخاب کنید. تصویر در فضای امن برنامه ذخیره می‌شود.", style = MaterialTheme.typography.bodyMedium)
+                            Button(
+                                enabled = !profilePhotoUploading,
+                                onClick = { photoPicker.launch("image/*") },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(if (profilePhotoUploading) "در حال بارگذاری تصویر..." else if (profilePhotoUrl.isBlank()) "انتخاب عکس از گالری" else "تغییر عکس پروفایل")
+                            }
+                            if (profilePhotoMessage.isNotBlank()) {
+                                Text(profilePhotoMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                            }
+                        }
+                    }
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("اطلاعات حساب", style = MaterialTheme.typography.titleMedium)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("نوع حساب")
+                                Text(if (role == UserRole.DRIVER) "راننده" else "شرکت باربری")
+                            }
+                            HorizontalDivider()
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("وضعیت")
+                                Text(if (userStatus == "approved") "تأیید شده" else "در انتظار بررسی")
+                            }
+                            if (role == UserRole.DRIVER) {
+                                HorizontalDivider()
+                                Text("نوع خودرو: $vehicleType")
+                                if (primaryDestination.isNotBlank()) Text("مقصد اصلی: $primaryDestination")
+                            } else if (companyName.isNotBlank()) {
+                                HorizontalDivider()
+                                Text("نام شرکت: $companyName")
+                            }
+                            Text("نشست ورود با ذخیره‌سازی امن روی دستگاه مدیریت می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { showProfile = false },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("بازگشت به پنل اصلی") }
                 } else if (userLoggedIn) {
                     HorizontalDivider()
                     Text(if (role == UserRole.DRIVER) "پنل راننده" else "پنل شرکت باربری", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
