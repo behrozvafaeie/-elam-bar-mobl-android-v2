@@ -249,7 +249,7 @@ internal fun ChatRoomScreen(accessToken: String, role: String, onClose: () -> Un
                         Spacer(Modifier.weight(1f))
                         Text(room.title, style = MaterialTheme.typography.titleSmall, maxLines = 1)
                     }
-                    if (isSuperAdmin) {
+                    if (isSuperAdmin && room.type == "public") {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             OutlinedButton(enabled = !busy, onClick = {
                                 busy = true
@@ -399,7 +399,7 @@ internal fun ChatRoomScreen(accessToken: String, role: String, onClose: () -> Un
                                         }
                                         else -> Text(item.body)
                                     }
-                                    if (isSuperAdmin && room.type == "public") {
+                                    if (isSuperAdmin) {
                                         Row {
                                             TextButton(onClick = {
                                                 scope.launch {
