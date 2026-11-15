@@ -664,6 +664,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         }
                                     }
                                     if (adminActionMessage.isNotBlank()) Text(adminActionMessage, color = MaterialTheme.colorScheme.secondary)
+                                    if (adminRole == "super_admin") {
+                                        AdminPermissionManagement(accessToken = adminAccessToken)
+                                    }
                                     HorizontalDivider()
                                 }
                                 if (selectedPanel == "تنظیمات کل برنامه" && adminRole == "super_admin") {
