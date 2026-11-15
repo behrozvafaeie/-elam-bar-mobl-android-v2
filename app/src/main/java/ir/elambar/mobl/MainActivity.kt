@@ -1092,7 +1092,11 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     )
 
                     if (role != UserRole.ADMIN) {
-                        Text("برای ساخت حساب، نام کاربری و رمز عبور تعیین کنید. ورودهای بعدی با همین اطلاعات انجام می‌شود.", textAlign = TextAlign.Center)
+                        Text(
+                            if (register) "نام کاربری را با حروف و اعداد انگلیسی بسازید؛ برای ورودهای بعدی همین نام کاربری و رمز را استفاده می‌کنید."
+                            else "با همان نام کاربری و رمزی وارد شوید که هنگام ثبت‌نام تعیین کرده‌اید.",
+                            textAlign = TextAlign.Center
+                        )
                     } else {
                         Text("فقط حساب‌های مدیریتی فعال در سامانه اجازه ورود به پنل مدیریت را دارند.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
                     }
@@ -1110,7 +1114,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         OutlinedTextField(
                             value = username,
                             onValueChange = { username = it.trim() },
-                            label = { Text("نام کاربری") },
+                            label = { Text("نام کاربری ثبت‌شده") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.None, autoCorrect = false),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1118,6 +1123,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             value = password,
                             onValueChange = { password = it },
                             label = { Text("رمز عبور") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                             visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
                             trailingIcon = {
                                 IconButton(onClick = { passwordVisible = !passwordVisible }) {
@@ -1137,6 +1143,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             value = username,
                             onValueChange = { username = it.trim().lowercase().take(32) },
                             label = { Text("نام کاربری (حداقل ۳ نویسه)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.None, autoCorrect = false),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1144,6 +1151,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             value = password,
                             onValueChange = { password = it },
                             label = { Text("رمز عبور (حداقل ۸ نویسه)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                             visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
                             trailingIcon = {
                                 IconButton(onClick = { passwordVisible = !passwordVisible }) {
