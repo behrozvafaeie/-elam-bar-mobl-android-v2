@@ -27,7 +27,7 @@ import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun CommunicationScreen(accessToken: String, onClose: () -> Unit) {
+internal fun CommunicationScreen(accessToken: String, isSuperAdmin: Boolean = false, onClose: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val userId = remember(accessToken) {
@@ -54,7 +54,7 @@ internal fun CommunicationScreen(accessToken: String, onClose: () -> Unit) {
         if (userId.isBlank()) { status = "شناسه حساب از نشست دریافت نشد."; return }
         busy = true
         scope.launch {
-            val result = withContext(Dispatchers.IO) { repository.conversationsFor(userId) }
+            val result = withContext(Dispatchers.IO) { repository.conversationsFor(userId, isSuperAdmin) }
             conversations = result.second
             status = result.first ?: if (result.second.isEmpty()) "گفتگوی فعالی برای حساب شما ثبت نشده است. گفتگو پس از تخصیص بار ایجاد می‌شود." else ""
             busy = false
@@ -134,7 +134,7 @@ internal fun CommunicationScreen(accessToken: String, onClose: () -> Unit) {
                 }
                 if (selected == null) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("گفتگوهای بارهای تخصیص‌یافته", style = MaterialTheme.typography.titleSmall)
+                        Text(if (isSuperAdmin) "همه گفتگوهای بار" else "گفتگوهای بارهای تخصیص‌یافته", style = MaterialTheme.typography.titleSmall)
                         TextButton(enabled = !busy, onClick = { refreshConversations() }) { Text("بروزرسانی") }
                     }
                     Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
