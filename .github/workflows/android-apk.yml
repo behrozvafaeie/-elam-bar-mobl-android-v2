@@ -1,7 +1,7 @@
 name: Android APK
 on:
   push:
-    branches: [ "main", "feature/v1.5.1-clean-ui-navigation", "work/v1.5.1-stabilization", "rebuild/106-base-v1.0.11", "feature/112-drawer-clock-panels", "fix/global-load-and-admin-settings-v3", "feature/admin-profile-photo-v1.0.14", "feature/load-rules-v1.5.2", "work/stage-1-login-polish" ]
+    branches: [ "main", "feature/v1.5.1-clean-ui-navigation", "work/v1.5.1-stabilization", "rebuild/106-base-v1.0.11", "feature/112-drawer-clock-panels", "fix/global-load-and-admin-settings-v3", "feature/admin-profile-photo-v1.0.14", "feature/load-rules-v1.5.2", "work/stage-1-login-polish", "work/v1.0.21-audit-fixes" ]
   workflow_dispatch:
 
 permissions:
@@ -60,8 +60,8 @@ jobs:
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 21' app/build.gradle.kts
-          grep -F 'versionName = "1.0.20"' app/build.gradle.kts
+          grep -F 'versionCode = 22' app/build.gradle.kts
+          grep -F 'versionName = "1.0.21"' app/build.gradle.kts
 
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
@@ -74,7 +74,7 @@ jobs:
         shell: bash
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='21' versionName='1.0.20'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='22' versionName='1.0.21'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           sha256sum "$APK"
 
