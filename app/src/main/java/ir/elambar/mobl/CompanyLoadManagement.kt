@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
@@ -76,10 +79,10 @@ private class CompanyLoadRepository(private val token: String) {
                 setRequestProperty("apikey", LOADS_KEY)
                 setRequestProperty("Authorization", "Bearer " + token)
                 setRequestProperty("Accept", "application/json")
+                if (method == "PATCH" || method == "DELETE") setRequestProperty("Prefer", "return=representation")
                 if (body != null) {
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json")
-                    setRequestProperty("Prefer", "return=representation")
                 }
             }
             if (body != null) connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
@@ -145,7 +148,7 @@ private class CompanyLoadRepository(private val token: String) {
         if (item.status != "published" || item.assignedDriverId != null) return "این بار پس از انتخاب راننده قابل حذف نیست."
         val uid = companyJwtUserId(token)
         val path = "loads?id=eq." + enc(item.id) + "&publisher_user_id=eq." + enc(uid) + "&status=eq.published&assigned_driver_id=is.null"
-        val (code, response) = request("DELETE", path, JSONObject())
+        val (code, response) = request("DELETE", path)
         if (code !in 200..299) return "حذف بار از طرف سرور رد شد (کد " + code + ")."
         return if (runCatching { JSONArray(response).length() }.getOrDefault(0) > 0) "بار حذف شد."
         else "باری برای حذف پیدا نشد؛ ممکن است بار قبلاً تغییر وضعیت داده باشد."
@@ -209,7 +212,7 @@ internal fun CompanyLoadManagement(accessToken: String) {
             onDismissRequest = { editing = null },
             title = { Text("ویرایش بار") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     OutlinedTextField(draft.destination, { draft = draft.copy(destination = it) }, label = { Text("مقصد") }, singleLine = true)
                     OutlinedTextField(draft.cargoType, { draft = draft.copy(cargoType = it) }, label = { Text("نوع بار") }, singleLine = true)
                     OutlinedTextField(draft.vehicleType, { draft = draft.copy(vehicleType = it) }, label = { Text("نوع خودرو") }, singleLine = true)
