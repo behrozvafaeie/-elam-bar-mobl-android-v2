@@ -180,7 +180,7 @@ internal fun ChatRoomScreen(accessToken: String, role: String, onClose: () -> Un
                     }
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         rooms.forEach { room ->
-                            Card(Modifier.fillMaxWidth(), onClick = { selectedRoom = room; showCompanySettings = false }) {
+                            Card(onClick = { selectedRoom = room; showCompanySettings = false }, modifier = Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(14.dp)) {
                                     Text(room.title, style = MaterialTheme.typography.titleMedium)
                                     Text(if (room.type == "public") "اتاق عمومی" else "گفتگوی خصوصی")
