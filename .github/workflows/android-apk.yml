@@ -1,7 +1,7 @@
 name: Android APK
 on:
   push:
-    branches: [ "main", "feature/v1.5.1-clean-ui-navigation", "work/v1.5.1-stabilization", "rebuild/106-base-v1.0.11", "feature/112-drawer-clock-panels" ]
+    branches: [ "main", "feature/v1.5.1-clean-ui-navigation", "work/v1.5.1-stabilization", "rebuild/106-base-v1.0.11", "feature/112-drawer-clock-panels", "fix/global-load-and-admin-settings-v3" ]
   workflow_dispatch:
 
 permissions:
