@@ -114,6 +114,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var profilePhotoMessage by remember { mutableStateOf("") }
     var showProfile by remember { mutableStateOf(false) }
     var showCommunication by remember { mutableStateOf(false) }
+    var showChatRooms by remember { mutableStateOf(false) }
     var selectedDriverDocType by remember { mutableStateOf("کارت هوشمند") }
     var driverDocUploading by remember { mutableStateOf(false) }
     var driverDocMessage by remember { mutableStateOf("") }
@@ -274,6 +275,12 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     if (showCommunication && userLoggedIn && userStatus == "approved") {
         CommunicationScreen(accessToken = userAccessToken) { showCommunication = false }
     }
+    if (showChatRooms && ((userLoggedIn && userStatus == "approved") || adminLoggedIn)) {
+        ChatRoomScreen(
+            accessToken = if (adminLoggedIn) adminAccessToken else userAccessToken,
+            role = if (adminLoggedIn) adminRole else role.name
+        ) { showChatRooms = false }
+    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -306,9 +313,17 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     }
                     if (userLoggedIn && userStatus == "approved") {
                         NavigationDrawerItem(
-                            label = { Text("پیام‌ها و گفتگوها") },
+                            label = { Text("پیام‌های بار") },
                             selected = showCommunication,
-                            onClick = { showCommunication = true; scope.launch { drawerState.close() } },
+                            onClick = { showCommunication = true; showChatRooms = false; scope.launch { drawerState.close() } },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    if ((userLoggedIn && userStatus == "approved") || adminLoggedIn) {
+                        NavigationDrawerItem(
+                            label = { Text("اتاق عمومی و گفتگوها") },
+                            selected = showChatRooms,
+                            onClick = { showChatRooms = true; showCommunication = false; scope.launch { drawerState.close() } },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
