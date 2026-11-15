@@ -17,6 +17,8 @@ internal data class ChatRoomItem(
 
 internal data class ChatContactItem(val id: String, val name: String, val accountType: String)
 internal data class ChatDriverAccess(val id: String, val name: String, val canRead: Boolean)
+internal data class ChatRoomCall(val id: String, val roomId: String, val callerId: String, val receiverId: String, val callType: String, val status: String)
+internal data class ChatRoomCallSignal(val id: String, val senderId: String, val recipientId: String, val type: String, val payload: JSONObject)
 
 internal data class ChatRoomMessage(
     val id: String,
@@ -77,6 +79,71 @@ internal class ChatRoomRepository(private val token: String) {
         val id = body.trim().removeSurrounding("\"").takeIf { it.length == 36 }
         return if (id != null) null to id else "شناسه گفتگوی خصوصی از سرور دریافت نشد." to null
     }
+
+    fun roomMemberIds(roomId: String): List<String> {
+        val (code, body) = request("GET", "chat_room_members?select=user_id&room_id=eq.${enc(roomId)}")
+        if (code !in 200..299) return emptyList()
+        return runCatching {
+            val rows = JSONArray(body)
+            (0 until rows.length()).map { rows.getJSONObject(it).optString("user_id") }.filter { it.isNotBlank() }
+        }.getOrDefault(emptyList())
+    }
+
+    fun createCall(roomId: String, receiverId: String, callType: String): Pair<String?, ChatRoomCall?> {
+        if (callType !in setOf("audio","video")) return "نوع تماس نامعتبر است." to null
+        val payload = JSONObject().put("p_room_id", roomId).put("p_receiver_user_id", receiverId).put("p_call_type", callType)
+        val (code, body) = request("POST", "rpc/create_chat_room_call_session", payload)
+        if (code !in 200..299) return "شروع تماس مجاز نشد؛ گفتگو باید خصوصی و مخاطب فعال باشد." to null
+        val id = body.trim().removeSurrounding("\"").takeIf { it.length == 36 }
+            ?: return "شناسه تماس از سرور دریافت نشد." to null
+        return getCall(id)
+    }
+
+    fun incomingCall(userId: String): ChatRoomCall? {
+        val path = "chat_room_call_sessions?select=id,room_id,caller_user_id,receiver_user_id,call_type,status&receiver_user_id=eq.${enc(userId)}&status=eq.ringing&order=created_at.desc&limit=1"
+        val (code, body) = request("GET", path)
+        if (code !in 200..299) return null
+        return parseCallArray(body).firstOrNull()
+    }
+
+    fun getCall(callId: String): Pair<String?, ChatRoomCall?> {
+        val (code, body) = request("GET", "chat_room_call_sessions?select=id,room_id,caller_user_id,receiver_user_id,call_type,status&id=eq.${enc(callId)}&limit=1")
+        if (code !in 200..299) return "دریافت وضعیت تماس ناموفق بود." to null
+        return null to parseCallArray(body).firstOrNull()
+    }
+
+    fun callSignals(callId: String): List<ChatRoomCallSignal> {
+        val (code, body) = request("GET", "chat_room_call_signals?select=id,sender_user_id,recipient_user_id,signal_type,payload&call_session_id=eq.${enc(callId)}&order=created_at.asc&limit=200")
+        if (code !in 200..299) return emptyList()
+        return runCatching {
+            val rows = JSONArray(body)
+            (0 until rows.length()).map { i ->
+                val row = rows.getJSONObject(i)
+                ChatRoomCallSignal(row.optString("id"),row.optString("sender_user_id"),row.optString("recipient_user_id"),row.optString("signal_type"),row.optJSONObject("payload") ?: JSONObject())
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    fun sendCallSignal(callId: String, senderId: String, recipientId: String, type: String, payload: JSONObject): String {
+        val row = JSONObject().put("call_session_id",callId).put("sender_user_id",senderId)
+            .put("recipient_user_id",recipientId).put("signal_type",type).put("payload",payload)
+        val (code, _) = request("POST","chat_room_call_signals",row,"return=minimal")
+        return if (code in 200..299) "" else "ارسال سیگنال تماس مجاز نشد."
+    }
+
+    fun updateCallStatus(callId: String, status: String): String {
+        val (code, body) = request("POST","rpc/update_chat_room_call_status",JSONObject().put("p_call_id",callId).put("p_new_status",status))
+        if (code !in 200..299) return "تغییر وضعیت تماس مجاز نشد."
+        return if (body.trim()=="true") "" else "وضعیت تماس تغییر نکرد."
+    }
+
+    private fun parseCallArray(body: String): List<ChatRoomCall> = runCatching {
+        val rows = JSONArray(body)
+        (0 until rows.length()).map { i ->
+            val r = rows.getJSONObject(i)
+            ChatRoomCall(r.optString("id"),r.optString("room_id"),r.optString("caller_user_id"),r.optString("receiver_user_id"),r.optString("call_type"),r.optString("status"))
+        }
+    }.getOrDefault(emptyList())
 
     fun messages(roomId: String): Pair<String?, List<ChatRoomMessage>> {
         val path = "chat_room_messages?select=id,room_id,sender_user_id,message_type,body,attachment_path,created_at,is_pinned&room_id=eq.${enc(roomId)}&deleted_at=is.null&order=created_at.asc&limit=300"
