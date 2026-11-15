@@ -89,7 +89,7 @@ private enum class UserRole(val label: String) {
     ADMIN("مدیر ارشد")
 }
 
-private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "")
+private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "", val role: String = "")
 private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "")
 private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String)
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
@@ -145,6 +145,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var message by remember { mutableStateOf("برای ادامه، نوع حساب را انتخاب کنید.") }
     var loading by remember { mutableStateOf(false) }
     var adminLoggedIn by remember { mutableStateOf(false) }
+    var adminRole by remember { mutableStateOf("") }
     var adminAccessToken by remember { mutableStateOf("") }
     var adminPanelData by remember { mutableStateOf("") }
     var adminRecords by remember { mutableStateOf<List<AdminRecord>>(emptyList()) }
@@ -277,7 +278,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     ) {
                         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("اعلام بار مبل", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            Text(if (adminLoggedIn) "پنل مدیر ارشد" else if (userLoggedIn) "پنل کاربر" else "سامانه اعلام بار", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text(if (adminLoggedIn) "پنل " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" } else if (userLoggedIn) "پنل کاربر" else "سامانه اعلام بار", color = MaterialTheme.colorScheme.onPrimaryContainer)
                         }
                     }
                     Text("بخش‌های مدیریتی", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
@@ -307,7 +308,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         )
                     }
                     if (adminLoggedIn) {
-                        adminPanels.filter { it != "مدیریت بارها" }.forEach { title ->
+                        adminPanels.filter { it != "مدیریت بارها" && (adminRole == "super_admin" || (it != "مدیریت مدیران" && it != "تنظیمات کل برنامه")) }.forEach { title ->
                             NavigationDrawerItem(
                                 label = { Text(title) },
                                 selected = selectedPanel == title,
@@ -422,8 +423,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
                 if (adminLoggedIn) {
                     HorizontalDivider()
-                    Text("پنل مدیر ارشد", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
-                    Text("خوش آمدید؛ ورود شما با نقش مدیر ارشد اصلی تأیید شده است.", textAlign = TextAlign.Center)
+                    Text("پنل مدیریت", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
+                    Text("خوش آمدید؛ سطح دسترسی: " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }, textAlign = TextAlign.Center)
                     if (selectedPanel == null) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -453,7 +454,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 Text("در حال دریافت اطلاعات از سامانه...")
                             } else {
                                 Text(adminPanelData.ifBlank { "اطلاعاتی برای نمایش دریافت نشد." }, textAlign = TextAlign.Start)
-                                if (selectedPanel == "مدیریت مدیران") {
+                                if (selectedPanel == "مدیریت مدیران" && adminRole == "super_admin") {
                                     Text("افزودن مدیر جدید", style = MaterialTheme.typography.titleMedium)
                                     Text("ابتدا کاربر باید با ایمیل خود در برنامه ثبت‌نام کرده باشد. سپس می‌توانید سطح دسترسی او را تعیین کنید.", style = MaterialTheme.typography.bodySmall)
                                     OutlinedTextField(
@@ -555,7 +556,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     if (adminActionMessage.isNotBlank()) Text(adminActionMessage, color = MaterialTheme.colorScheme.secondary)
                                     HorizontalDivider()
                                 }
-                                if (selectedPanel == "تنظیمات کل برنامه") {
+                                if (selectedPanel == "تنظیمات کل برنامه" && adminRole == "super_admin") {
                                     Text("این بخش مربوط به تنظیمات سراسری سامانه است و تغییرات آن باید برای همه شرکت‌ها، رانندگان و مدیران اعمال شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                                 }
                                 if (selectedPanel == "مدیریت بارها") {
@@ -847,14 +848,14 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     }
                     FilterChip(
                         selected = role == UserRole.ADMIN,
-                        onClick = { role = UserRole.ADMIN; register = false; message = "ورود مدیر ارشد با ایمیل و رمز عبور" },
-                        label = { Text("ورود مدیر ارشد") }
+                        onClick = { role = UserRole.ADMIN; register = false; message = "ورود مدیران با ایمیل و رمز عبور" },
+                        label = { Text("ورود مدیر") }
                     )
 
                     if (role != UserRole.ADMIN) {
                         Text("برای ساخت حساب، نام کاربری و رمز عبور تعیین کنید. ورودهای بعدی با همین اطلاعات انجام می‌شود.", textAlign = TextAlign.Center)
                     } else {
-                        Text("فقط حساب مدیر ارشد ثبت‌شده در سامانه اجازه ورود به پنل مدیریت را دارد.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
+                        Text("فقط حساب‌های مدیریتی فعال در سامانه اجازه ورود به پنل مدیریت را دارند.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
                     }
 
                     if (role != UserRole.ADMIN) {
@@ -965,14 +966,14 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     password.isBlank() -> message = "رمز عبور را وارد کنید."
                                     else -> {
                                         loading = true
-                                        message = "در حال بررسی حساب مدیر ارشد..."
+                                        message = "در حال بررسی سطح دسترسی مدیر..."
                                         scope.launch {
                                             val result = withContext(Dispatchers.IO) {
                                                 authenticateAdmin(email.trim(), password)
                                             }
                                             loading = false
                                             message = result.message
-                                            if (result.success) { adminAccessToken = result.accessToken; adminLoggedIn = true }
+                                            if (result.success) { adminAccessToken = result.accessToken; adminRole = result.role; adminLoggedIn = true }
                                         }
                                     }
                                 }
@@ -1561,10 +1562,12 @@ private fun authenticateAdmin(email: String, password: String): AdminLoginResult
         if (admin.optBoolean("is_blocked", false)) {
             return AdminLoginResult(false, "دسترسی این حساب مدیر مسدود شده است.")
         }
-        if (admin.optString("role") != "super_admin") {
-            return AdminLoginResult(false, "این حساب دسترسی مدیر ارشد اصلی را ندارد.")
+        val adminRole = admin.optString("role")
+        if (adminRole !in setOf("super_admin", "senior_admin", "admin")) {
+            return AdminLoginResult(false, "سطح دسترسی این حساب معتبر نیست.")
         }
-        AdminLoginResult(true, "ورود مدیر ارشد با موفقیت انجام شد.", accessToken)
+        val roleTitle = when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }
+        AdminLoginResult(true, "ورود با سطح دسترسی $roleTitle انجام شد.", accessToken, adminRole)
     } catch (_: Exception) {
         AdminLoginResult(false, "ارتباط با سرور برقرار نشد. اینترنت را بررسی و دوباره تلاش کنید.")
     } finally {
