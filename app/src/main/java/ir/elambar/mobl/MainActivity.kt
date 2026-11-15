@@ -91,7 +91,7 @@ private enum class UserRole(val label: String) {
 
 private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "", val role: String = "")
 private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "")
-private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String)
+private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val priceMode: String, val freightAmount: String, val description: String)
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -126,7 +126,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var loadCargoType by remember { mutableStateOf("مبل") }
     var loadVehicleType by remember { mutableStateOf("وانت") }
     var loadLoadingType by remember { mutableStateOf("روباری") }
-    var loadFreightAmount by remember { mutableStateOf("0") }
+    var loadFreightAmount by remember { mutableStateOf("") }
+    var loadPriceMode by remember { mutableStateOf("fixed") }
     var loadDescription by remember { mutableStateOf("") }
     var loadActionMessage by remember { mutableStateOf("") }
     var loadPublishing by remember { mutableStateOf(false) }
@@ -609,13 +610,18 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     listOf("دربست","روباری","نیم بار").forEach { v ->
                                         FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
                                     }
-                                    OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("کرایه (ریال؛ در صورت نامشخص بودن صفر)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                    Text("نحوه تعیین کرایه")
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
+                                        FilterChip(selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
+                                    }
+                                    if (loadPriceMode == "fixed") OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("مبلغ کرایه (تومان)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                     OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
                                     OutlinedButton(onClick = {
-                                        if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || loadFreightAmount.isBlank()) {
+                                        if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || (loadPriceMode == "fixed" && (loadFreightAmount.isBlank() || loadFreightAmount.toLongOrNull() == null || loadFreightAmount.toLong() <= 0))) {
                                             adminActionMessage = "مقصد، نوع بار و کرایه را کامل کنید."
                                         } else {
-                                            loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadFreightAmount.ifBlank { "0" }, loadDescription.trim()))
+                                            loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", loadDescription.trim()))
                                             loadDestination = ""
                                             loadDescription = ""
                                             adminActionMessage = "بار به فهرست انتشار مدیریت اضافه شد."
@@ -628,7 +634,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                 Column(Modifier.padding(12.dp)) {
                                                     Text("${index + 1}. تهران ← ${draft.destination}")
                                                     Text("${draft.cargoType} | ${draft.vehicleType} | ${draft.loadingType}")
-                                                    Text("کرایه: ${draft.freightAmount}")
+                                                    Text(if (draft.priceMode == "negotiable") "کرایه: توافقی" else "کرایه: ${draft.freightAmount} تومان")
                                                     TextButton(onClick = { loadDrafts.removeAt(index) }) { Text("حذف از فهرست") }
                                                 }
                                             }
@@ -896,13 +902,18 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 listOf("دربست","روباری","نیم بار").forEach { v ->
                                     FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
                                 }
-                                OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("کرایه (ریال؛ در صورت نامشخص بودن صفر)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                Text("نحوه تعیین کرایه")
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
+                                        FilterChip(selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
+                                    }
+                                    if (loadPriceMode == "fixed") OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("مبلغ کرایه (تومان)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                 OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
                                 OutlinedButton(onClick = {
-                                    if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || loadFreightAmount.isBlank()) {
+                                    if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || (loadPriceMode == "fixed" && (loadFreightAmount.isBlank() || loadFreightAmount.toLongOrNull() == null || loadFreightAmount.toLong() <= 0))) {
                                         loadActionMessage = "مقصد، نوع بار و کرایه را کامل کنید."
                                     } else {
-                                        loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadFreightAmount.ifBlank { "0" }, loadDescription.trim()))
+                                        loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", loadDescription.trim()))
                                         loadDestination = ""
                                         loadDescription = ""
                                         loadActionMessage = "بار به فهرست گروهی اضافه شد."
@@ -915,7 +926,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                             Column(Modifier.padding(12.dp)) {
                                                 Text("${index + 1}. تهران ← ${draft.destination}")
                                                 Text("${draft.cargoType} | ${draft.vehicleType} | ${draft.loadingType}")
-                                                Text("کرایه: ${draft.freightAmount}")
+                                                Text(if (draft.priceMode == "negotiable") "کرایه: توافقی" else "کرایه: ${draft.freightAmount} تومان")
                                                 TextButton(onClick = { loadDrafts.removeAt(index) }) { Text("حذف از فهرست") }
                                             }
                                         }
@@ -1833,6 +1844,7 @@ private fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>, publi
                 .put("cargo_type", d.cargoType)
                 .put("vehicle_type", d.vehicleType)
                 .put("loading_type", d.loadingType)
+                .put("price_mode", d.priceMode)
                 .put("freight_amount", d.freightAmount)
                 .put("description", d.description))
         }
