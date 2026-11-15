@@ -50,6 +50,9 @@ internal fun ChatRoomScreen(accessToken: String, role: String, onClose: () -> Un
     var status by remember { mutableStateOf("در حال دریافت اتاق‌های مجاز...") }
     var busy by remember { mutableStateOf(false) }
     var showCompanySettings by remember { mutableStateOf(false) }
+    var showContactSearch by remember { mutableStateOf(false) }
+    var contactQuery by remember { mutableStateOf("") }
+    var contactResults by remember { mutableStateOf<List<ChatContactItem>>(emptyList()) }
     var companySettings by remember { mutableStateOf<List<ChatCompanyItem>>(emptyList()) }
     var downloadedImages by remember { mutableStateOf<Map<String, File>>(emptyMap()) }
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
@@ -174,9 +177,58 @@ internal fun ChatRoomScreen(accessToken: String, role: String, onClose: () -> Un
                 }
 
                 if (selectedRoom == null) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text("اتاق‌های قابل دسترسی")
-                        TextButton(enabled = !busy, onClick = { refreshRooms() }) { Text("بروزرسانی") }
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TextButton(enabled = !busy, onClick = { refreshRooms() }) { Text("بروزرسانی") }
+                            TextButton(onClick = { showContactSearch = !showContactSearch; contactResults = emptyList(); contactQuery = "" }) { Text(if (showContactSearch) "بستن جستجو" else "گفتگوی خصوصی جدید") }
+                        }
+                    }
+                    if (showContactSearch) {
+                        Card(Modifier.fillMaxWidth()) {
+                            Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("جستجوی شرکت یا مدیر", style = MaterialTheme.typography.titleSmall)
+                                OutlinedTextField(
+                                    value = contactQuery,
+                                    onValueChange = { contactQuery = it.take(80) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("نام شرکت، نام مخاطب یا شماره همراه") },
+                                    singleLine = true
+                                )
+                                Button(enabled = !busy && contactQuery.trim().length >= 2, modifier = Modifier.fillMaxWidth(), onClick = {
+                                    busy = true
+                                    scope.launch {
+                                        val result = withContext(Dispatchers.IO) { repository.searchContacts(contactQuery) }
+                                        contactResults = result.second
+                                        status = result.first ?: if (result.second.isEmpty()) "مخاطبی با این مشخصات پیدا نشد." else "مخاطبان پیدا شدند."
+                                        busy = false
+                                    }
+                                }) { Text("جستجو") }
+                                contactResults.forEach { contact ->
+                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(contact.name, style = MaterialTheme.typography.bodyMedium)
+                                            Text(when (contact.accountType) { "company" -> "شرکت باربری"; "driver" -> "راننده"; else -> "مدیر سامانه" }, style = MaterialTheme.typography.bodySmall)
+                                        }
+                                        TextButton(enabled = !busy, onClick = {
+                                            busy = true
+                                            scope.launch {
+                                                val result = withContext(Dispatchers.IO) { repository.createPrivateRoom(contact.id, "گفتگوی خصوصی با ${contact.name}") }
+                                                if (result.second != null) {
+                                                    val room = ChatRoomItem(result.second!!, "private", "گفتگوی خصوصی با ${contact.name}", false)
+                                                    rooms = (rooms.filterNot { it.id == room.id } + room)
+                                                    selectedRoom = room
+                                                    showContactSearch = false
+                                                    status = "گفتگوی خصوصی ایجاد شد."
+                                                } else status = result.first.orEmpty()
+                                                busy = false
+                                            }
+                                        }) { Text("شروع گفتگو") }
+                                    }
+                                    HorizontalDivider()
+                                }
+                            }
+                        }
                     }
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         rooms.forEach { room ->
