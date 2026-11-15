@@ -283,6 +283,78 @@ create policy chat_room_storage_upload_authorized on storage.objects
 for insert to authenticated
 with check (
   bucket_id='chat-room-attachments'
+  and split_part(name,'/',1) ~ '^[0-9a-fA-F-]{36}
+  and private.can_send_chat_room_message(
+    split_part(name,'/',1)::uuid,
+    case when split_part(name,'/',3)='image' then 'image' else 'voice' end
+  )
+);
+
+drop policy if exists chat_room_storage_read_authorized on storage.objects;
+create policy chat_room_storage_read_authorized on storage.objects
+for select to authenticated
+using (
+  bucket_id='chat-room-attachments'
+  and split_part(name,'/',1) ~ '^[0-9a-fA-F-]{36}
+);
+
+drop policy if exists chat_room_storage_delete_authorized on storage.objects;
+create policy chat_room_storage_delete_authorized on storage.objects
+for delete to authenticated
+using (
+  bucket_id='chat-room-attachments'
+  and (
+    split_part(name,'/',2)=auth.uid()::text
+    or private.is_super_admin()
+  )
+);
+
+-- Restrict all new tables against anonymous sign-ins, matching the existing project policy.
+do $$
+declare t text;
+begin
+  foreach t in array array['chat_rooms','chat_room_members','chat_room_company_settings','chat_room_messages'] loop
+    execute format(
+      'drop policy if exists %I on public.%I',
+      'chat_deny_anonymous_'||t,t
+    );
+    execute format(
+      'create policy %I on public.%I as restrictive for all to authenticated using (coalesce(((select auth.jwt())->>''is_anonymous'')::boolean,false)=false) with check (coalesce(((select auth.jwt())->>''is_anonymous'')::boolean,false)=false)',
+      'chat_deny_anonymous_'||t,t
+    );
+  end loop;
+end $$;
+
+  and private.can_read_chat_room(split_part(name,'/',1)::uuid)
+);
+
+drop policy if exists chat_room_storage_delete_authorized on storage.objects;
+create policy chat_room_storage_delete_authorized on storage.objects
+for delete to authenticated
+using (
+  bucket_id='chat-room-attachments'
+  and (
+    split_part(name,'/',2)=auth.uid()::text
+    or private.is_super_admin()
+  )
+);
+
+-- Restrict all new tables against anonymous sign-ins, matching the existing project policy.
+do $$
+declare t text;
+begin
+  foreach t in array array['chat_rooms','chat_room_members','chat_room_company_settings','chat_room_messages'] loop
+    execute format(
+      'drop policy if exists %I on public.%I',
+      'chat_deny_anonymous_'||t,t
+    );
+    execute format(
+      'create policy %I on public.%I as restrictive for all to authenticated using (coalesce(((select auth.jwt())->>''is_anonymous'')::boolean,false)=false) with check (coalesce(((select auth.jwt())->>''is_anonymous'')::boolean,false)=false)',
+      'chat_deny_anonymous_'||t,t
+    );
+  end loop;
+end $$;
+
   and split_part(name,'/',2)=auth.uid()::text
   and split_part(name,'/',3) in ('image','voice')
   and private.can_send_chat_room_message(
