@@ -178,6 +178,32 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     }
     var soundEnabled by remember { mutableStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getBoolean("sound", true)) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    var selectedPanel by remember { mutableStateOf<String?>(null) }
+    var settingsExpanded by remember { mutableStateOf(false) }
+    var clockNowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var serverTimeOffsetMillis by remember { mutableLongStateOf(0L) }
+    var clockUsesServerTime by remember { mutableStateOf(false) }
+    val adminPanels = listOf(
+        "مدیریت رانندگان", "مدیریت شرکت‌ها", "مدیریت بارها", "مدیریت مدیران",
+        "مدیریت مدارک", "گفتگوها", "شکایات", "گزارش‌ها", "تنظیمات و امنیت"
+    )
+    LaunchedEffect(Unit) {
+        while (true) {
+            val serverMillis = withContext(Dispatchers.IO) { fetchSupabaseServerTimeMillis() }
+            if (serverMillis != null) {
+                serverTimeOffsetMillis = serverMillis - System.currentTimeMillis()
+                clockUsesServerTime = true
+            } else {
+                clockUsesServerTime = false
+            }
+            clockNowMillis = System.currentTimeMillis() + serverTimeOffsetMillis
+            repeat(60) {
+                delay(1000)
+                clockNowMillis = System.currentTimeMillis() + serverTimeOffsetMillis
+            }
+        }
+    }
+    val tehranClockText = remember(clockNowMillis) { formatPersianTehranDateTime(clockNowMillis) }
     var textScale by remember { mutableFloatStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getFloat("text_scale", 1f).coerceIn(0.9f, 1.35f)) }
     val currentDensity = androidx.compose.ui.platform.LocalDensity.current
     val scaledDensity = androidx.compose.ui.unit.Density(density = currentDensity.density, fontScale = textScale)
@@ -230,38 +256,86 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
+            ModalDrawerSheet(
+                drawerContainerColor = MaterialTheme.colorScheme.surface,
+                drawerTonalElevation = 6.dp
+            ) {
                 Column(
-                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("منوی برنامه", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-                    Text(if (adminLoggedIn) "مدیر ارشد" else if (userLoggedIn) role.label else "مهمان")
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("اعلام بار مبل", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text(if (adminLoggedIn) "پنل مدیر ارشد" else if (userLoggedIn) "پنل کاربر" else "سامانه اعلام بار", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                    }
+                    Text("بخش‌های مدیریتی", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    if (adminLoggedIn) {
+                        adminPanels.filter { it != "مدیریت بارها" }.forEach { title ->
+                            NavigationDrawerItem(
+                                label = { Text(title) },
+                                selected = selectedPanel == title,
+                                onClick = {
+                                    selectedPanel = title
+                                    adminPanelData = ""
+                                    adminRecords = emptyList()
+                                    adminActionMessage = ""
+                                    scope.launch {
+                                        drawerState.close()
+                                        adminPanelLoading = true
+                                        adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, title) }
+                                        if (title == "مدیریت رانندگان" || title == "مدیریت شرکت‌ها" || title == "مدیریت مدارک") {
+                                            adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, title) }
+                                        }
+                                        adminPanelLoading = false
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    } else {
+                        Text(if (userLoggedIn) "بخش‌های حساب شما از این منو در دسترس خواهند بود." else "برای ورود به بخش‌های برنامه، ابتدا وارد حساب شوید.", style = MaterialTheme.typography.bodySmall)
+                    }
                     HorizontalDivider()
-                    Text("تنظیمات برنامه", style = MaterialTheme.typography.titleMedium)
-                    TextButton(onClick = onNextPalette, modifier = Modifier.fillMaxWidth()) {
-                        Text("تغییر پوسته: " + listOf("روشن", "سبز", "آبی", "تیره", "خودکار")[palette])
-                    }
-                    TextButton(onClick = {
-                        soundEnabled = !soundEnabled
-                        context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putBoolean("sound", soundEnabled).apply()
-                    }, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (soundEnabled) "صدای اعلان: روشن" else "صدای اعلان: خاموش")
-                    }
-                    Text("اندازه نوشته‌ها", style = MaterialTheme.typography.titleSmall)
-                    listOf("کوچک" to 0.9f, "متوسط" to 1f, "بزرگ" to 1.15f, "خیلی بزرگ" to 1.3f).forEach { (label, scale) ->
-                        FilterChip(
-                            selected = kotlin.math.abs(textScale - scale) < 0.02f,
-                            onClick = {
-                                textScale = scale
-                                context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putFloat("text_scale", scale).apply()
-                            },
-                            label = { Text(label) }
-                        )
+                    NavigationDrawerItem(
+                        label = { Text("تنظیمات برنامه") },
+                        selected = settingsExpanded,
+                        onClick = { settingsExpanded = !settingsExpanded },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (settingsExpanded) {
+                        TextButton(onClick = onNextPalette, modifier = Modifier.fillMaxWidth()) {
+                            Text("پوسته و رنگ‌بندی: " + listOf("روشن", "سبز", "آبی", "تیره", "خودکار")[palette])
+                        }
+                        TextButton(onClick = {
+                            soundEnabled = !soundEnabled
+                            context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putBoolean("sound", soundEnabled).apply()
+                        }, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (soundEnabled) "صدای اعلان: روشن" else "صدای اعلان: خاموش")
+                        }
+                        Text("اندازه نوشته‌ها", style = MaterialTheme.typography.bodyMedium)
+                        listOf("کوچک" to 0.9f, "متوسط" to 1f, "بزرگ" to 1.15f, "خیلی بزرگ" to 1.3f).forEach { (label, scale) ->
+                            FilterChip(
+                                selected = kotlin.math.abs(textScale - scale) < 0.02f,
+                                onClick = {
+                                    textScale = scale
+                                    context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putFloat("text_scale", scale).apply()
+                                },
+                                label = { Text(label) }
+                            )
+                        }
+                        Text("زبان: فارسی")
+                        Text("تقویم: شمسی | منطقه زمانی: تهران")
                     }
                     HorizontalDivider()
-                    Text("زبان: فارسی")
-                    Text("تقویم: شمسی (در حال تکمیل در بخش‌های تاریخ‌دار)")
+                    Text("زمان سامانه", style = MaterialTheme.typography.labelMedium)
+                    Text(tehranClockText, style = MaterialTheme.typography.bodyMedium)
+                    Text(if (clockUsesServerTime) "همگام با زمان سرور" else "زمان دستگاه؛ سرور در دسترس نیست", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     TextButton(onClick = { scope.launch { drawerState.close() } }, modifier = Modifier.fillMaxWidth()) { Text("بستن منو") }
                 }
             }
@@ -271,7 +345,26 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl,
         androidx.compose.ui.platform.LocalDensity provides scaledDensity
     ) {
-        Scaffold { padding ->
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Text("اعلام بار مبل", style = MaterialTheme.typography.titleMedium)
+                            Text(tehranClockText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                            Text("☰", style = MaterialTheme.typography.titleLarge)
+                        }
+                    },
+                    actions = {
+                        Text(if (clockUsesServerTime) "سرور" else "دستگاه", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 10.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                )
+            }
+        ) { padding ->
             Column(
                 modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -291,51 +384,26 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 }
                 Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
                 Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
-                OutlinedButton(onClick = { scope.launch { drawerState.open() } }, modifier = Modifier.fillMaxWidth()) {
-                    Text("☰  منوی کناری و تنظیمات")
-                }
                 if (adminLoggedIn) {
-                    var selectedPanel by remember { mutableStateOf<String?>(null) }
-                    val panels = listOf(
-                        "مدیریت رانندگان" to "بررسی فهرست رانندگان، مدارک و وضعیت تأیید",
-                        "مدیریت شرکت‌ها" to "بررسی شرکت‌ها و فعال‌سازی حساب‌ها",
-                        "مدیریت بارها" to "مشاهده و مدیریت بارهای ثبت‌شده",
-                        "مدیریت مدیران" to "مشاهده نقش‌ها و وضعیت مدیران",
-                        "مدیریت مدارک" to "بررسی مدارک بارگذاری‌شده رانندگان",
-                        "گفتگوها" to "مشاهده گفتگوهای ثبت‌شده",
-                        "شکایات" to "بررسی شکایات ثبت‌شده",
-                        "گزارش‌ها" to "گزارش فعالیت‌ها و رویدادهای سامانه",
-                        "تنظیمات و امنیت" to "مشاهده تنظیمات و وضعیت امنیتی"
-                    )
                     HorizontalDivider()
                     Text("پنل مدیر ارشد", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
                     Text("خوش آمدید؛ ورود شما با نقش مدیر ارشد اصلی تأیید شده است.", textAlign = TextAlign.Center)
                     if (selectedPanel == null) {
-                        panels.forEach { (title, subtitle) ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                onClick = {
-                                    selectedPanel = title
-                                    adminPanelData = ""
-                                    adminRecords = emptyList()
-                                    adminActionMessage = ""
-                                    if (title in listOf("مدیریت رانندگان", "مدیریت شرکت‌ها", "مدیریت بارها", "مدیریت مدیران", "مدیریت مدارک", "گفتگوها", "شکایات", "گزارش‌ها", "تنظیمات و امنیت")) {
-                                        adminPanelLoading = true
-                                        scope.launch {
-                                            adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, title) }
-                                            if (title == "مدیریت رانندگان" || title == "مدیریت شرکت‌ها" || title == "مدیریت مدارک") {
-                                                adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, title) }
-                                            }
-                                            adminPanelLoading = false
-                                        }
-                                    }
-                                },
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                                    Text(title, style = MaterialTheme.typography.titleMedium)
-                                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                selectedPanel = "مدیریت بارها"
+                                adminPanelLoading = true
+                                scope.launch {
+                                    adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, "مدیریت بارها") }
+                                    adminPanelLoading = false
                                 }
+                            },
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Text("پنل بارها", style = MaterialTheme.typography.titleLarge)
+                                Text("مشاهده و مدیریت بارهای ثبت‌شده", style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     } else {
@@ -793,6 +861,36 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
 
 
 
+}
+
+
+private fun fetchSupabaseServerTimeMillis(): Long? {
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL(SUPABASE_URL + "/rest/v1/").openConnection() as HttpURLConnection).apply {
+            requestMethod = "HEAD"
+            connectTimeout = 8000
+            readTimeout = 8000
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+        }
+        connection.connect()
+        val dateHeader = connection.getHeaderField("Date") ?: return null
+        java.time.ZonedDateTime.parse(dateHeader, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME)
+            .toInstant().toEpochMilli()
+    } catch (_: Exception) {
+        null
+    } finally {
+        connection?.disconnect()
+    }
+}
+
+private fun formatPersianTehranDateTime(epochMillis: Long): String {
+    val formatter = android.icu.text.SimpleDateFormat(
+        "yyyy/MM/dd  HH:mm:ss",
+        android.icu.util.ULocale("fa_IR@calendar=persian")
+    )
+    formatter.timeZone = android.icu.util.TimeZone.getTimeZone("Asia/Tehran")
+    return formatter.format(java.util.Date(epochMillis))
 }
 
 private fun uploadDriverDocument(context: Context, uri: Uri, token: String, documentType: String): String {
