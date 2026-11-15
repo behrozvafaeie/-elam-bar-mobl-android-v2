@@ -28,6 +28,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("io.github.webrtc-sdk:android:150.7871.04")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
