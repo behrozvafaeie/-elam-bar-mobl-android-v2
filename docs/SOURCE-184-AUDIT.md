@@ -108,3 +108,12 @@
 - Security Advisor همچنان هشدار auth_leaked_password_protection می‌دهد: محافظت رمزهای افشاشده در تنظیمات Auth خاموش است. این تنظیم از این اتصال تغییر داده نشد و باید در Auth > Security and Protection فعال و سپس دوباره بررسی شود.
 - Advisor درباره اجرای تابع public.admin_set_member_status با SECURITY DEFINER توسط authenticated هشدار داده است. پیش از هر تغییر باید متن کامل تابع و کنترل نقش داخل آن بررسی شود؛ در این مرحله تغییری داده نشد.
 - Advisor همچنین هشدارهای anonymous access برای چند policy مبتنی بر نقش authenticated گزارش کرده است. چون چند جدول policy محدودکننده anonymous نیز دارند، این هشدارها باید policy به policy با JWT واقعی و تست pgTAP بررسی شوند؛ هیچ policy عمومی باز ایجاد نشد.
+
+## پیاده‌سازی اولیه در شاخه work/source-184
+- فایل جدید `CompanyLoadManagement.kt` اضافه شد: دریافت فهرست بارهای منتشرشده شرکت، نمایش ساخت‌یافته، ویرایش فیلدهای بار و حذف با تأیید کاربر.
+- `MainActivity.kt` صفحه جدید مدیریت بارها را به پنل شرکت متصل می‌کند.
+- در کلاینت، ویرایش/حذف فقط وقتی دکمه‌ها فعال‌اند که status برابر published و assigned_driver_id خالی باشد؛ درخواست‌های PATCH/DELETE نیز با شناسه مالک و همان وضعیت به سرور محدود شده‌اند.
+- policy حذف شرکت در Supabase اعمال و در کاتالوگ policyها تأیید شده؛ فایل migration متناظر در `supabase/migrations/20261115201250_company_delete_own_unassigned_published_loads.sql` نگهداری می‌شود.
+- نسخه برنامه به `1.0.20` و `versionCode=21` تغییر کرد.
+- workflow برای اجرای push روی شاخه work/source-184 تنظیم و بررسی metadata نسخه ۲۱ اصلاح شد. گزینه تنظیم انیمیشن شبیه‌ساز که با ADB خطا می‌داد حذف شده است.
+- سه اجرای CI برای commitهای متوالی آغاز شده‌اند؛ تا زمان ثبت این گزارش هنوز نتیجه نهایی build و smoke test دریافت نشده است. هیچ APK جدیدی را آماده نصب اعلام نمی‌کنیم.
