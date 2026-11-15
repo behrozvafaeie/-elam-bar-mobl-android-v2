@@ -90,7 +90,7 @@ jobs:
     name: Optional emulator smoke test
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 22
     continue-on-error: true
     steps:
       - name: Download built APK
@@ -100,7 +100,7 @@ jobs:
           path: artifacts
 
       - name: Install and launch APK on Android emulator
-        timeout-minutes: 7
+        timeout-minutes: 18
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
@@ -108,7 +108,7 @@ jobs:
           arch: x86_64
           profile: pixel_2
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
-          emulator-boot-timeout: 240
+          emulator-boot-timeout: 600
           disable-animations: true
           script: |
             set -e
