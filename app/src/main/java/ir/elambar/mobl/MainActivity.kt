@@ -197,7 +197,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var soundEnabled by remember { mutableStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getBoolean("sound", true)) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var selectedPanel by remember { mutableStateOf<String?>(null) }
-    var settingsExpanded by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
     var clockNowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var serverTimeOffsetMillis by remember { mutableLongStateOf(0L) }
     var clockUsesServerTime by remember { mutableStateOf(false) }
@@ -372,34 +372,15 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     HorizontalDivider()
                     NavigationDrawerItem(
                         label = { Text("تنظیمات برنامه") },
-                        selected = settingsExpanded,
-                        onClick = { settingsExpanded = !settingsExpanded },
+                        selected = showSettings,
+                        onClick = {
+                            showSettings = true
+                            showProfile = false
+                            selectedPanel = null
+                            scope.launch { drawerState.close() }
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
-                    if (settingsExpanded) {
-                        TextButton(onClick = onNextPalette, modifier = Modifier.fillMaxWidth()) {
-                            Text("پوسته و رنگ‌بندی: " + listOf("روشن", "سبز", "آبی", "تیره", "خودکار")[palette])
-                        }
-                        TextButton(onClick = {
-                            soundEnabled = !soundEnabled
-                            context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putBoolean("sound", soundEnabled).apply()
-                        }, modifier = Modifier.fillMaxWidth()) {
-                            Text(if (soundEnabled) "صدای اعلان: روشن" else "صدای اعلان: خاموش")
-                        }
-                        Text("اندازه نوشته‌ها", style = MaterialTheme.typography.bodyMedium)
-                        listOf("کوچک" to 0.9f, "متوسط" to 1f, "بزرگ" to 1.15f, "خیلی بزرگ" to 1.3f).forEach { (label, scale) ->
-                            FilterChip(
-                                selected = kotlin.math.abs(textScale - scale) < 0.02f,
-                                onClick = {
-                                    textScale = scale
-                                    context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putFloat("text_scale", scale).apply()
-                                },
-                                label = { Text(label) }
-                            )
-                        }
-                        Text("زبان: فارسی")
-                        Text("تقویم: شمسی | منطقه زمانی: تهران")
-                    }
                     HorizontalDivider()
                     Text("زمان سامانه", style = MaterialTheme.typography.labelMedium)
                     Text(tehranClockText, style = MaterialTheme.typography.bodyMedium)
@@ -452,7 +433,49 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 }
                 Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
                 Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
-                if (showProfile && adminLoggedIn) {
+                if (showSettings) {
+                    HorizontalDivider()
+                    Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(18.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text("تنظیمات برنامه", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                            Text("پوسته و رنگ‌بندی", style = MaterialTheme.typography.titleMedium)
+                            TextButton(onClick = onNextPalette, modifier = Modifier.fillMaxWidth()) {
+                                Text("پوسته فعلی: " + listOf("روشن", "سبز", "آبی", "تیره", "خودکار")[palette] + "  |  تغییر پوسته")
+                            }
+                            HorizontalDivider()
+                            Text("اعلان و صدا", style = MaterialTheme.typography.titleMedium)
+                            OutlinedButton(
+                                onClick = {
+                                    soundEnabled = !soundEnabled
+                                    context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putBoolean("sound", soundEnabled).apply()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(if (soundEnabled) "صدای اعلان روشن است" else "صدای اعلان خاموش است") }
+                            HorizontalDivider()
+                            Text("اندازه نوشته‌ها", style = MaterialTheme.typography.titleMedium)
+                            listOf("کوچک" to 0.9f, "متوسط" to 1f, "بزرگ" to 1.15f, "خیلی بزرگ" to 1.3f).forEach { (label, scale) ->
+                                FilterChip(
+                                    selected = kotlin.math.abs(textScale - scale) < 0.02f,
+                                    onClick = {
+                                        textScale = scale
+                                        context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putFloat("text_scale", scale).apply()
+                                    },
+                                    label = { Text(label) }
+                                )
+                            }
+                            HorizontalDivider()
+                            Text("زبان: فارسی")
+                            Text("تقویم: شمسی")
+                            Text("منطقه زمانی: تهران")
+                            OutlinedButton(onClick = { showSettings = false }, modifier = Modifier.fillMaxWidth()) {
+                                Text("برگشت")
+                            }
+                        }
+                    }
+                } else if (showProfile && adminLoggedIn) {
                     HorizontalDivider()
                     Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge) {
                         Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
