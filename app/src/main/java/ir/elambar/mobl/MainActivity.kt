@@ -150,6 +150,11 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var adminRecords by remember { mutableStateOf<List<AdminRecord>>(emptyList()) }
     var adminActionMessage by remember { mutableStateOf("") }
     var adminPanelLoading by remember { mutableStateOf(false) }
+    var adminSearchQuery by remember { mutableStateOf("") }
+    var adminSearchResults by remember { mutableStateOf<List<AdminAccount>>(emptyList()) }
+    var managedAdmins by remember { mutableStateOf<List<AdminAccount>>(emptyList()) }
+    var adminNewRole by remember { mutableStateOf("admin") }
+    var adminManageBusy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
@@ -318,6 +323,11 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         if (title == "مدیریت رانندگان" || title == "مدیریت شرکت‌ها" || title == "مدیریت مدارک") {
                                             adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, title) }
                                         }
+                                        if (title == "مدیریت مدیران") {
+                                            managedAdmins = withContext(Dispatchers.IO) { fetchAdminUsers(adminAccessToken) }
+                                            adminSearchResults = emptyList()
+                                            adminSearchQuery = ""
+                                        }
                                         adminPanelLoading = false
                                     }
                                 },
@@ -443,6 +453,108 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 Text("در حال دریافت اطلاعات از سامانه...")
                             } else {
                                 Text(adminPanelData.ifBlank { "اطلاعاتی برای نمایش دریافت نشد." }, textAlign = TextAlign.Start)
+                                if (selectedPanel == "مدیریت مدیران") {
+                                    Text("افزودن مدیر جدید", style = MaterialTheme.typography.titleMedium)
+                                    Text("ابتدا کاربر باید با ایمیل خود در برنامه ثبت‌نام کرده باشد. سپس می‌توانید سطح دسترسی او را تعیین کنید.", style = MaterialTheme.typography.bodySmall)
+                                    OutlinedTextField(
+                                        value = adminSearchQuery,
+                                        onValueChange = { adminSearchQuery = it.trim().take(254) },
+                                        label = { Text("ایمیل کاربر برای جستجو") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    Text("سطح دسترسی حساب جدید")
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        FilterChip(selected = adminNewRole == "admin", onClick = { adminNewRole = "admin" }, label = { Text("ادمین عادی") })
+                                        FilterChip(selected = adminNewRole == "senior_admin", onClick = { adminNewRole = "senior_admin" }, label = { Text("ادمین ارشد") })
+                                    }
+                                    Button(
+                                        enabled = !adminManageBusy && adminSearchQuery.trim().length >= 3,
+                                        onClick = {
+                                            adminManageBusy = true
+                                            adminActionMessage = "در حال جستجوی حساب..."
+                                            scope.launch {
+                                                val result = withContext(Dispatchers.IO) { searchAdminCandidates(adminAccessToken, adminSearchQuery.trim()) }
+                                                adminSearchResults = result.second
+                                                adminActionMessage = result.first
+                                                adminManageBusy = false
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { Text("جستجوی کاربر") }
+                                    adminSearchResults.forEach { candidate ->
+                                        Card(Modifier.fillMaxWidth()) {
+                                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                Text(candidate.email, style = MaterialTheme.typography.titleSmall)
+                                                Text("این حساب هنوز مدیر نیست.")
+                                                Button(
+                                                    enabled = !adminManageBusy,
+                                                    onClick = {
+                                                        adminManageBusy = true
+                                                        scope.launch {
+                                                            adminActionMessage = withContext(Dispatchers.IO) { addAdminUser(adminAccessToken, candidate.userId, adminNewRole) }
+                                                            if (adminActionMessage.startsWith("انجام شد")) {
+                                                                managedAdmins = withContext(Dispatchers.IO) { fetchAdminUsers(adminAccessToken) }
+                                                                adminSearchResults = emptyList()
+                                                            }
+                                                            adminManageBusy = false
+                                                        }
+                                                    },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) { Text(if (adminNewRole == "admin") "افزودن به‌عنوان ادمین عادی" else "افزودن به‌عنوان ادمین ارشد") }
+                                            }
+                                        }
+                                    }
+                                    HorizontalDivider()
+                                    Text("فهرست مدیران سامانه", style = MaterialTheme.typography.titleMedium)
+                                    if (managedAdmins.isEmpty()) {
+                                        Text("فهرست مدیران دریافت نشد یا هنوز مدیری ثبت نشده است.", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    managedAdmins.forEach { account ->
+                                        Card(Modifier.fillMaxWidth()) {
+                                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                Text(account.email.ifBlank { account.userId }, style = MaterialTheme.typography.titleSmall)
+                                                Text("سطح فعلی: " + when (account.role) {
+                                                    "super_admin" -> "مدیر ارشد اصلی"
+                                                    "senior_admin" -> "ادمین ارشد"
+                                                    else -> "ادمین عادی"
+                                                })
+                                                if (account.role == "super_admin") {
+                                                    Text("حساب اصلی قابل تغییر نیست.", color = MaterialTheme.colorScheme.primary)
+                                                } else {
+                                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                        OutlinedButton(
+                                                            enabled = !adminManageBusy && account.role != "admin",
+                                                            onClick = {
+                                                                adminManageBusy = true
+                                                                scope.launch {
+                                                                    adminActionMessage = withContext(Dispatchers.IO) { setAdminUserRole(adminAccessToken, account.userId, "admin") }
+                                                                    managedAdmins = withContext(Dispatchers.IO) { fetchAdminUsers(adminAccessToken) }
+                                                                    adminManageBusy = false
+                                                                }
+                                                            },
+                                                            modifier = Modifier.weight(1f)
+                                                        ) { Text("ادمین عادی") }
+                                                        OutlinedButton(
+                                                            enabled = !adminManageBusy && account.role != "senior_admin",
+                                                            onClick = {
+                                                                adminManageBusy = true
+                                                                scope.launch {
+                                                                    adminActionMessage = withContext(Dispatchers.IO) { setAdminUserRole(adminAccessToken, account.userId, "senior_admin") }
+                                                                    managedAdmins = withContext(Dispatchers.IO) { fetchAdminUsers(adminAccessToken) }
+                                                                    adminManageBusy = false
+                                                                }
+                                                            },
+                                                            modifier = Modifier.weight(1f)
+                                                        ) { Text("ادمین ارشد") }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (adminActionMessage.isNotBlank()) Text(adminActionMessage, color = MaterialTheme.colorScheme.secondary)
+                                    HorizontalDivider()
+                                }
                                 if (selectedPanel == "تنظیمات کل برنامه") {
                                     Text("این بخش مربوط به تنظیمات سراسری سامانه است و تغییرات آن باید برای همه شرکت‌ها، رانندگان و مدیران اعمال شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                                 }
@@ -1187,6 +1299,73 @@ private fun restoreDeviceSession(refreshToken: String, role: UserRole): UserLogi
         UserLoginResult(true,"نشست قبلی بازیابی شد.",name,status,access,fresh,profilePhotoPublicUrl(p.optString("profile_photo_path")))
     } catch (_:Exception) { UserLoginResult(false,"ارتباط با سامانه برقرار نشد.") }
     finally { auth?.disconnect(); profile?.disconnect() }
+}
+
+private data class AdminAccount(
+    val userId: String,
+    val email: String,
+    val role: String,
+    val isBlocked: Boolean = false
+)
+
+private fun adminRpc(accessToken: String, functionName: String, body: JSONObject): Pair<Int, String> {
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL("$SUPABASE_URL/rest/v1/rpc/$functionName").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 20000
+            doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        code to (stream?.bufferedReader()?.use { it.readText() }.orEmpty())
+    } catch (e: Exception) {
+        -1 to (e.message ?: "network_error")
+    } finally {
+        connection?.disconnect()
+    }
+}
+
+private fun fetchAdminUsers(accessToken: String): List<AdminAccount> {
+    val (code, body) = adminRpc(accessToken, "admin_list_users", JSONObject())
+    if (code !in 200..299) return emptyList()
+    return runCatching {
+        val rows = JSONArray(body)
+        (0 until rows.length()).map { i ->
+            val row = rows.getJSONObject(i)
+            AdminAccount(row.optString("user_id"), row.optString("email"), row.optString("role"), row.optBoolean("is_blocked"))
+        }
+    }.getOrDefault(emptyList())
+}
+
+private fun searchAdminCandidates(accessToken: String, query: String): Pair<String, List<AdminAccount>> {
+    if (query.length !in 3..254) return "حداقل سه نویسه از ایمیل را وارد کنید." to emptyList()
+    val (code, body) = adminRpc(accessToken, "admin_search_users", JSONObject().put("p_query", query))
+    if (code !in 200..299) return "جستجو ناموفق بود؛ دسترسی مدیر ارشد و اتصال را بررسی کنید." to emptyList()
+    val rows = JSONArray(body)
+    val result = (0 until rows.length()).map { i ->
+        val row = rows.getJSONObject(i)
+        AdminAccount(row.optString("user_id"), row.optString("email"), "")
+    }
+    return (if (result.isEmpty()) "کاربر ثبت‌نام‌شده‌ای با این ایمیل پیدا نشد یا قبلاً مدیر شده است." else "حساب‌های قابل افزودن پیدا شدند.") to result
+}
+
+private fun addAdminUser(accessToken: String, userId: String, role: String): String {
+    val (code, body) = adminRpc(accessToken, "admin_add_user", JSONObject().put("p_target_user_id", userId).put("p_new_role", role))
+    return if (code in 200..299) "انجام شد؛ مدیر جدید با سطح دسترسی انتخاب‌شده اضافه شد."
+    else "افزودن مدیر انجام نشد؛ ممکن است حساب قبلاً مدیر شده باشد یا مجوز کافی وجود نداشته باشد."
+}
+
+private fun setAdminUserRole(accessToken: String, userId: String, role: String): String {
+    val (code, body) = adminRpc(accessToken, "admin_set_role", JSONObject().put("p_target_user_id", userId).put("p_new_role", role))
+    return if (code in 200..299) "انجام شد؛ سطح دسترسی مدیر تغییر کرد."
+    else "تغییر سطح دسترسی انجام نشد؛ مجوزها را بررسی کنید."
 }
 
 private fun fetchAdminPanelData(accessToken: String, panel: String): String {
