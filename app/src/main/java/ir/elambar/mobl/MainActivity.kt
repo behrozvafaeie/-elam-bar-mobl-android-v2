@@ -148,6 +148,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var adminLoggedIn by remember { mutableStateOf(false) }
     var adminRole by remember { mutableStateOf("") }
     var adminAccessToken by remember { mutableStateOf("") }
+    var adminProfilePhotoUrl by remember { mutableStateOf("") }
     var adminPanelData by remember { mutableStateOf("") }
     var adminRecords by remember { mutableStateOf<List<AdminRecord>>(emptyList()) }
     var adminActionMessage by remember { mutableStateOf("") }
@@ -171,14 +172,16 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         }
     }
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        if (uri != null && userAccessToken.isNotBlank()) {
+        val photoToken = if (adminLoggedIn) adminAccessToken else userAccessToken
+        val photoRole = if (adminLoggedIn) UserRole.ADMIN else role
+        if (uri != null && photoToken.isNotBlank()) {
             profilePhotoUploading = true
             profilePhotoMessage = "در حال بارگذاری تصویر پروفایل..."
             scope.launch {
-                val uploaded = withContext(Dispatchers.IO) { uploadProfilePhoto(context, uri, userAccessToken, role) }
+                val uploaded = withContext(Dispatchers.IO) { uploadProfilePhoto(context, uri, photoToken, photoRole) }
                 profilePhotoUploading = false
                 if (uploaded.startsWith("https://")) {
-                    profilePhotoUrl = uploaded
+                    if (adminLoggedIn) adminProfilePhotoUrl = uploaded else profilePhotoUrl = uploaded
                     profilePhotoMessage = "تصویر پروفایل ذخیره شد."
                 } else profilePhotoMessage = uploaded
             }
@@ -434,13 +437,21 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     HorizontalDivider()
                     Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge) {
                         Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(104.dp)) {
-                                Box(contentAlignment = Alignment.Center) { Text("مدیر", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer) }
+                            if (adminProfilePhotoUrl.isNotBlank()) {
+                                AsyncImage(model = adminProfilePhotoUrl, contentDescription = "عکس پروفایل مدیر", modifier = Modifier.size(112.dp).clip(CircleShape))
+                            } else {
+                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(112.dp)) {
+                                    Box(contentAlignment = Alignment.Center) { Text("مدیر", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer) }
+                                }
                             }
                             Text("پروفایل مدیر", style = MaterialTheme.typography.headlineSmall)
                             Text(when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }, style = MaterialTheme.typography.titleMedium)
                             if (email.isNotBlank()) Text(email, style = MaterialTheme.typography.bodyMedium)
-                            Text("سطح دسترسی این حساب توسط مدیر ارشد اصلی تعیین می‌شود.", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                            Button(enabled = !profilePhotoUploading, onClick = { photoPicker.launch("image/*") }) {
+                                Text(if (profilePhotoUploading) "در حال بارگذاری تصویر..." else if (adminProfilePhotoUrl.isBlank()) "انتخاب عکس از گالری" else "تغییر عکس پروفایل")
+                            }
+                            if (profilePhotoMessage.isNotBlank()) Text(profilePhotoMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                            Text("عکس پروفایل برای نمایش حساب مدیر است؛ تصویر یا مدرک محرمانه بارگذاری نکنید.", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                         }
                     }
                     OutlinedButton(onClick = { showProfile = false }, modifier = Modifier.fillMaxWidth()) { Text("بازگشت به پنل مدیریت") }
@@ -736,6 +747,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     OutlinedButton(
                         onClick = {
                             adminLoggedIn = false
+                            adminProfilePhotoUrl = ""
+                            adminAccessToken = ""
+                            showProfile = false
                             email = ""
                             password = ""
                             message = "از حساب مدیر ارشد خارج شدید."
@@ -1087,7 +1101,12 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                             }
                                             loading = false
                                             message = result.message
-                                            if (result.success) { adminAccessToken = result.accessToken; adminRole = result.role; adminLoggedIn = true }
+                                            if (result.success) {
+                                                adminAccessToken = result.accessToken
+                                                adminRole = result.role
+                                                adminLoggedIn = true
+                                                adminProfilePhotoUrl = withContext(Dispatchers.IO) { fetchAdminProfilePhoto(result.accessToken) }
+                                            }
                                         }
                                     }
                                 }
@@ -1260,6 +1279,32 @@ private fun profilePhotoPublicUrl(path: String): String {
     return SUPABASE_URL + "/storage/v1/object/public/profile-photos/" + path
 }
 
+private fun fetchAdminProfilePhoto(token: String): String {
+    var connection: HttpURLConnection? = null
+    return try {
+        val part = token.split(".").getOrNull(1) ?: return ""
+        val decoded = Base64.decode(part, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+        val userId = JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
+        if (userId.isBlank()) return ""
+        val query = URLEncoder.encode(userId, "UTF-8")
+        connection = (URL(SUPABASE_URL + "/rest/v1/admin_users?select=profile_photo_path&user_id=eq." + query + "&limit=1").openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 12000
+            readTimeout = 15000
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer " + token)
+        }
+        val code = connection.responseCode
+        if (code !in 200..299) return ""
+        val rows = JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
+        if (rows.length() == 0) "" else profilePhotoPublicUrl(rows.getJSONObject(0).optString("profile_photo_path"))
+    } catch (_: Exception) {
+        ""
+    } finally {
+        connection?.disconnect()
+    }
+}
+
 private fun uploadProfilePhoto(context: Context, uri: Uri, token: String, role: UserRole): String {
     var upload: HttpURLConnection? = null
     var update: HttpURLConnection? = null
@@ -1286,7 +1331,6 @@ private fun uploadProfilePhoto(context: Context, uri: Uri, token: String, role: 
         upload.outputStream.use { it.write(bytes) }
         val uploadCode = upload.responseCode
         if (uploadCode !in 200..299) return "بارگذاری تصویر مجاز نشد (کد " + uploadCode + ")."
-        val table = if (role == UserRole.DRIVER) "drivers" else "companies"
         update = (URL(SUPABASE_URL + "/rest/v1/rpc/set_my_profile_photo_path").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"; connectTimeout = 15000; readTimeout = 20000; doOutput = true
             setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
