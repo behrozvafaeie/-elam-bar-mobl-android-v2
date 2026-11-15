@@ -794,7 +794,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("تصویر پروفایل", style = MaterialTheme.typography.titleMedium)
-                            Text("عکس دلخواه را از گالری گوشی انتخاب کنید. تصویر در فضای امن برنامه ذخیره می‌شود.", style = MaterialTheme.typography.bodyMedium)
+                            Text("عکس دلخواه را از گالری انتخاب کنید. این تصویر برای نمایش پروفایل قابل مشاهده است؛ عکس یا مدرک محرمانه بارگذاری نکنید.", style = MaterialTheme.typography.bodyMedium)
                             Button(
                                 enabled = !profilePhotoUploading,
                                 onClick = { photoPicker.launch("image/*") },
