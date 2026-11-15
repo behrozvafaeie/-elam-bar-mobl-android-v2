@@ -54,6 +54,8 @@ internal fun ChatRoomScreen(accessToken: String, role: String, onClose: () -> Un
     var contactQuery by remember { mutableStateOf("") }
     var contactResults by remember { mutableStateOf<List<ChatContactItem>>(emptyList()) }
     var companySettings by remember { mutableStateOf<List<ChatCompanyItem>>(emptyList()) }
+    var showDriverSettings by remember { mutableStateOf(false) }
+    var driverAccess by remember { mutableStateOf<List<ChatDriverAccess>>(emptyList()) }
     var downloadedImages by remember { mutableStateOf<Map<String, File>>(emptyMap()) }
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var recordingFile by remember { mutableStateOf<File?>(null) }
@@ -247,7 +249,7 @@ internal fun ChatRoomScreen(accessToken: String, role: String, onClose: () -> Un
                         Spacer(Modifier.weight(1f))
                         Text(room.title, style = MaterialTheme.typography.titleSmall, maxLines = 1)
                     }
-                    if (isSuperAdmin && room.type == "public") {
+                    if (isSuperAdmin) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             OutlinedButton(enabled = !busy, onClick = {
                                 busy = true
@@ -261,7 +263,8 @@ internal fun ChatRoomScreen(accessToken: String, role: String, onClose: () -> Un
                             }) { Text(if (room.locked) "بازکردن اتاق" else "قفل‌کردن ارسال") }
                             OutlinedButton(onClick = {
                                 showCompanySettings = !showCompanySettings
-                                if (!showCompanySettings) {
+                                showDriverSettings = false
+                                if (showCompanySettings) {
                                     busy = true
                                     scope.launch {
                                         val result = withContext(Dispatchers.IO) { repository.companiesForModeration(room.id) }
@@ -271,6 +274,19 @@ internal fun ChatRoomScreen(accessToken: String, role: String, onClose: () -> Un
                                     }
                                 }
                             }) { Text("مجوز شرکت‌ها") }
+                            OutlinedButton(onClick = {
+                                showDriverSettings = !showDriverSettings
+                                showCompanySettings = false
+                                if (showDriverSettings) {
+                                    busy = true
+                                    scope.launch {
+                                        val result = withContext(Dispatchers.IO) { repository.driversForModeration(room.id) }
+                                        driverAccess = result.second
+                                        status = result.first.orEmpty()
+                                        busy = false
+                                    }
+                                }
+                            }) { Text("مجوز رانندگان") }
                         }
                     }
 
@@ -302,6 +318,34 @@ internal fun ChatRoomScreen(accessToken: String, role: String, onClose: () -> Un
                                         }) { Text("ذخیره مجوز این شرکت") }
                                         HorizontalDivider()
                                     }
+                                }
+                            }
+                        }
+                    }
+
+                    if (showDriverSettings && isSuperAdmin && room.type == "public") {
+                        Card(Modifier.fillMaxWidth()) {
+                            Column(Modifier.fillMaxWidth().padding(10.dp).heightIn(max = 220.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("دسترسی فقط‌خواندنی رانندگان", style = MaterialTheme.typography.titleSmall)
+                                Text("راننده فقط پیام‌ها را می‌بیند و امکان ارسال متن، تصویر یا ویس در اتاق عمومی ندارد.", style = MaterialTheme.typography.bodySmall)
+                                driverAccess.forEach { item ->
+                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text(item.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                                        Switch(checked = item.canRead, onCheckedChange = { value ->
+                                            driverAccess = driverAccess.map { if (it.id == item.id) it.copy(canRead = value) else it }
+                                        })
+                                        TextButton(enabled = !busy, onClick = {
+                                            busy = true
+                                            scope.launch {
+                                                status = withContext(Dispatchers.IO) { repository.saveDriverReadPermission(room.id, item.id, item.canRead) }
+                                                val result = withContext(Dispatchers.IO) { repository.driversForModeration(room.id) }
+                                                driverAccess = result.second
+                                                if (result.first != null) status += " " + result.first
+                                                busy = false
+                                            }
+                                        }) { Text("ذخیره") }
+                                    }
+                                    HorizontalDivider()
                                 }
                             }
                         }
