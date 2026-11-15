@@ -155,6 +155,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var adminPanelData by remember { mutableStateOf("") }
     var adminRecords by remember { mutableStateOf<List<AdminRecord>>(emptyList()) }
     var adminActionMessage by remember { mutableStateOf("") }
+    var adminStatusReason by remember { mutableStateOf("") }
     var adminPanelLoading by remember { mutableStateOf(false) }
     var adminSearchQuery by remember { mutableStateOf("") }
     var adminSearchResults by remember { mutableStateOf<List<AdminAccount>>(emptyList()) }
@@ -671,6 +672,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     HorizontalDivider()
                                 }
                                 if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها" || selectedPanel == "مدیریت مدارک") {
+                                    if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها") {
+                                        OutlinedTextField(value = adminStatusReason, onValueChange = { adminStatusReason = it.take(500) }, label = { Text("دلیل رد یا مسدودسازی (برای مسدودسازی الزامی است)") }, modifier = Modifier.fillMaxWidth(), maxLines = 3)
+                                    }
                                     adminRecords.forEach { record ->
                                         Card(Modifier.fillMaxWidth()) {
                                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -714,17 +718,27 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                         Button(onClick = {
                                                             adminPanelLoading = true
                                                             scope.launch {
-                                                                adminActionMessage = withContext(Dispatchers.IO) { updateMemberStatus(adminAccessToken, selectedPanel ?: "", record.id, "approved") }
+                                                                adminActionMessage = withContext(Dispatchers.IO) { updateMemberStatus(adminAccessToken, selectedPanel ?: "", record.id, "approved", adminStatusReason) }
                                                                 adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, selectedPanel ?: "") }
                                                                 adminPanelLoading = false
                                                             }
                                                         }) { Text("تأیید حساب") }
+                                                    if (record.status != "rejected" && record.status != "blocked") {
+                                                        OutlinedButton(onClick = {
+                                                            adminPanelLoading = true
+                                                            scope.launch {
+                                                                adminActionMessage = withContext(Dispatchers.IO) { updateMemberStatus(adminAccessToken, selectedPanel ?: "", record.id, "rejected", adminStatusReason) }
+                                                                adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, selectedPanel ?: "") }
+                                                                adminPanelLoading = false
+                                                            }
+                                                        }) { Text("رد درخواست") }
+                                                    }
                                                     }
                                                     if (record.status != "blocked") {
                                                         OutlinedButton(onClick = {
                                                             adminPanelLoading = true
                                                             scope.launch {
-                                                                adminActionMessage = withContext(Dispatchers.IO) { updateMemberStatus(adminAccessToken, selectedPanel ?: "", record.id, "blocked") }
+                                                                adminActionMessage = withContext(Dispatchers.IO) { updateMemberStatus(adminAccessToken, selectedPanel ?: "", record.id, "blocked", adminStatusReason) }
                                                                 adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, selectedPanel ?: "") }
                                                                 adminPanelLoading = false
                                                             }
@@ -734,7 +748,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                         Button(onClick = {
                                                             adminPanelLoading = true
                                                             scope.launch {
-                                                                adminActionMessage = withContext(Dispatchers.IO) { updateMemberStatus(adminAccessToken, selectedPanel ?: "", record.id, "approved") }
+                                                                adminActionMessage = withContext(Dispatchers.IO) { updateMemberStatus(adminAccessToken, selectedPanel ?: "", record.id, "approved", adminStatusReason) }
                                                                 adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, selectedPanel ?: "") }
                                                                 adminPanelLoading = false
                                                             }
@@ -2129,32 +2143,23 @@ private fun updateDriverDocumentStatus(accessToken: String, id: String, status: 
     finally { connection?.disconnect() }
 }
 
-private fun updateMemberStatus(accessToken: String, panel: String, id: String, status: String): String {
+private fun updateMemberStatus(accessToken: String, panel: String, id: String, status: String, reason: String): String {
     if (accessToken.isBlank() || id.isBlank()) return "نشست مدیر معتبر نیست."
     val table = when (panel) {
         "مدیریت رانندگان" -> "drivers"
         "مدیریت شرکت‌ها" -> "companies"
         else -> return "این عملیات برای این بخش تعریف نشده است."
     }
-    var connection: HttpURLConnection? = null
-    return try {
-        connection = (URL("$SUPABASE_URL/rest/v1/$table?id=eq.$id").openConnection() as HttpURLConnection).apply {
-            requestMethod = "PATCH"
-            connectTimeout = 15000
-            readTimeout = 20000
-            doOutput = true
-            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
-            setRequestProperty("Authorization", "Bearer $accessToken")
-            setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("Prefer", "return=minimal")
-        }
-        connection.outputStream.use { it.write(JSONObject().put("status", status).toString().toByteArray(Charsets.UTF_8)) }
-        val code = connection.responseCode
-        if (code in 200..299) "وضعیت حساب با موفقیت به «$status» تغییر کرد."
-        else "تغییر وضعیت انجام نشد (کد $code). مجوز edit مدیر ارشد را بررسی کنید."
-    } catch (_: Exception) {
-        "ارتباط با سامانه برقرار نشد."
-    } finally {
-        connection?.disconnect()
+    if (status !in setOf("approved", "rejected", "blocked")) return "وضعیت درخواستی معتبر نیست."
+    if (status == "blocked" && reason.trim().length < 3) return "برای مسدودسازی، دلیل حداقل سه نویسه‌ای وارد کنید."
+    val payload = JSONObject().put("p_table", table).put("p_user_id", id).put("p_status", status)
+        .put("p_reason", reason.trim().ifBlank { JSONObject.NULL })
+    val (code, body) = adminRpc(accessToken, "admin_set_member_status", payload)
+    if (code in 200..299) return when (status) {
+        "approved" -> "حساب تأیید شد."
+        "rejected" -> "درخواست حساب رد شد."
+        else -> "حساب با ثبت دلیل مسدود شد."
     }
+    val detail = runCatching { JSONObject(body).optString("message").ifBlank { JSONObject(body).optString("hint") } }.getOrDefault("")
+    "تغییر وضعیت انجام نشد (کد $code)." + if (detail.isNotBlank()) " $detail" else " مجوز مدیر و وضعیت حساب را بررسی کنید."
 }
