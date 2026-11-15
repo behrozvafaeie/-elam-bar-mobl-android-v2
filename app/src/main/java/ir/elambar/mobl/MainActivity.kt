@@ -589,7 +589,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     )
 
                     if (role != UserRole.ADMIN) {
-                        Text("ثبت‌نام با مشخصات و شماره موبایل؛ ورود مستقیم و نگهداری نشست امن روی همین گوشی.", textAlign = TextAlign.Center)
+                        Text("برای ساخت حساب، نام کاربری و رمز عبور تعیین کنید. ورودهای بعدی با همین اطلاعات انجام می‌شود.", textAlign = TextAlign.Center)
                     } else {
                         Text("فقط حساب مدیر ارشد ثبت‌شده در سامانه اجازه ورود به پنل مدیریت را دارد.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
                     }
@@ -630,6 +630,29 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     }
 
                     if (register && role != UserRole.ADMIN) {
+                        OutlinedTextField(
+                            value = username,
+                            onValueChange = { username = it.trim().lowercase().take(32) },
+                            label = { Text("نام کاربری (حداقل ۴ نویسه)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            label = { Text("رمز عبور (حداقل ۸ نویسه)") },
+                            visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Icon(
+                                        imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                        contentDescription = if (passwordVisible) "مخفی کردن رمز عبور" else "نمایش رمز عبور"
+                                    )
+                                }
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                         OutlinedTextField(firstName, { firstName = it }, label = { Text("نام") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(lastName, { lastName = it }, label = { Text("نام خانوادگی") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(mobile, { mobile = it }, label = { Text("شماره موبایل (09...)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth())
@@ -691,27 +714,38 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     }
                                 }
                             } else if (register) {
-                                val commonInvalid = firstName.isBlank() || lastName.isBlank() || mobile.isBlank()
+                                val commonInvalid = username.length < 4 || password.length < 8 ||
+                                    firstName.isBlank() || lastName.isBlank() ||
+                                    !mobile.matches(Regex("^09\\d{9}$"))
                                 val typeInvalid = if (role == UserRole.COMPANY) companyName.isBlank() || activityCity.isBlank()
                                     else nationalId.length != 10 || smartCardNumber.isBlank() || licensePlate.isBlank() || primaryDestination.isBlank()
                                 if (commonInvalid || typeInvalid) {
-                                    message = "اطلاعات ثبت‌نام را کامل و صحیح وارد کنید."
+                                    message = "نام کاربری، رمز عبور و مشخصات را کامل و صحیح وارد کنید. شماره موبایل باید ۱۱ رقم و با ۰۹ شروع شود."
                                 } else {
                                     loading = true
-                                    message = "در حال ثبت پرونده و ورود امن..."
+                                    message = "در حال ساخت حساب و بررسی ورود..."
                                     scope.launch {
                                         val result = withContext(Dispatchers.IO) {
-                                            registerDeviceAccount(role, firstName, lastName, mobile, companyName, activityCity,
-                                                officeAddress, nationalId, smartCardNumber, vehicleType, licensePlate,
-                                                primaryDestination, destinationsText)
+                                            val registration = registerUserAccount(
+                                                username, password, role, firstName, lastName, mobile,
+                                                companyName, activityCity, officeAddress, nationalId,
+                                                smartCardNumber, vehicleType, licensePlate,
+                                                primaryDestination, destinationsText
+                                            )
+                                            if (registration == "OK") {
+                                                authenticateUser(username, password, role)
+                                            } else {
+                                                UserLoginResult(false, registration)
+                                            }
                                         }
                                         loading = false
                                         message = result.message
-                                        if (result.success && result.refreshToken.isNotBlank()) {
+                                        if (result.success && result.accessToken.isNotBlank() && result.refreshToken.isNotBlank()) {
                                             userLoggedIn = true
                                             userDisplayName = result.displayName
                                             userStatus = result.status
                                             userAccessToken = result.accessToken
+                                            profilePhotoUrl = result.photoUrl
                                             DeviceSessionStore.save(context, result.refreshToken, role.name)
                                             if (soundEnabled) playAppTone()
                                         }
@@ -743,7 +777,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (loading) "لطفاً صبر کنید..." else if (role == UserRole.ADMIN) "ورود مدیر ارشد" else "ثبت‌نام و ورود مستقیم")
+                        Text(if (loading) "لطفاً صبر کنید..." else if (role == UserRole.ADMIN) "ورود مدیر ارشد" else "ساخت حساب و ورود")
                     }
                     Text(message, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.secondary)
                     if (role != UserRole.ADMIN) {
