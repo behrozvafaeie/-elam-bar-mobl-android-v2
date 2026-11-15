@@ -2,10 +2,19 @@ name: Android APK
 on:
   push:
     branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184" ]
+    paths:
+      - "app/**"
+      - "*.gradle.kts"
+      - "settings.gradle.kts"
+      - ".github/workflows/android-apk.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
