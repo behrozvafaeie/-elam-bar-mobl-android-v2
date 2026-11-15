@@ -122,7 +122,18 @@ internal class CommunicationRepository(
             val payload = JSONObject().put("conversation_id", conversationId).put("sender_user_id", senderUserId)
                 .put("message_type", "voice").put("body", "پیام صوتی").put("attachment_path", path)
             val (code, _) = request("POST", "messages", payload)
-            if (code in 200..299) "پیام صوتی ارسال شد." else "فایل بارگذاری شد اما ثبت پیام توسط سیاست امنیتی سامانه رد شد."
+            if (code in 200..299) "پیام صوتی ارسال شد." else {
+                var cleanup: HttpURLConnection? = null
+                try {
+                    cleanup = (URL("$supabaseUrl/storage/v1/object/chat-attachments/$path").openConnection() as HttpURLConnection).apply {
+                        requestMethod = "DELETE"; connectTimeout = 10000; readTimeout = 10000
+                        setRequestProperty("apikey", publishableKey)
+                        setRequestProperty("Authorization", "Bearer $accessToken")
+                    }
+                    runCatching { cleanup.responseCode }
+                } finally { cleanup?.disconnect() }
+                "فایل بارگذاری شد اما ثبت پیام توسط سیاست امنیتی سامانه رد شد؛ فایل موقت پاک شد."
+            }
         } catch (_: Exception) { "ارتباط برای ارسال پیام صوتی برقرار نشد." }
         finally { upload?.disconnect() }
     }

@@ -20,6 +20,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
@@ -110,6 +111,14 @@ internal fun CommunicationScreen(accessToken: String, onClose: () -> Unit) {
         }
     }
     LaunchedEffect(accessToken) { refreshConversations() }
+    LaunchedEffect(selected?.id, accessToken) {
+        val conversation = selected ?: return@LaunchedEffect
+        while (true) {
+            delay(5000)
+            val result = withContext(Dispatchers.IO) { repository.messages(conversation.id) }
+            if (result.first == null) messages = result.second else status = result.first.orEmpty()
+        }
+    }
     DisposableEffect(Unit) {
         onDispose {
             runCatching { recorder?.stop() }; runCatching { recorder?.release() }
