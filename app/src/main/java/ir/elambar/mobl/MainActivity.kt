@@ -706,6 +706,16 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                             }
                                                         }) { Text("تأیید حساب") }
                                                     }
+                                                    if (record.status != "rejected") {
+                                                        OutlinedButton(onClick = {
+                                                            adminPanelLoading = true
+                                                            scope.launch {
+                                                                adminActionMessage = withContext(Dispatchers.IO) { updateMemberStatus(adminAccessToken, selectedPanel ?: "", record.id, "rejected") }
+                                                                adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, selectedPanel ?: "") }
+                                                                adminPanelLoading = false
+                                                            }
+                                                        }) { Text("رد حساب") }
+                                                    }
                                                     if (record.status != "blocked") {
                                                         OutlinedButton(onClick = {
                                                             adminPanelLoading = true
@@ -2122,25 +2132,16 @@ private fun updateMemberStatus(accessToken: String, panel: String, id: String, s
         "مدیریت شرکت‌ها" -> "companies"
         else -> return "این عملیات برای این بخش تعریف نشده است."
     }
-    var connection: HttpURLConnection? = null
     return try {
-        connection = (URL("$SUPABASE_URL/rest/v1/$table?id=eq.$id").openConnection() as HttpURLConnection).apply {
-            requestMethod = "PATCH"
-            connectTimeout = 15000
-            readTimeout = 20000
-            doOutput = true
-            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
-            setRequestProperty("Authorization", "Bearer $accessToken")
-            setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("Prefer", "return=minimal")
-        }
-        connection.outputStream.use { it.write(JSONObject().put("status", status).toString().toByteArray(Charsets.UTF_8)) }
-        val code = connection.responseCode
-        if (code in 200..299) "وضعیت حساب با موفقیت به «$status» تغییر کرد."
-        else "تغییر وضعیت انجام نشد (کد $code). مجوز edit مدیر ارشد را بررسی کنید."
+        val body = JSONObject()
+            .put("p_table", table)
+            .put("p_user_id", id)
+            .put("p_status", status)
+            .put("p_reason", if (status == "blocked") "مسدودسازی از پنل مدیریت؛ علت نیازمند ثبت تکمیلی است." else JSONObject.NULL)
+        val (code, response) = adminRpc(accessToken, "admin_set_member_status", body)
+        if (code in 200..299) "وضعیت حساب با موفقیت به «$status» تغییر کرد و در سوابق مدیریتی ثبت شد."
+        else "تغییر وضعیت انجام نشد؛ دسترسی مدیر یا تنظیمات امنیتی سامانه را بررسی کنید. ($code)"
     } catch (_: Exception) {
         "ارتباط با سامانه برقرار نشد."
-    } finally {
-        connection?.disconnect()
     }
 }
