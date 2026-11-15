@@ -29,6 +29,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
@@ -406,7 +407,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Text("☰", style = MaterialTheme.typography.titleLarge)
+                            Icon(Icons.Filled.Menu, contentDescription = "باز کردن منو")
                         }
                     },
                     actions = {
@@ -416,9 +417,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
             }
         ) { padding ->
             Column(
-                modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp),
+                modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Spacer(Modifier.height(12.dp))
                 Surface(
@@ -923,7 +924,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     Text("بارهای آماده انتشار: ${loadDrafts.size}", style = MaterialTheme.typography.titleSmall)
                                     loadDrafts.forEachIndexed { index, draft ->
                                         Card(Modifier.fillMaxWidth()) {
-                                            Column(Modifier.padding(12.dp)) {
+                                            Column(Modifier.padding(horizontal = 9.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                                 Text("${index + 1}. تهران ← ${draft.destination}")
                                                 Text("${draft.cargoType} | ${draft.vehicleType} | ${draft.loadingType}")
                                                 Text(if (draft.priceMode == "negotiable") "کرایه: توافقی" else "کرایه: ${draft.freightAmount} تومان")
