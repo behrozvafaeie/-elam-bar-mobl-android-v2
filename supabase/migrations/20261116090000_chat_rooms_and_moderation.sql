@@ -135,6 +135,7 @@ as $function$
             or (p_message_type='image' and coalesce((select s.can_send_images from public.chat_room_company_settings s where s.room_id=r.id and s.company_id=auth.uid()),false)=true)
             or (p_message_type='voice' and coalesce((select s.can_send_voice from public.chat_room_company_settings s where s.room_id=r.id and s.company_id=auth.uid()),true)=true)
           )
+        )
         or (
           r.room_type='private'
           and exists (
