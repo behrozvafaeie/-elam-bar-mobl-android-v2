@@ -60,11 +60,15 @@ private data class CompanyLoadDraft(
     val description: String
 )
 
-private fun companyJwtUserId(token: String): String = runCatching {
-    val part = token.split(".").getOrNull(1) ?: return ""
-    val decoded = android.util.Base64.decode(part, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
-    JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
-}.getOrDefault("")
+private fun companyJwtUserId(token: String): String {
+    return runCatching {
+        val part = token.split(".").getOrNull(1).orEmpty()
+        if (part.isBlank()) "" else {
+            val decoded = android.util.Base64.decode(part, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
+            JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
+        }
+    }.getOrDefault("")
+}
 
 private fun normalizeCompanyDigits(value: String): String = buildString {
     value.forEach { ch ->
