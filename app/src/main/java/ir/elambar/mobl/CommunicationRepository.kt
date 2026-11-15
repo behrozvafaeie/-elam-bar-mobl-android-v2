@@ -28,7 +28,8 @@ internal data class ChatMessage(
     val senderUserId: String,
     val type: String,
     val body: String,
-    val createdAt: String
+    val createdAt: String,
+    val attachmentPath: String = ""
 )
 
 internal class CommunicationRepository(
@@ -71,7 +72,7 @@ internal class CommunicationRepository(
         if (accessToken.isBlank() || conversationId.isBlank()) return "نشست یا شناسه گفتگو معتبر نیست." to emptyList()
         val (code, body) = request(
             "GET",
-            "messages?select=id,conversation_id,sender_user_id,message_type,body,created_at&conversation_id=eq.${enc(conversationId)}&order=created_at.asc&limit=300"
+            "messages?select=id,conversation_id,sender_user_id,message_type,body,created_at,attachment_path&conversation_id=eq.${enc(conversationId)}&order=created_at.asc&limit=300"
         )
         if (code !in 200..299) return "دسترسی به پیام‌ها توسط سیاست امنیتی سامانه رد شد." to emptyList()
         return runCatching {
@@ -81,7 +82,7 @@ internal class CommunicationRepository(
                 ChatMessage(
                     row.optString("id"), row.optString("conversation_id"),
                     row.optString("sender_user_id"), row.optString("message_type"),
-                    row.optString("body"), row.optString("created_at")
+                    row.optString("body"), row.optString("created_at"), row.optString("attachment_path")
                 )
             }
         }.getOrElse { "پاسخ پیام‌ها قابل خواندن نیست." to emptyList() }
@@ -100,6 +101,45 @@ internal class CommunicationRepository(
         val (code, body) = request("POST", "messages", payload)
         return if (code in 200..299) "پیام ارسال شد."
         else "ارسال پیام توسط سامانه رد شد؛ عضویت در گفتگو و مجوز حساب بررسی شود."
+    }
+
+    fun sendVoiceFile(conversationId: String, senderUserId: String, file: java.io.File): String {
+        if (accessToken.isBlank() || conversationId.isBlank() || senderUserId.isBlank()) return "نشست یا گفتگو معتبر نیست."
+        if (!file.exists() || file.length() !in 1..(8L * 1024L * 1024L)) return "فایل ویس خالی است یا از ۸ مگابایت بیشتر است."
+        val path = "$conversationId/$senderUserId/${java.util.UUID.randomUUID()}.m4a"
+        var upload: HttpURLConnection? = null
+        return try {
+            upload = (URL("$supabaseUrl/storage/v1/object/chat-attachments/$path").openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"; connectTimeout = 20000; readTimeout = 30000; doOutput = true
+                setRequestProperty("apikey", publishableKey)
+                setRequestProperty("Authorization", "Bearer $accessToken")
+                setRequestProperty("Content-Type", "audio/mp4")
+                setRequestProperty("x-upsert", "false")
+            }
+            file.inputStream().use { input -> upload.outputStream.use { output -> input.copyTo(output) } }
+            val uploadCode = upload.responseCode
+            if (uploadCode !in 200..299) return "بارگذاری ویس توسط سیاست امنیتی فضای گفتگو رد شد (کد $uploadCode)."
+            val payload = JSONObject().put("conversation_id", conversationId).put("sender_user_id", senderUserId)
+                .put("message_type", "audio").put("body", "پیام صوتی").put("attachment_path", path)
+            val (code, _) = request("POST", "messages", payload)
+            if (code in 200..299) "پیام صوتی ارسال شد." else "فایل بارگذاری شد اما ثبت پیام توسط سیاست امنیتی سامانه رد شد."
+        } catch (_: Exception) { "ارتباط برای ارسال پیام صوتی برقرار نشد." }
+        finally { upload?.disconnect() }
+    }
+
+    fun downloadVoice(path: String): ByteArray? {
+        if (accessToken.isBlank() || path.isBlank()) return null
+        var connection: HttpURLConnection? = null
+        return try {
+            val safePath = path.split("/").joinToString("/") { enc(it) }
+            connection = (URL("$supabaseUrl/storage/v1/object/authenticated/chat-attachments/$safePath").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"; connectTimeout = 15000; readTimeout = 25000
+                setRequestProperty("apikey", publishableKey)
+                setRequestProperty("Authorization", "Bearer $accessToken")
+            }
+            if (connection.responseCode !in 200..299) null else connection.inputStream.use { it.readBytes() }
+        } catch (_: Exception) { null }
+        finally { connection?.disconnect() }
     }
 
     fun createAssignedLoadConversation(

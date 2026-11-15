@@ -112,6 +112,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var profilePhotoUploading by remember { mutableStateOf(false) }
     var profilePhotoMessage by remember { mutableStateOf("") }
     var showProfile by remember { mutableStateOf(false) }
+    var showCommunication by remember { mutableStateOf(false) }
     var selectedDriverDocType by remember { mutableStateOf("کارت هوشمند") }
     var driverDocUploading by remember { mutableStateOf(false) }
     var driverDocMessage by remember { mutableStateOf("") }
@@ -266,6 +267,10 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     }
 
 
+    if (showCommunication && userLoggedIn && userStatus == "approved") {
+        CommunicationScreen(accessToken = userAccessToken) { showCommunication = false }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -292,6 +297,14 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             label = { Text("پروفایل من") },
                             selected = showProfile,
                             onClick = { showProfile = true; scope.launch { drawerState.close() } },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    if (userLoggedIn && userStatus == "approved") {
+                        NavigationDrawerItem(
+                            label = { Text("پیام‌ها و گفتگوها") },
+                            selected = showCommunication,
+                            onClick = { showCommunication = true; scope.launch { drawerState.close() } },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
