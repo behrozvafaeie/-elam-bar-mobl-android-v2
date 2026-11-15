@@ -81,7 +81,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    }
 }
 
 private enum class UserRole(val label: String) {
@@ -760,6 +759,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
 
 
 
+}
 
 private fun uploadDriverDocument(context: Context, uri: Uri, token: String, documentType: String): String {
     var upload: HttpURLConnection? = null
