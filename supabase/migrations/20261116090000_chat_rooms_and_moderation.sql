@@ -132,14 +132,9 @@ as $function$
           )
           and (
             p_message_type='text'
-            or exists (
-              select 1 from public.chat_room_company_settings s
-              where s.room_id=r.id and s.company_id=auth.uid()
-                and ((p_message_type='image' and s.can_send_images=true)
-                  or (p_message_type='voice' and s.can_send_voice=true))
-            )
+            or (p_message_type='image' and coalesce((select s.can_send_images from public.chat_room_company_settings s where s.room_id=r.id and s.company_id=auth.uid()),false)=true)
+            or (p_message_type='voice' and coalesce((select s.can_send_voice from public.chat_room_company_settings s where s.room_id=r.id and s.company_id=auth.uid()),true)=true)
           )
-        )
         or (
           r.room_type='private'
           and exists (
