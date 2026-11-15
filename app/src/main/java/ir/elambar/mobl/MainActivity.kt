@@ -94,6 +94,7 @@ private data class AdminLoginResult(val success: Boolean, val message: String, v
 private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "")
 private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val priceMode: String, val freightAmount: String, val description: String)
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
+private data class MatchedLoad(val id: String, val origin: String, val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -117,7 +118,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var driverDocUploading by remember { mutableStateOf(false) }
     var driverDocMessage by remember { mutableStateOf("") }
     var matchedLoadsText by remember { mutableStateOf("برای دریافت بارهای متناسب، دکمه بروزرسانی را بزنید.") }
+    var matchedLoads by remember { mutableStateOf<List<MatchedLoad>>(emptyList()) }
     var matchedLoadsLoading by remember { mutableStateOf(false) }
+    var acceptingLoadId by remember { mutableStateOf("") }
     var companyLoadsText by remember { mutableStateOf("برای مشاهده بارهای ثبت‌شده، بروزرسانی را بزنید.") }
     var companyLoadsLoading by remember { mutableStateOf(false) }
     var driverSearchDestination by remember { mutableStateOf("") }
@@ -1020,11 +1023,35 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 OutlinedButton(enabled = !matchedLoadsLoading, onClick = {
                                     matchedLoadsLoading = true
                                     scope.launch {
-                                        matchedLoadsText = withContext(Dispatchers.IO) { fetchMatchedLoads(userAccessToken) }
+                                        val result = withContext(Dispatchers.IO) { fetchMatchedLoadsDetailed(userAccessToken) }
+                                        matchedLoadsText = result.first
+                                        matchedLoads = result.second
                                         matchedLoadsLoading = false
                                     }
                                 }, modifier = Modifier.fillMaxWidth()) { Text(if (matchedLoadsLoading) "در حال بروزرسانی..." else "بروزرسانی بارهای قابل دریافت") }
                                 Text(matchedLoadsText, textAlign = TextAlign.Start)
+                                matchedLoads.forEach { load ->
+                                    Card(Modifier.fillMaxWidth()) {
+                                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                            Text("تهران ← ${load.destination}", style = MaterialTheme.typography.titleMedium)
+                                            Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
+                                            Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
+                                            if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
+                                            Button(enabled = acceptingLoadId.isBlank(), onClick = {
+                                                acceptingLoadId = load.id
+                                                scope.launch {
+                                                    val accepted = withContext(Dispatchers.IO) { acceptDriverLoad(userAccessToken, load.id) }
+                                                    val refreshed = withContext(Dispatchers.IO) { fetchMatchedLoadsDetailed(userAccessToken) }
+                                                    matchedLoadsText = accepted + "\n" + refreshed.first
+                                                    matchedLoads = refreshed.second
+                                                    acceptingLoadId = ""
+                                                }
+                                            }, modifier = Modifier.fillMaxWidth()) {
+                                                Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "گرفتن این بار")
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                         else -> Text("وضعیت حساب: $userStatus", textAlign = TextAlign.Center)
@@ -1993,6 +2020,101 @@ private fun fetchCompanyLoads(accessToken: String): String {
         }
     } catch (_: Exception) { "ارتباط با سامانه برقرار نشد." }
     finally { connection?.disconnect() }
+}
+
+private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<MatchedLoad>> {
+    if (accessToken.isBlank()) return "نشست ورود معتبر نیست؛ دوباره وارد شوید." to emptyList()
+    var profileConnection: HttpURLConnection? = null
+    var loadsConnection: HttpURLConnection? = null
+    return try {
+        val payload = accessToken.split(".").getOrNull(1) ?: return "نشست ورود نامعتبر است." to emptyList()
+        val decoded = Base64.decode(payload, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+        val userId = JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
+        if (userId.isBlank()) return "شناسه راننده از نشست دریافت نشد." to emptyList()
+        val profileUrl = "$SUPABASE_URL/rest/v1/drivers?select=vehicle_type,primary_destination,destinations&id=eq.$userId&limit=1"
+        profileConnection = (URL(profileUrl).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"; connectTimeout = 15000; readTimeout = 15000
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Accept", "application/json")
+        }
+        val profileCode = profileConnection.responseCode
+        val profileStream = if (profileCode in 200..299) profileConnection.inputStream else profileConnection.errorStream
+        val profileRows = JSONArray(profileStream?.bufferedReader()?.use { it.readText() }.orEmpty())
+        if (profileCode !in 200..299 || profileRows.length() == 0) return "اطلاعات خودرو و مقصد راننده دریافت نشد." to emptyList()
+        val driver = profileRows.getJSONObject(0)
+        val vehicle = driver.optString("vehicle_type").trim()
+        val destinations = mutableSetOf<String>()
+        val destinationArray = driver.optJSONArray("destinations")
+        if (destinationArray != null) for (i in 0 until destinationArray.length()) {
+            val value = destinationArray.optString(i).trim()
+            if (value.isNotBlank()) destinations.add(value.lowercase())
+        }
+        val primary = driver.optString("primary_destination").trim()
+        if (primary.isNotBlank()) destinations.add(primary.lowercase())
+        if (vehicle.isBlank() || destinations.isEmpty()) return "ابتدا نوع خودرو و مقصدهای خود را در پروفایل کامل کنید." to emptyList()
+        val loadsUrl = "$SUPABASE_URL/rest/v1/loads?select=id,origin,destination,cargo_type,vehicle_type,freight_amount,description,loading_type&status=eq.published&order=created_at.desc&limit=200"
+        loadsConnection = (URL(loadsUrl).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"; connectTimeout = 15000; readTimeout = 20000
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Accept", "application/json")
+        }
+        val code = loadsConnection.responseCode
+        val stream = if (code in 200..299) loadsConnection.inputStream else loadsConnection.errorStream
+        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code !in 200..299) return "دریافت بارها ناموفق بود (کد $code)." to emptyList()
+        val rows = JSONArray(raw)
+        val matching = (0 until rows.length()).map { rows.getJSONObject(it) }.filter { item ->
+            item.optString("vehicle_type").trim().equals(vehicle, ignoreCase = true) &&
+                destinations.contains(item.optString("destination").trim().lowercase())
+        }.map { item ->
+            MatchedLoad(
+                id = item.optString("id"),
+                origin = item.optString("origin", "تهران"),
+                destination = item.optString("destination"),
+                cargoType = item.optString("cargo_type"),
+                vehicleType = item.optString("vehicle_type"),
+                loadingType = item.optString("loading_type"),
+                freightAmount = item.optString("freight_amount", "0"),
+                description = item.optString("description").takeUnless { it == "null" }.orEmpty()
+            )
+        }.filter { it.id.isNotBlank() }
+        (if (matching.isEmpty()) "در حال حاضر بار منتشرشده متناسب با خودرو و مقصدهای شما وجود ندارد." else "بارهای متناسب پیدا شد: ${matching.size} مورد. برای گرفتن بار، دکمه هر کارت را بزنید.") to matching
+    } catch (_: Exception) {
+        "ارتباط با سامانه برقرار نشد. اینترنت را بررسی کنید." to emptyList()
+    } finally {
+        profileConnection?.disconnect()
+        loadsConnection?.disconnect()
+    }
+}
+
+private fun acceptDriverLoad(accessToken: String, loadId: String): String {
+    if (accessToken.isBlank() || loadId.isBlank()) return "نشست یا شناسه بار معتبر نیست."
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL("$SUPABASE_URL/rest/v1/rpc/driver_accept_load").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"; connectTimeout = 15000; readTimeout = 20000; doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        val body = JSONObject().put("p_load_id", loadId)
+        connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code in 200..299) "بار با موفقیت به نام شما ثبت شد."
+        else {
+            val detail = runCatching { JSONObject(response).optString("message") }.getOrDefault("")
+            "گرفتن بار انجام نشد." + if (detail.isNotBlank()) " $detail" else " ممکن است راننده دیگری زودتر آن را گرفته باشد."
+        }
+    } catch (_: Exception) {
+        "ارتباط با سامانه برقرار نشد؛ وضعیت بار را دوباره بررسی کنید."
+    } finally {
+        connection?.disconnect()
+    }
 }
 
 private fun fetchMatchedLoads(accessToken: String): String {
