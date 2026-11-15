@@ -62,6 +62,9 @@ internal fun ChatRoomScreen(accessToken: String, role: String, onClose: () -> Un
     var isRecording by remember { mutableStateOf(false) }
     var activePlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var playingId by remember { mutableStateOf("") }
+    var roomMembers by remember { mutableStateOf<List<String>>(emptyList()) }
+    var activeCall by remember { mutableStateOf<ChatRoomCall?>(null) }
+    var incomingCall by remember { mutableStateOf<ChatRoomCall?>(null) }
 
     fun refreshRooms() {
         busy = true
@@ -151,11 +154,21 @@ internal fun ChatRoomScreen(accessToken: String, role: String, onClose: () -> Un
     LaunchedEffect(selectedRoom?.id) {
         val room = selectedRoom ?: return@LaunchedEffect
         messages = emptyList()
+        roomMembers = if (room.type == "private") withContext(Dispatchers.IO) { repository.roomMemberIds(room.id) } else emptyList()
         refreshMessages(room)
         while (true) {
             delay(5000)
             val result = withContext(Dispatchers.IO) { repository.messages(room.id) }
             if (result.first == null) messages = result.second else status = result.first.orEmpty()
+            if (room.type == "private") roomMembers = withContext(Dispatchers.IO) { repository.roomMemberIds(room.id) }
+        }
+    }
+    LaunchedEffect(accessToken, userId) {
+        while (true) {
+            if (userId.isNotBlank() && activeCall == null && incomingCall == null) {
+                incomingCall = withContext(Dispatchers.IO) { repository.incomingCall(userId) }
+            }
+            delay(2500)
         }
     }
     DisposableEffect(Unit) {
@@ -248,6 +261,31 @@ internal fun ChatRoomScreen(accessToken: String, role: String, onClose: () -> Un
                         TextButton(onClick = { selectedRoom = null; messages = emptyList(); refreshRooms() }) { Text("فهرست اتاق‌ها") }
                         Spacer(Modifier.weight(1f))
                         Text(room.title, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                    }
+                    if (room.type == "private") {
+                        val targetId = roomMembers.firstOrNull { it != userId } ?: roomMembers.firstOrNull()
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(enabled = targetId != null && activeCall == null && !busy, modifier = Modifier.weight(1f), onClick = {
+                                val target = targetId ?: return@OutlinedButton
+                                busy = true
+                                scope.launch {
+                                    val result = withContext(Dispatchers.IO) { repository.createCall(room.id, target, "audio") }
+                                    activeCall = result.second
+                                    status = result.first.orEmpty()
+                                    busy = false
+                                }
+                            }) { Text("تماس صوتی") }
+                            OutlinedButton(enabled = targetId != null && activeCall == null && !busy, modifier = Modifier.weight(1f), onClick = {
+                                val target = targetId ?: return@OutlinedButton
+                                busy = true
+                                scope.launch {
+                                    val result = withContext(Dispatchers.IO) { repository.createCall(room.id, target, "video") }
+                                    activeCall = result.second
+                                    status = result.first.orEmpty()
+                                    busy = false
+                                }
+                            }) { Text("تماس تصویری") }
+                        }
                     }
                     if (isSuperAdmin && room.type == "public") {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -456,6 +494,38 @@ internal fun ChatRoomScreen(accessToken: String, role: String, onClose: () -> Un
                 if (status.isNotBlank()) Text(status, color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodySmall)
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             }
+        }
+    }
+
+    incomingCall?.let { call ->
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text(if (call.callType == "video") "تماس تصویری ورودی" else "تماس صوتی ورودی") },
+            text = { Text("یک تماس خصوصی از طرف یکی از اعضای گفتگو دریافت کرده‌اید.") },
+            confirmButton = {
+                TextButton(enabled = activeCall == null, onClick = {
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) { repository.updateCallStatus(call.id, "accepted") }
+                        if (result.isBlank()) activeCall = call.copy(status = "accepted") else status = result
+                        incomingCall = null
+                    }
+                }) { Text("پاسخ") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        withContext(Dispatchers.IO) { repository.updateCallStatus(call.id, "rejected") }
+                        incomingCall = null
+                    }
+                }) { Text("رد تماس") }
+            }
+        )
+    }
+
+    activeCall?.let { call ->
+        ChatRoomCallScreen(accessToken = accessToken, call = call, currentUserId = userId) {
+            activeCall = null
+            selectedRoom?.let { refreshMessages(it) }
         }
     }
 }
