@@ -497,7 +497,23 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         TextButton(onClick = { selectedPanel = null }, modifier = Modifier.align(Alignment.Start)) {
                             Text("بازگشت به پنل اصلی")
                         }
-                        Text(selectedPanel ?: "", fontSize = 21.sp, color = MaterialTheme.colorScheme.primary)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(selectedPanel ?: "", fontSize = 21.sp, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                            TextButton(enabled = !adminPanelLoading, onClick = {
+                                val panel = selectedPanel ?: return@TextButton
+                                adminPanelLoading = true
+                                scope.launch {
+                                    adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, panel) }
+                                    if (panel == "مدیریت رانندگان" || panel == "مدیریت شرکت‌ها" || panel == "مدیریت مدارک") {
+                                        adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, panel) }
+                                    }
+                                    if (panel == "مدیریت مدیران") {
+                                        managedAdmins = withContext(Dispatchers.IO) { fetchAdminUsers(adminAccessToken) }
+                                    }
+                                    adminPanelLoading = false
+                                }
+                            }) { Text("بروزرسانی") }
+                        }
                         if (selectedPanel != null) {
                             if (adminPanelLoading) {
                                 CircularProgressIndicator()
