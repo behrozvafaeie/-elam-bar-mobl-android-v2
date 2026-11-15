@@ -10,10 +10,16 @@ android {
         applicationId = "ir.elambar.mobl"
         minSdk = 24
         targetSdk = 35
-        versionCode = 22
-        versionName = "1.0.21"
+        versionCode = 23
+        versionName = "1.0.22"
+        val turnUrl = (System.getenv("ELAM_TURN_URL") ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
+        val turnUsername = (System.getenv("ELAM_TURN_USERNAME") ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
+        val turnPassword = (System.getenv("ELAM_TURN_PASSWORD") ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
+        buildConfigField("String", "TURN_URL", "\"$turnUrl\"")
+        buildConfigField("String", "TURN_USERNAME", "\"$turnUsername\"")
+        buildConfigField("String", "TURN_PASSWORD", "\"$turnPassword\"")
     }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
