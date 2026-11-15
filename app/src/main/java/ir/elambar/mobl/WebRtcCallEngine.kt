@@ -77,10 +77,20 @@ internal class WebRtcCallEngine(
             .setVideoDecoderFactory(DefaultVideoDecoderFactory(eglContext))
             .createPeerConnectionFactory()
 
-        val iceServers = listOf(
+        val iceServers = mutableListOf(
             PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
             PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer()
         )
+        val turnUsername = BuildConfig.TURN_USERNAME
+        val turnPassword = BuildConfig.TURN_PASSWORD
+        if (turnUsername.isNotBlank() && turnPassword.isNotBlank()) {
+            BuildConfig.TURN_URL.split(',').map(String::trim).filter(String::isNotBlank).forEach { url ->
+                iceServers += PeerConnection.IceServer.builder(url)
+                    .setUsername(turnUsername)
+                    .setPassword(turnPassword)
+                    .createIceServer()
+            }
+        }
         val configuration = PeerConnection.RTCConfiguration(iceServers).apply {
             sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
         }
