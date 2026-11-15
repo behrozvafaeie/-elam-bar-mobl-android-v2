@@ -27,11 +27,11 @@
 
 ## ساخت APK
 
-گردش‌کار **Android APK** در GitHub Actions با push به شاخه‌های تعریف‌شده در فایل workflow یا با اجرای دستی فعال می‌شود. شاخه کاری مرحله اول نیز باید به فهرست شاخه‌های trigger اضافه شود یا workflow به‌صورت دستی اجرا شود. خروجی آزمایشی با نام `elam-bar-mobl-debug-apk` در بخش Artifacts قرار می‌گیرد.
+گردش‌کار **Android APK** در GitHub Actions با push به شاخه‌های تعریف‌شده در فایل workflow یا با اجرای دستی فعال می‌شود. شاخه `work/stage-1-login-polish` نیز در فهرست شاخه‌های trigger قرار دارد و با push به آن، ساخت خودکار آغاز می‌شود. خروجی آزمایشی با نام `elam-bar-mobl-debug-apk` در بخش Artifacts قرار می‌گیرد.
 
 مشخصات بسته:
 - Application ID: `ir.elambar.mobl`
-- نسخه سورس شاخه مبنا: `1.0.16` (versionCode: `17`)
+- نسخه سورس این شاخه: `1.0.17` (versionCode: `18`)
 - حداقل Android: نسخه 7.0 (API 24)
 
 ## امنیت
