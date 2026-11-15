@@ -172,7 +172,7 @@ internal class ChatRoomRepository(private val token: String) {
     }
 
     fun deleteMessage(messageId: String, userId: String): String {
-        val payload = JSONObject().put("deleted_at", java.time.Instant.now().toString()).put("deleted_by", userId)
+        val payload = JSONObject().put("deleted_at", utcNow()).put("deleted_by", userId)
         val (code, _) = request("PATCH", "chat_room_messages?id=eq.${enc(messageId)}", payload)
         return if (code in 200..299) "پیام حذف شد." else "حذف پیام مجاز نشد."
     }
@@ -221,6 +221,8 @@ internal class ChatRoomRepository(private val token: String) {
         } catch (e: Exception) { -1 to (e.message ?: "network_error") }
         finally { connection?.disconnect() }
     }
+
+    private fun utcNow(): String = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date())
 
     private fun enc(value: String) = URLEncoder.encode(value, "UTF-8")
 }
