@@ -69,10 +69,14 @@ jobs:
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 22' app/build.gradle.kts
-          grep -F 'versionName = "1.0.21"' app/build.gradle.kts
+          grep -F 'versionCode = 23' app/build.gradle.kts
+          grep -F 'versionName = "1.0.22"' app/build.gradle.kts
 
       - name: Build debug APK
+        env:
+          ELAM_TURN_URL: ${{ secrets.ELAM_TURN_URL }}
+          ELAM_TURN_USERNAME: ${{ secrets.ELAM_TURN_USERNAME }}
+          ELAM_TURN_PASSWORD: ${{ secrets.ELAM_TURN_PASSWORD }}
         run: gradle --no-daemon assembleDebug
 
       - name: Verify APK was produced
