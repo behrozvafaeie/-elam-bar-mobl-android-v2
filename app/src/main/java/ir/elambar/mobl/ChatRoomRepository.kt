@@ -16,6 +16,7 @@ internal data class ChatRoomItem(
 )
 
 internal data class ChatContactItem(val id: String, val name: String, val accountType: String)
+internal data class ChatDriverAccess(val id: String, val name: String, val canRead: Boolean)
 
 internal data class ChatRoomMessage(
     val id: String,
@@ -180,6 +181,39 @@ internal class ChatRoomRepository(private val token: String) {
                 )
             }
         }.getOrElse { "فهرست شرکت‌ها قابل پردازش نیست." to emptyList() }
+    }
+
+    fun driversForModeration(roomId: String): Pair<String?, List<ChatDriverAccess>> {
+        val (driverCode, driverBody) = request("GET", "drivers?select=id,full_name&status=eq.approved&order=full_name.asc&limit=500")
+        if (driverCode !in 200..299) return "دریافت فهرست رانندگان مجاز نشد." to emptyList()
+        val (memberCode, memberBody) = request("GET", "chat_room_members?select=user_id,can_read,can_send&room_id=eq.${enc(roomId)}")
+        if (memberCode !in 200..299) return "دریافت مجوز مشاهده رانندگان مجاز نشد." to emptyList()
+        return runCatching {
+            val members = mutableMapOf<String, Boolean>()
+            val memberRows = JSONArray(memberBody)
+            for (i in 0 until memberRows.length()) {
+                val row = memberRows.getJSONObject(i)
+                members[row.optString("user_id")] = row.optBoolean("can_read") && !row.optBoolean("can_send")
+            }
+            val rows = JSONArray(driverBody)
+            null to (0 until rows.length()).map { i ->
+                val row = rows.getJSONObject(i)
+                val id = row.optString("id")
+                ChatDriverAccess(id, row.optString("full_name"), members[id] == true)
+            }
+        }.getOrElse { "فهرست دسترسی رانندگان قابل پردازش نیست." to emptyList() }
+    }
+
+    fun saveDriverReadPermission(roomId: String, driverId: String, enabled: Boolean): String {
+        if (enabled) {
+            val payload = JSONObject().put("room_id", roomId).put("user_id", driverId)
+                .put("can_read", true).put("can_send", false)
+            val (code, _) = request("POST", "chat_room_members?on_conflict=room_id,user_id", payload, "resolution=merge-duplicates,return=minimal")
+            return if (code in 200..299) "مجوز مشاهده فقط‌خواندنی راننده فعال شد." else "فعال‌سازی دسترسی راننده مجاز نشد."
+        }
+        val path = "chat_room_members?room_id=eq.${enc(roomId)}&user_id=eq.${enc(driverId)}"
+        val (code, _) = request("DELETE", path)
+        return if (code in 200..299) "دسترسی راننده برداشته شد." else "حذف دسترسی راننده مجاز نشد."
     }
 
     fun saveCompanySetting(roomId: String, item: ChatCompanyItem): String {
