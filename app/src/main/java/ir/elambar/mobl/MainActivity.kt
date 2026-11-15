@@ -272,8 +272,11 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     }
 
 
-    if (showCommunication && userLoggedIn && userStatus == "approved") {
-        CommunicationScreen(accessToken = userAccessToken) { showCommunication = false }
+    if (showCommunication && ((userLoggedIn && userStatus == "approved") || (adminLoggedIn && adminRole == "super_admin"))) {
+        CommunicationScreen(
+            accessToken = if (adminLoggedIn) adminAccessToken else userAccessToken,
+            isSuperAdmin = adminLoggedIn && adminRole == "super_admin"
+        ) { showCommunication = false }
     }
     if (showChatRooms && ((userLoggedIn && userStatus == "approved") || adminLoggedIn)) {
         ChatRoomScreen(
@@ -311,7 +314,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
-                    if (userLoggedIn && userStatus == "approved") {
+                    if ((userLoggedIn && userStatus == "approved") || (adminLoggedIn && adminRole == "super_admin")) {
                         NavigationDrawerItem(
                             label = { Text("پیام‌های بار") },
                             selected = showCommunication,
