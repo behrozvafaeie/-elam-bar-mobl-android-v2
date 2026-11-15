@@ -186,7 +186,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var clockUsesServerTime by remember { mutableStateOf(false) }
     val adminPanels = listOf(
         "مدیریت رانندگان", "مدیریت شرکت‌ها", "مدیریت بارها", "مدیریت مدیران",
-        "مدیریت مدارک", "گفتگوها", "شکایات", "گزارش‌ها", "تنظیمات و امنیت"
+        "مدیریت مدارک", "گفتگوها", "شکایات", "گزارش‌ها", "تنظیمات کل برنامه"
     )
     LaunchedEffect(Unit) {
         while (true) {
@@ -443,6 +443,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 Text("در حال دریافت اطلاعات از سامانه...")
                             } else {
                                 Text(adminPanelData.ifBlank { "اطلاعاتی برای نمایش دریافت نشد." }, textAlign = TextAlign.Start)
+                                if (selectedPanel == "تنظیمات کل برنامه") {
+                                    Text("این بخش مربوط به تنظیمات سراسری سامانه است و تغییرات آن باید برای همه شرکت‌ها، رانندگان و مدیران اعمال شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                }
                                 if (selectedPanel == "مدیریت بارها") {
                                     Text("اعلام بار به نام مدیریت سامانه", style = MaterialTheme.typography.titleMedium)
                                     Text("ثبت این بار با مجوز مدیر ارشد و بدون انتساب به شرکت انجام می‌شود.", style = MaterialTheme.typography.bodySmall)
@@ -1197,7 +1200,7 @@ private fun fetchAdminPanelData(accessToken: String, panel: String): String {
         "گفتگوها" -> Triple("conversations", "id,load_id,company_id,driver_id,created_at,last_message_at", "گفتگوها")
         "شکایات" -> Triple("load_complaints", "load_id,reporter_user_id,reported_user_id,subject,status,admin_note,created_at", "شکایات")
         "گزارش‌ها" -> Triple("admin_audit_logs", "actor_user_id,target_user_id,action,details,created_at", "گزارش فعالیت‌ها")
-        "تنظیمات و امنیت" -> Triple("app_settings", "setting_key,setting_value,updated_at,updated_by", "تنظیمات")
+        "تنظیمات کل برنامه" -> Triple("app_settings", "setting_key,setting_value,updated_at,updated_by", "تنظیمات")
         else -> return "این بخش هنوز آماده نیست."
     }
     var connection: HttpURLConnection? = null
