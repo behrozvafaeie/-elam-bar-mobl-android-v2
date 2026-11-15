@@ -1,5 +1,6 @@
 package ir.elambar.mobl
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -183,6 +186,8 @@ internal fun CompanyLoadManagement(accessToken: String) {
     var editing by remember { mutableStateOf<CompanyLoadItem?>(null) }
     var deleting by remember { mutableStateOf<CompanyLoadItem?>(null) }
     var draft by remember { mutableStateOf(CompanyLoadDraft("", "", "", "روباری", "", "")) }
+    var vehicleMenu by remember { mutableStateOf(false) }
+    var loadingMenu by remember { mutableStateOf(false) }
 
     fun refresh() {
         loading = true
@@ -233,8 +238,44 @@ internal fun CompanyLoadManagement(accessToken: String) {
                 Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     OutlinedTextField(draft.destination, { draft = draft.copy(destination = it.take(100)) }, label = { Text("مقصد") }, singleLine = true)
                     OutlinedTextField(draft.cargoType, { draft = draft.copy(cargoType = it.take(160)) }, label = { Text("نوع بار") }, singleLine = true)
-                    OutlinedTextField(draft.vehicleType, { draft = draft.copy(vehicleType = it) }, label = { Text("نوع خودرو") }, singleLine = true)
-                    OutlinedTextField(draft.loadingType, { draft = draft.copy(loadingType = it) }, label = { Text("نوع بارگیری: دربست / روباری / نیم بار") }, singleLine = true)
+                    Box {
+                        OutlinedTextField(
+                            value = draft.vehicleType,
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier.fillMaxWidth().clickable { vehicleMenu = true },
+                            label = { Text("نوع خودرو") },
+                            trailingIcon = { Text("⌄") },
+                            singleLine = true
+                        )
+                        DropdownMenu(expanded = vehicleMenu, onDismissRequest = { vehicleMenu = false }) {
+                            listOf("وانت مبلی", "کامیونت مبلی", "کامیون ۶متری", "کامیون مبلی", "کامیون دربستی کار", "خاور مبلی پتو‌دار", "کامیون بزرگ", "وانت", "سایر خودروهای مبلی").forEach { option ->
+                                DropdownMenuItem(text = { Text(option) }, onClick = {
+                                    draft = draft.copy(vehicleType = option)
+                                    vehicleMenu = false
+                                })
+                            }
+                        }
+                    }
+                    Box {
+                        OutlinedTextField(
+                            value = draft.loadingType,
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier.fillMaxWidth().clickable { loadingMenu = true },
+                            label = { Text("نوع بارگیری") },
+                            trailingIcon = { Text("⌄") },
+                            singleLine = true
+                        )
+                        DropdownMenu(expanded = loadingMenu, onDismissRequest = { loadingMenu = false }) {
+                            listOf("دربست", "روباری", "نیم بار").forEach { option ->
+                                DropdownMenuItem(text = { Text(option) }, onClick = {
+                                    draft = draft.copy(loadingType = option)
+                                    loadingMenu = false
+                                })
+                            }
+                        }
+                    }
                     OutlinedTextField(draft.freightAmount, { draft = draft.copy(freightAmount = it.filter(Char::isDigit).take(15)) }, label = { Text("کرایه به تومان؛ خالی یعنی توافقی") }, singleLine = true)
                     OutlinedTextField(draft.description, { draft = draft.copy(description = it.take(3000)) }, label = { Text("توضیحات") }, minLines = 2)
                 }
