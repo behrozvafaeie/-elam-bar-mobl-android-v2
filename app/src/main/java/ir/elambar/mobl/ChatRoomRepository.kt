@@ -15,6 +15,8 @@ internal data class ChatRoomItem(
     val locked: Boolean
 )
 
+internal data class ChatContactItem(val id: String, val name: String, val accountType: String)
+
 internal data class ChatRoomMessage(
     val id: String,
     val roomId: String,
@@ -50,6 +52,29 @@ internal class ChatRoomRepository(private val token: String) {
                 ChatRoomItem(r.optString("id"), r.optString("room_type"), r.optString("title"), r.optBoolean("is_locked"))
             }
         }.getOrElse { "ساختار فهرست گفتگوها قابل خواندن نیست." to emptyList() }
+    }
+
+    fun searchContacts(query: String): Pair<String?, List<ChatContactItem>> {
+        val clean = query.trim()
+        if (clean.length !in 2..80) return "برای جستجو حداقل دو نویسه وارد کنید." to emptyList()
+        val (code, body) = request("POST", "rpc/search_chat_contacts", JSONObject().put("p_query", clean))
+        if (code !in 200..299) return "جستجوی مخاطب مجاز نشد؛ نقش حساب یا اتصال را بررسی کنید." to emptyList()
+        return runCatching {
+            val rows = JSONArray(body)
+            null to (0 until rows.length()).map { i ->
+                val r = rows.getJSONObject(i)
+                ChatContactItem(r.optString("user_id"), r.optString("display_name"), r.optString("account_type"))
+            }
+        }.getOrElse { "پاسخ جستجوی مخاطبان قابل خواندن نیست." to emptyList() }
+    }
+
+    fun createPrivateRoom(targetUserId: String, title: String): Pair<String?, String?> {
+        if (targetUserId.isBlank()) return "مخاطب معتبر نیست." to null
+        val payload = JSONObject().put("p_target_user_id", targetUserId).put("p_title", title.take(160))
+        val (code, body) = request("POST", "rpc/create_private_chat_room", payload)
+        if (code !in 200..299) return "ایجاد گفتگوی خصوصی مجاز نشد؛ نوع حساب یا وضعیت مخاطب را بررسی کنید." to null
+        val id = body.trim().removeSurrounding("\"").takeIf { it.length == 36 }
+        return if (id != null) null to id else "شناسه گفتگوی خصوصی از سرور دریافت نشد." to null
     }
 
     fun messages(roomId: String): Pair<String?, List<ChatRoomMessage>> {
