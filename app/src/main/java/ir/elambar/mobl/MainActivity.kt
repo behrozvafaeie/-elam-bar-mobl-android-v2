@@ -1015,16 +1015,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 if (loadActionMessage.isNotBlank()) Text(loadActionMessage, color = MaterialTheme.colorScheme.secondary)
                                 HorizontalDivider()
                                 Text("بارهای ثبت‌شده شرکت", style = MaterialTheme.typography.titleMedium)
-                                OutlinedButton(enabled = !companyLoadsLoading, onClick = {
-                                    companyLoadsLoading = true
-                                    scope.launch {
-                                        companyLoadsText = withContext(Dispatchers.IO) { fetchCompanyLoads(userAccessToken) }
-                                        companyLoadsLoading = false
-                                    }
-                                }, modifier = Modifier.fillMaxWidth()) {
-                                    Text(if (companyLoadsLoading) "در حال دریافت..." else "مشاهده و بروزرسانی بارهای من")
-                                }
-                                Text(companyLoadsText, textAlign = TextAlign.Start)
+                                CompanyLoadManagement(accessToken = userAccessToken)
                                 HorizontalDivider()
                                 Text("جست‌وجوی راننده مناسب", style = MaterialTheme.typography.titleMedium)
                                 OutlinedTextField(driverSearchDestination, { driverSearchDestination = it }, label = { Text("مقصد موردنظر") }, singleLine = true, modifier = Modifier.fillMaxWidth())
