@@ -35,7 +35,7 @@ internal class WebRtcCallEngine(
     private val videoEnabled: Boolean,
     eglBase: EglBase,
     localRenderer: SurfaceViewRenderer?,
-    remoteRenderer: SurfaceViewRenderer?,
+    private val remoteRenderer: SurfaceViewRenderer?,
     private val onSignal: (String, JSONObject) -> Unit,
     private val onState: (String) -> Unit
 ) {
@@ -98,19 +98,23 @@ internal class WebRtcCallEngine(
             val cameraName = enumerator.deviceNames.firstOrNull { enumerator.isFrontFacing(it) }
                 ?: enumerator.deviceNames.firstOrNull()
                 ?: throw IllegalStateException("دوربین در دسترس نیست.")
-            videoCapturer = enumerator.createCapturer(cameraName, null)
+            val capturer = enumerator.createCapturer(cameraName, null)
                 ?: throw IllegalStateException("راه‌اندازی دوربین ممکن نشد.")
-            videoSource = factory.createVideoSource(false)
-            surfaceTextureHelper = SurfaceTextureHelper.create("ElambarCamera", eglContext)
-            videoCapturer!!.initialize(surfaceTextureHelper, appContext, videoSource!!.capturerObserver)
-            videoCapturer!!.startCapture(640, 480, 24)
-            videoTrack = factory.createVideoTrack("elambar-video", videoSource)
-            videoTrack!!.setEnabled(true)
+            videoCapturer = capturer
+            val source = factory.createVideoSource(false)
+            videoSource = source
+            val textureHelper = SurfaceTextureHelper.create("ElambarCamera", eglContext)
+            surfaceTextureHelper = textureHelper
+            capturer.initialize(textureHelper, appContext, source.capturerObserver)
+            capturer.startCapture(640, 480, 24)
+            val track = factory.createVideoTrack("elambar-video", source)
+            videoTrack = track
+            track.setEnabled(true)
             localRenderer?.let {
                 it.setMirror(true)
-                videoTrack!!.addSink(it)
+                track.addSink(it)
             }
-            peerConnection.addTrack(videoTrack, listOf("elambar-stream"))
+            peerConnection.addTrack(track, listOf("elambar-stream"))
         }
 
         audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
