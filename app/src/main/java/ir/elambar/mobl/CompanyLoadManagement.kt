@@ -1,0 +1,258 @@
+package ir.elambar.mobl
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
+
+private const val LOADS_API = "https://sckcxtceybwtiecyxqsy.supabase.co"
+private const val LOADS_KEY = "sb_publishable_rcJe7tZqCkHPgnAXZffzUg_f9ixVbwg"
+
+private data class CompanyLoadItem(
+    val id: String,
+    val destination: String,
+    val cargoType: String,
+    val vehicleType: String,
+    val loadingType: String,
+    val freightAmount: Long,
+    val description: String,
+    val status: String,
+    val assignedDriverId: String?
+)
+
+private data class CompanyLoadDraft(
+    val destination: String,
+    val cargoType: String,
+    val vehicleType: String,
+    val loadingType: String,
+    val freightAmount: String,
+    val description: String
+)
+
+private fun companyJwtUserId(token: String): String = runCatching {
+    val part = token.split(".").getOrNull(1) ?: return ""
+    val decoded = android.util.Base64.decode(part, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
+    JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
+}.getOrDefault("")
+
+private class CompanyLoadRepository(private val token: String) {
+    private fun enc(value: String) = URLEncoder.encode(value, "UTF-8")
+
+    private fun request(method: String, path: String, body: JSONObject? = null): Pair<Int, String> {
+        var connection: HttpURLConnection? = null
+        return try {
+            connection = (URL(LOADS_API + "/rest/v1/" + path).openConnection() as HttpURLConnection).apply {
+                requestMethod = method
+                connectTimeout = 15000
+                readTimeout = 20000
+                setRequestProperty("apikey", LOADS_KEY)
+                setRequestProperty("Authorization", "Bearer " + token)
+                setRequestProperty("Accept", "application/json")
+                if (body != null) {
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json")
+                    setRequestProperty("Prefer", "return=representation")
+                }
+            }
+            if (body != null) connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            val code = connection.responseCode
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            code to (stream?.bufferedReader()?.use { it.readText() }.orEmpty())
+        } catch (e: Exception) {
+            -1 to (e.message ?: "network_error")
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    fun list(): Pair<String?, List<CompanyLoadItem>> {
+        if (token.isBlank()) return "نشست معتبر نیست؛ دوباره وارد شوید." to emptyList()
+        val uid = companyJwtUserId(token)
+        if (uid.isBlank()) return "شناسه حساب از نشست دریافت نشد." to emptyList()
+        val query = "loads?select=id,destination,cargo_type,vehicle_type,loading_type,freight_amount,description,status,assigned_driver_id&publisher_user_id=eq." + enc(uid) + "&order=created_at.desc&limit=200"
+        val (code, body) = request("GET", query)
+        if (code !in 200..299) return "دریافت بارها ناموفق بود (کد " + code + ")." to emptyList()
+        return runCatching {
+            val rows = JSONArray(body)
+            null to (0 until rows.length()).map { i ->
+                val row = rows.getJSONObject(i)
+                CompanyLoadItem(
+                    id = row.optString("id"),
+                    destination = row.optString("destination"),
+                    cargoType = row.optString("cargo_type"),
+                    vehicleType = row.optString("vehicle_type"),
+                    loadingType = row.optString("loading_type"),
+                    freightAmount = row.optLong("freight_amount"),
+                    description = row.optString("description"),
+                    status = row.optString("status"),
+                    assignedDriverId = row.optString("assigned_driver_id").takeIf { it.isNotBlank() && it != "null" }
+                )
+            }
+        }.getOrElse { "ساختار پاسخ بارها قابل خواندن نیست." to emptyList() }
+    }
+
+    fun update(item: CompanyLoadItem, draft: CompanyLoadDraft): String {
+        if (token.isBlank()) return "نشست معتبر نیست."
+        if (item.status != "published" || item.assignedDriverId != null) return "این بار پس از انتخاب راننده قابل ویرایش نیست."
+        if (draft.destination.trim().length < 2 || draft.cargoType.trim().length < 2 || draft.vehicleType.isBlank()) return "مقصد، نوع بار و خودرو را کامل کنید."
+        val amount = if (draft.freightAmount.isBlank()) 0L else draft.freightAmount.trim().toLongOrNull() ?: return "مبلغ کرایه معتبر نیست."
+        if (amount < 0) return "مبلغ کرایه معتبر نیست."
+        val body = JSONObject()
+            .put("destination", draft.destination.trim())
+            .put("cargo_type", draft.cargoType.trim())
+            .put("vehicle_type", draft.vehicleType.trim())
+            .put("loading_type", draft.loadingType.trim())
+            .put("freight_amount", amount)
+            .put("description", draft.description.trim().take(3000))
+        val uid = companyJwtUserId(token)
+        val path = "loads?id=eq." + enc(item.id) + "&publisher_user_id=eq." + enc(uid) + "&status=eq.published&assigned_driver_id=is.null"
+        val (code, response) = request("PATCH", path, body)
+        if (code !in 200..299) return "ویرایش بار از طرف سرور رد شد (کد " + code + ")."
+        return if (runCatching { JSONArray(response).length() }.getOrDefault(0) > 0) "بار با موفقیت ویرایش شد."
+        else "باری برای ویرایش پیدا نشد؛ مالکیت یا وضعیت بار را بررسی کنید."
+    }
+
+    fun delete(item: CompanyLoadItem): String {
+        if (token.isBlank()) return "نشست معتبر نیست."
+        if (item.status != "published" || item.assignedDriverId != null) return "این بار پس از انتخاب راننده قابل حذف نیست."
+        val uid = companyJwtUserId(token)
+        val path = "loads?id=eq." + enc(item.id) + "&publisher_user_id=eq." + enc(uid) + "&status=eq.published&assigned_driver_id=is.null"
+        val (code, response) = request("DELETE", path, JSONObject())
+        if (code !in 200..299) return "حذف بار از طرف سرور رد شد (کد " + code + ")."
+        return if (runCatching { JSONArray(response).length() }.getOrDefault(0) > 0) "بار حذف شد."
+        else "باری برای حذف پیدا نشد؛ ممکن است بار قبلاً تغییر وضعیت داده باشد."
+    }
+}
+
+@Composable
+internal fun CompanyLoadManagement(accessToken: String) {
+    val scope = rememberCoroutineScope()
+    val repository = remember(accessToken) { CompanyLoadRepository(accessToken) }
+    var items by remember { mutableStateOf<List<CompanyLoadItem>>(emptyList()) }
+    var status by remember { mutableStateOf("در حال دریافت بارهای شرکت...") }
+    var loading by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<CompanyLoadItem?>(null) }
+    var deleting by remember { mutableStateOf<CompanyLoadItem?>(null) }
+    var draft by remember { mutableStateOf(CompanyLoadDraft("", "", "", "روباری", "", "")) }
+
+    fun refresh() {
+        loading = true
+        scope.launch {
+            val result = withContext(Dispatchers.IO) { repository.list() }
+            items = result.second
+            status = result.first ?: if (result.second.isEmpty()) "هنوز باری ثبت نشده است." else ""
+            loading = false
+        }
+    }
+    LaunchedEffect(accessToken) { refresh() }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("بارهای ثبت‌شده شرکت", style = MaterialTheme.typography.titleMedium)
+            TextButton(enabled = !loading, onClick = { refresh() }) { Text("بروزرسانی") }
+        }
+        if (loading) CircularProgressIndicator()
+        items.forEach { item ->
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("تهران ← " + item.destination, style = MaterialTheme.typography.titleMedium)
+                    Text(item.cargoType + " | " + item.vehicleType + " | " + item.loadingType)
+                    Text(if (item.freightAmount == 0L) "کرایه: توافقی" else "کرایه: " + item.freightAmount + " تومان")
+                    Text("وضعیت: " + item.status + if (item.assignedDriverId != null) " | راننده انتخاب شده" else "")
+                    if (item.description.isNotBlank()) Text(item.description)
+                    val canManage = item.status == "published" && item.assignedDriverId == null
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(enabled = canManage, onClick = {
+                            editing = item
+                            draft = CompanyLoadDraft(item.destination, item.cargoType, item.vehicleType, item.loadingType, if (item.freightAmount == 0L) "" else item.freightAmount.toString(), item.description)
+                        }) { Text("ویرایش") }
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(enabled = canManage, onClick = { deleting = item }) { Text("حذف") }
+                    }
+                    if (!canManage) Text("پس از انتخاب راننده یا تغییر وضعیت، ویرایش و حذف شرکت غیرفعال است.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                }
+            }
+        }
+        if (status.isNotBlank()) Text(status, color = MaterialTheme.colorScheme.secondary)
+    }
+
+    editing?.let { item ->
+        AlertDialog(
+            onDismissRequest = { editing = null },
+            title = { Text("ویرایش بار") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedTextField(draft.destination, { draft = draft.copy(destination = it) }, label = { Text("مقصد") }, singleLine = true)
+                    OutlinedTextField(draft.cargoType, { draft = draft.copy(cargoType = it) }, label = { Text("نوع بار") }, singleLine = true)
+                    OutlinedTextField(draft.vehicleType, { draft = draft.copy(vehicleType = it) }, label = { Text("نوع خودرو") }, singleLine = true)
+                    OutlinedTextField(draft.loadingType, { draft = draft.copy(loadingType = it) }, label = { Text("نوع بارگیری: دربست / روباری / نیم بار") }, singleLine = true)
+                    OutlinedTextField(draft.freightAmount, { draft = draft.copy(freightAmount = it.filter(Char::isDigit)) }, label = { Text("کرایه به تومان؛ خالی یعنی توافقی") }, singleLine = true)
+                    OutlinedTextField(draft.description, { draft = draft.copy(description = it.take(3000)) }, label = { Text("توضیحات") }, minLines = 2)
+                }
+            },
+            confirmButton = {
+                Button(enabled = !loading, onClick = {
+                    loading = true
+                    scope.launch {
+                        status = withContext(Dispatchers.IO) { repository.update(item, draft) }
+                        editing = null
+                        val result = withContext(Dispatchers.IO) { repository.list() }
+                        items = result.second
+                        if (result.first != null) status += " " + result.first
+                        loading = false
+                    }
+                }) { Text("ذخیره تغییرات") }
+            },
+            dismissButton = { TextButton(onClick = { editing = null }) { Text("انصراف") } }
+        )
+    }
+    deleting?.let { item ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text("حذف بار") },
+            text = { Text("بار مقصد «" + item.destination + "» حذف شود؟ این عملیات فقط برای بار منتشرشده و بدون راننده مجاز است.") },
+            confirmButton = {
+                Button(enabled = !loading, onClick = {
+                    loading = true
+                    scope.launch {
+                        status = withContext(Dispatchers.IO) { repository.delete(item) }
+                        deleting = null
+                        val result = withContext(Dispatchers.IO) { repository.list() }
+                        items = result.second
+                        if (result.first != null) status += " " + result.first
+                        loading = false
+                    }
+                }) { Text("حذف بار") }
+            },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text("انصراف") } }
+        )
+    }
+}
