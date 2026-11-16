@@ -1171,10 +1171,12 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     )
                                 Text("نوع خودرو")
                                 VehicleTypeDropdown(value = loadVehicleType, onValueChange = { loadVehicleType = it }, modifier = Modifier.fillMaxWidth())
-                                Text("نوع بارگیری")
-                                listOf("دربست","روباری","نیم بار").forEach { v ->
-                                    FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
-                                }
+                                LoadChoiceDropdown(
+                                    label = "مدل بار",
+                                    value = loadLoadingType,
+                                    options = listOf("دربست", "روباری", "نیم بار"),
+                                    onValueChange = { loadLoadingType = it }
+                                )
                                 Text("نحوه تعیین کرایه")
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
