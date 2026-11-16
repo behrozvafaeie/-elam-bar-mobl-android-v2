@@ -311,6 +311,10 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 Text("در حال دریافت اطلاعات از سامانه...")
                             } else {
                                 Text(adminPanelData.ifBlank { "اطلاعاتی برای نمایش دریافت نشد." }, textAlign = TextAlign.Start)
+                                if (selectedPanel == "گفتگوها") {
+                                    HorizontalDivider()
+                                    ChatPanel(accessToken = adminAccessToken)
+                                }
                                 if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها" || selectedPanel == "مدیریت مدارک") {
                                     adminRecords.forEach { record ->
                                         Card(Modifier.fillMaxWidth()) {
@@ -542,6 +546,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     Text(if (driverSearchLoading) "در حال جست‌وجو..." else "جست‌وجوی رانندگان تأییدشده")
                                 }
                                 Text(driverSearchResults, textAlign = TextAlign.Start)
+                                HorizontalDivider()
+                                ChatPanel(accessToken = userAccessToken)
                             } else {
                                 Text("بارهای متناسب با نوع خودرو و مقصدهای ثبت‌شده شما", style = MaterialTheme.typography.titleMedium)
                                 OutlinedButton(enabled = !matchedLoadsLoading, onClick = {
