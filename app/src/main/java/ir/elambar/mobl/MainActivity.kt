@@ -197,6 +197,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var showChatRoom by remember { mutableStateOf(false) }
     var showContacts by remember { mutableStateOf(false) }
     var showStories by remember { mutableStateOf(false) }
+    var showNearby by remember { mutableStateOf(false) }
     var profileUsername by remember { mutableStateOf("") }
     var profileMobile by remember { mutableStateOf("") }
     var activeChatRoomId by remember { mutableStateOf<String?>(null) }
@@ -361,16 +362,21 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     }
 
 
-    BackHandler(enabled = showProfile || showCommunication || showChatRoom || showContacts || showNotifications || showStories || selectedPanel != null) {
+    BackHandler(enabled = showProfile || showCommunication || showChatRoom || showContacts || showNotifications || showStories || showNearby || selectedPanel != null) {
         when {
             showContacts -> showContacts = false
             showChatRoom -> { showChatRoom = false; activeChatRoomId = null }
             showCommunication -> showCommunication = false
             showNotifications -> showNotifications = false
             showStories -> showStories = false
+            showNearby -> showNearby = false
             showProfile -> showProfile = false
             selectedPanel != null -> selectedPanel = null
         }
+    }
+
+    if (showNearby && userLoggedIn && userStatus == "approved") {
+        NearbyLoadsScreen(accessToken = userAccessToken, onClose = { showNearby = false })
     }
 
     if (showStories && (adminLoggedIn || (userLoggedIn && userStatus == "approved"))) {
@@ -457,6 +463,14 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             label = { Text("پیام‌ها و گفتگوها") },
                             selected = showCommunication,
                             onClick = { showCommunication = true; scope.launch { drawerState.close() } },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    if (userLoggedIn && userStatus == "approved") {
+                        NavigationDrawerItem(
+                            label = { Text("اطراف من | بارهای نزدیک") },
+                            selected = showNearby,
+                            onClick = { showNearby = true; scope.launch { drawerState.close() } },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
