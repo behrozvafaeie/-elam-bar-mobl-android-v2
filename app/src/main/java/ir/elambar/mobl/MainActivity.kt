@@ -156,6 +156,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var showProfile by remember { mutableStateOf(false) }
     var showCommunication by remember { mutableStateOf(false) }
     var showChatRoom by remember { mutableStateOf(false) }
+    var showContacts by remember { mutableStateOf(false) }
+    var activeChatRoomId by remember { mutableStateOf<String?>(null) }
     var showNotifications by remember { mutableStateOf(false) }
     var selectedDriverDocType by remember { mutableStateOf("کارت هوشمند") }
     var driverDocUploading by remember { mutableStateOf(false) }
@@ -323,7 +325,19 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         if (showChatRoom && (adminLoggedIn || (userLoggedIn && userStatus == "approved"))) {
         ChatRoomScreen(
             accessToken = if (adminLoggedIn) adminAccessToken else userAccessToken,
-            onClose = { showChatRoom = false }
+            initialRoomId = activeChatRoomId,
+            onClose = { showChatRoom = false; activeChatRoomId = null }
+        )
+    }
+    if (showContacts && (adminLoggedIn || (userLoggedIn && userStatus == "approved"))) {
+        ContactsScreen(
+            accessToken = if (adminLoggedIn) adminAccessToken else userAccessToken,
+            onClose = { showContacts = false },
+            onOpenPrivateChat = { roomId, _ ->
+                showContacts = false
+                activeChatRoomId = roomId
+                showChatRoom = true
+            }
         )
     }
 
@@ -382,8 +396,14 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     if (adminLoggedIn || (userLoggedIn && userStatus == "approved")) {
                         NavigationDrawerItem(
                             label = { Text("اتاق گفتگوی عمومی") },
-                            selected = showChatRoom,
-                            onClick = { showChatRoom = true; scope.launch { drawerState.close() } },
+                            selected = showChatRoom && activeChatRoomId == null,
+                            onClick = { activeChatRoomId = null; showChatRoom = true; scope.launch { drawerState.close() } },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        NavigationDrawerItem(
+                            label = { Text("مخاطبین") },
+                            selected = showContacts,
+                            onClick = { showContacts = true; scope.launch { drawerState.close() } },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
