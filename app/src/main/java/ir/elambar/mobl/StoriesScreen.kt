@@ -82,7 +82,7 @@ internal fun StoriesScreen(accessToken: String, userRole: String, onClose: () ->
                             Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 AsyncImage(model = story.imageUrl, contentDescription = "استوری", modifier = Modifier.fillMaxWidth().heightIn(min = 150.dp, max = 260.dp))
                                 if (story.caption.isNotBlank()) Text(story.caption)
-                                Text("زمان انتشار: \${story.createdAt}", style = MaterialTheme.typography.bodySmall)
+                                Text("زمان انتشار: ${story.createdAt}", style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
@@ -123,7 +123,7 @@ private fun fetchActiveStories(token: String): Pair<String, List<UserStory>> {
             val signed = createStorySignedUrl(token, path)
             if (signed.isNotBlank()) items.add(UserStory(row.optString("id"), row.optString("user_id"), row.optString("caption"), signed, row.optString("created_at")))
         }
-        (if (items.isEmpty()) "استوری فعالی برای نمایش وجود ندارد." else "\${items.size} استوری فعال") to items
+        (if (items.isEmpty()) "استوری فعالی برای نمایش وجود ندارد." else "${items.size} استوری فعال") to items
     } catch (_: Exception) { "ارتباط با استوری‌ها برقرار نشد." to emptyList() }
     finally { connection?.disconnect() }
 }
@@ -156,7 +156,7 @@ private fun uploadUserStory(context: Context, uri: Uri, token: String, role: Str
     catch (_: Exception) { return "خواندن عکس انتخاب‌شده ممکن نشد." }
     if (bytes.isEmpty() || bytes.size > 25 * 1024 * 1024) return "حجم عکس باید کمتر از ۲۵ مگابایت باشد."
     val normalizedRole = when (role) { "driver" -> "driver"; "company" -> "company"; else -> "admin" }
-    val path = "$userId/\${UUID.randomUUID()}.$extension"
+    val path = "$userId/${UUID.randomUUID()}.$extension"
     var upload: HttpURLConnection? = null
     var insert: HttpURLConnection? = null
     return try {
