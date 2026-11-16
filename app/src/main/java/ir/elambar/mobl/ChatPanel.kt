@@ -31,7 +31,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.Base64
+import android.util.Base64
 
 private const val CHAT_SUPABASE_URL = "https://sckcxtceybwtiecyxqsy.supabase.co"
 private const val CHAT_PUBLISHABLE_KEY = "sb_publishable_rcJe7tZqCkHPgnAXZffzUg_f9ixVbwg"
@@ -177,8 +177,7 @@ private fun sendPublicChatMessage(accessToken: String, roomId: String, body: Str
     var connection: HttpURLConnection? = null
     return try {
         val tokenPart = accessToken.split(".").getOrNull(1) ?: return "نشست ورود معتبر نیست."
-        val normalized = tokenPart.replace('-', '+').replace('_', '/').let { it + "=".repeat((4 - it.length % 4) % 4) }
-        val claims = JSONObject(String(Base64.getDecoder().decode(normalized), Charsets.UTF_8))
+        val claims = JSONObject(String(Base64.decode(tokenPart, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING), Charsets.UTF_8))
         val senderId = claims.optString("sub")
         if (senderId.isBlank()) return "شناسه فرستنده از نشست دریافت نشد."
         connection = (URL("$CHAT_SUPABASE_URL/rest/v1/chat_room_messages").openConnection() as HttpURLConnection).apply {
