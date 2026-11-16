@@ -95,7 +95,7 @@ private fun VehicleTypeDropdown(
     val options = listOf(
         "کامیونت مبلی" to "کامیونت مبلی",
         "۶ متری" to "کامیون ۶ متری",
-        "روباری کار" to "روباری کار",
+        "روباری کار" to "کامیون دربستی کار",
         "وانت" to "وانت مبلی"
     )
     var expanded by remember { mutableStateOf(false) }
