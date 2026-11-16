@@ -1,7 +1,7 @@
 name: Android APK
 on:
   push:
-    branches: [ "main", "feature/communication-and-ui-polish", "feature/v1.5.1-clean-ui-navigation", "work/v1.5.1-stabilization", "rebuild/106-base-v1.0.11", "feature/112-drawer-clock-panels", "fix/global-load-and-admin-settings-v3", "feature/admin-profile-photo-v1.0.14", "feature/load-rules-v1.5.2", "fix/v152-login-vehicle-validation", "integration/v1.5.3-communication-loadrules", "fix/driver-accept-load-chat-v1.5.4" ]
+    branches: [ "main", "feature/communication-and-ui-polish", "feature/v1.5.1-clean-ui-navigation", "work/v1.5.1-stabilization", "rebuild/106-base-v1.0.11", "feature/112-drawer-clock-panels", "fix/global-load-and-admin-settings-v3", "feature/admin-profile-photo-v1.0.14", "feature/load-rules-v1.5.2", "fix/v152-login-vehicle-validation", "integration/v1.5.3-communication-loadrules", "fix/driver-accept-load-chat-v1.5.4", "rebuild/clean-independent-app-v2" ]
   workflow_dispatch:
 
 permissions:
@@ -59,9 +59,9 @@ jobs:
       - name: Verify package identity and version
         shell: bash
         run: |
-          grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 19' app/build.gradle.kts
-          grep -F 'versionName = "1.0.18"' app/build.gradle.kts
+          grep -F 'applicationId = "ir.elambar.mobl.standalone"' app/build.gradle.kts
+          grep -F 'versionCode = 1' app/build.gradle.kts
+          grep -F 'versionName = "1.0.0"' app/build.gradle.kts
 
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
@@ -74,14 +74,14 @@ jobs:
         shell: bash
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='19' versionName='1.0.18'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl.standalone' versionCode='1' versionName='1.0.0'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           sha256sum "$APK"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: elam-bar-mobl-debug-apk
+          name: elam-bar-mobl-independent-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 90
@@ -121,7 +121,7 @@ jobs:
             done
             test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1"
             adb install -r artifacts/app-debug.apk
-            adb shell am force-stop ir.elambar.mobl
-            adb shell monkey -p ir.elambar.mobl 1
+            adb shell am force-stop ir.elambar.mobl.standalone
+            adb shell monkey -p ir.elambar.mobl.standalone 1
             sleep 8
-            adb shell pidof ir.elambar.mobl
+            adb shell pidof ir.elambar.mobl.standalone
