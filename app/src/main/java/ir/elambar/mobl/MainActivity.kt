@@ -494,7 +494,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
-                    Text("بخش‌های مدیریتی", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    Text(if (adminLoggedIn) "مدیریت سامانه" else "بخش‌های حساب من", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                     if (adminLoggedIn) {
                         NavigationDrawerItem(
                             label = { Text("اعلام بار") },
@@ -668,7 +668,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             Text("عکس پروفایل برای نمایش حساب مدیر است؛ تصویر یا مدرک محرمانه بارگذاری نکنید.", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                         }
                     }
-                    OutlinedButton(onClick = { showProfile = false }, modifier = Modifier.fillMaxWidth()) { Text("بازگشت به پنل مدیریت") }
+                    OutlinedButton(onClick = { showProfile = false }, modifier = Modifier.fillMaxWidth()) { Text("برگشت") }
                 } else if (adminLoggedIn) {
                     HorizontalDivider()
                     Text("پنل مدیریت", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
@@ -693,7 +693,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         }
                     } else {
                         TextButton(onClick = { selectedPanel = null }, modifier = Modifier.align(Alignment.Start)) {
-                            Text("بازگشت به پنل اصلی")
+                            Text("برگشت")
                         }
                         Text(selectedPanel ?: "", fontSize = 21.sp, color = MaterialTheme.colorScheme.primary)
                         if (selectedPanel != null) {
