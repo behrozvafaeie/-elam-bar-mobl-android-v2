@@ -683,6 +683,11 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                             modifier = Modifier.weight(1f)
                                                         ) { Text("ادمین ارشد") }
                                                     }
+                                                    OutlinedButton(
+                                                        enabled = !adminManageBusy,
+                                                        onClick = { forceLogoutTarget = AdminRecord(account.userId, account.email, "مدیر", account.role) },
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    ) { Text("خروج اجباری مدیر از همه دستگاه‌ها") }
                                                 }
                                             }
                                         }
