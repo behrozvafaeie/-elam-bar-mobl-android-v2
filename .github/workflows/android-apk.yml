@@ -1,7 +1,7 @@
 name: Android APK
 on:
   push:
-    branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186" ]
+    branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22" ]
     paths:
       - "app/**"
       - "*.gradle.kts"
@@ -125,13 +125,8 @@ jobs:
           script: |
             set -e
             adb wait-for-device
-            for i in $(seq 1 60); do
-              if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
-                break
-              fi
-              sleep 5
-            done
-            test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1"
+            echo "Checking emulator boot state..."
+            adb shell getprop sys.boot_completed
             echo "Installing APK..."
             adb install -r artifacts/app-debug.apk
             echo "Launching app..."
@@ -142,3 +137,8 @@ jobs:
             adb shell pidof ir.elambar.mobl
             echo "Checking foreground activity..."
             adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" | head -n 2
+            echo "Checking for fatal application crashes..."
+            if adb logcat -d -t 2500 | grep -q "FATAL EXCEPTION"; then
+              adb logcat -d -t 2500 | grep -A 30 -B 5 "FATAL EXCEPTION"
+              exit 1
+            fi
