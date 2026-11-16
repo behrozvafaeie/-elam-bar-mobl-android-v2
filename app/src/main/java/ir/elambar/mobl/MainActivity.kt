@@ -154,6 +154,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var profilePhotoMessage by remember { mutableStateOf("") }
     var showProfile by remember { mutableStateOf(false) }
     var showCommunication by remember { mutableStateOf(false) }
+    var showChatRoom by remember { mutableStateOf(false) }
     var selectedDriverDocType by remember { mutableStateOf("کارت هوشمند") }
     var driverDocUploading by remember { mutableStateOf(false) }
     var driverDocMessage by remember { mutableStateOf("") }
@@ -315,6 +316,13 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         ) { showCommunication = false }
     }
 
+        if (showChatRoom && (adminLoggedIn || (userLoggedIn && userStatus == "approved"))) {
+        ChatRoomScreen(
+            accessToken = if (adminLoggedIn) adminAccessToken else userAccessToken,
+            onClose = { showChatRoom = false }
+        )
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -349,6 +357,14 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             label = { Text("پیام‌ها و گفتگوها") },
                             selected = showCommunication,
                             onClick = { showCommunication = true; scope.launch { drawerState.close() } },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    if (adminLoggedIn || (userLoggedIn && userStatus == "approved")) {
+                        NavigationDrawerItem(
+                            label = { Text("اتاق گفتگوی عمومی") },
+                            selected = showChatRoom,
+                            onClick = { showChatRoom = true; scope.launch { drawerState.close() } },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
