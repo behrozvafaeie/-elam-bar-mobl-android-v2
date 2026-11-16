@@ -60,8 +60,8 @@ jobs:
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 11' app/build.gradle.kts
-          grep -F 'versionName = "1.0.10"' app/build.gradle.kts
+          grep -F 'versionCode = 12' app/build.gradle.kts
+          grep -F 'versionName = "1.0.11"' app/build.gradle.kts
 
       - name: Verify Android security baseline
         shell: bash
@@ -70,6 +70,9 @@ jobs:
           grep -F 'android:usesCleartextTraffic="false"' app/src/main/AndroidManifest.xml
           grep -F 'android:networkSecurityConfig="@xml/network_security_config"' app/src/main/AndroidManifest.xml
           grep -F 'cleartextTrafficPermitted="false"' app/src/main/res/xml/network_security_config.xml
+          grep -F 'private fun normalizeIranianMobile' app/src/main/java/ir/elambar/mobl/MainActivity.kt
+          grep -F 'private fun requestUserPasswordReset' app/src/main/java/ir/elambar/mobl/MainActivity.kt
+          grep -F 'private fun authenticateUser' app/src/main/java/ir/elambar/mobl/MainActivity.kt
           if grep -RInE 'service_role|SUPABASE_SERVICE_ROLE|KAVENEGAR_API_KEY|-----BEGIN (RSA |EC )?PRIVATE KEY-----' app/src/main; then
             echo "Privileged secret material must never be shipped in the Android app."
             exit 1
