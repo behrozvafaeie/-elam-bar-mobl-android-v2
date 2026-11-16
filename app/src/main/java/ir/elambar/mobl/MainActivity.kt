@@ -84,6 +84,47 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VehicleTypeDropdown(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val options = listOf(
+        "کامیونت مبلی" to "کامیونت مبلی",
+        "۶ متری" to "کامیون ۶ متری",
+        "روباری کار" to "روباری کار",
+        "وانت" to "وانت مبلی"
+    )
+    var expanded by remember { mutableStateOf(false) }
+    val label = options.firstOrNull { it.second == value }?.first ?: value
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = label,
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            label = { Text("نوع خودرو") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier.fillMaxWidth().menuAnchor()
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.first) },
+                    onClick = { onValueChange(option.second); expanded = false }
+                )
+            }
+        }
+    }
+}
+
 private enum class UserRole(val label: String) {
     DRIVER("راننده"),
     COMPANY("شرکت باربری"),
@@ -628,9 +669,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         FilterChip(selected = loadCargoType == cargo, onClick = { loadCargoType = cargo }, label = { Text(cargo) })
                                     }
                                     Text("نوع خودرو")
-                                    listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون بزرگ","خاور مبلی پتو دار","کامیون دربستی کار","سایر خودروهای مبلی").forEach { v ->
-                                        FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
-                                    }
+                                    VehicleTypeDropdown(value = loadVehicleType, onValueChange = { loadVehicleType = it }, modifier = Modifier.fillMaxWidth())
                                     Text("نوع بارگیری")
                                     listOf("دربست","روباری","نیم بار").forEach { v ->
                                         FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
@@ -920,9 +959,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         FilterChip(selected = loadCargoType == cargo, onClick = { loadCargoType = cargo }, label = { Text(cargo) })
                                     }
                                 Text("نوع خودرو")
-                                listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون بزرگ","خاور مبلی پتو دار","کامیون دربستی کار","سایر خودروهای مبلی").forEach { v ->
-                                    FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
-                                }
+                                VehicleTypeDropdown(value = loadVehicleType, onValueChange = { loadVehicleType = it }, modifier = Modifier.fillMaxWidth())
                                 Text("نوع بارگیری")
                                 listOf("دربست","روباری","نیم بار").forEach { v ->
                                     FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
@@ -983,9 +1020,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 HorizontalDivider()
                                 Text("جست‌وجوی راننده مناسب", style = MaterialTheme.typography.titleMedium)
                                 OutlinedTextField(driverSearchDestination, { driverSearchDestination = it }, label = { Text("مقصد موردنظر") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                                listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون بزرگ","خاور مبلی پتو دار","کامیون دربستی کار","سایر خودروهای مبلی").forEach { v ->
-                                    FilterChip(selected = driverSearchVehicle == v, onClick = { driverSearchVehicle = v }, label = { Text(v) })
-                                }
+                                VehicleTypeDropdown(value = driverSearchVehicle, onValueChange = { driverSearchVehicle = it }, modifier = Modifier.fillMaxWidth())
                                 OutlinedButton(enabled = !driverSearchLoading && driverSearchDestination.trim().length >= 2, onClick = {
                                     driverSearchLoading = true
                                     scope.launch {
@@ -1098,9 +1133,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             OutlinedTextField(nationalId, { nationalId = it.filter { c -> c.isDigit() }.take(10) }, label = { Text("کد ملی ۱۰ رقمی") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
                             OutlinedTextField(smartCardNumber, { smartCardNumber = it }, label = { Text("شماره کارت هوشمند") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                             Text("نوع خودرو")
-                            listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون بزرگ","خاور مبلی پتو دار","کامیون دربستی کار","سایر خودروهای مبلی").forEach { v ->
-                                FilterChip(selected = vehicleType == v, onClick = { vehicleType = v }, label = { Text(v) })
-                            }
+                            VehicleTypeDropdown(value = vehicleType, onValueChange = { vehicleType = it }, modifier = Modifier.fillMaxWidth())
                             OutlinedTextField(licensePlate, { licensePlate = it }, label = { Text("شماره پلاک") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                             OutlinedTextField(primaryDestination, { primaryDestination = it }, label = { Text("مقصد اصلی") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                             OutlinedTextField(destinationsText, { destinationsText = it }, label = { Text("مقصدهای دیگر (با ویرگول جدا کنید)") }, modifier = Modifier.fillMaxWidth())
