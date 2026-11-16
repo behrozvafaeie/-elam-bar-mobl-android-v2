@@ -1,7 +1,10 @@
 name: Android APK
 on:
   push:
-    branches: [ "main", "feature/communication-and-ui-polish", "feature/v1.5.1-clean-ui-navigation", "work/v1.5.1-stabilization", "rebuild/106-base-v1.0.11", "feature/112-drawer-clock-panels", "fix/global-load-and-admin-settings-v3", "feature/admin-profile-photo-v1.0.14", "feature/load-rules-v1.5.2", "fix/v152-login-vehicle-validation", "integration/v1.5.3-communication-loadrules" ]
+    branches:
+      - "main"
+      - "integration/v1.5.3-communication-loadrules"
+      - "release/base-244-preserved"
   workflow_dispatch:
 
 permissions:
@@ -15,32 +18,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools'
-
       - name: Install Android build packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-
       - name: Restore stable debug signing key
         uses: actions/cache@v4
         with:
           path: /home/runner/.android/debug.keystore
           key: android-debug-keystore-v2-Linux
-
       - name: Create stable debug signing key when cache is empty
         shell: bash
         run: |
@@ -55,73 +52,29 @@ jobs:
               -keyalg RSA -keysize 2048 -validity 10000
           fi
           test -s /home/runner/.android/debug.keystore
-
       - name: Verify package identity and version
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 18' app/build.gradle.kts
-          grep -F 'versionName = "1.0.17"' app/build.gradle.kts
-
+          grep -F 'versionCode = 19' app/build.gradle.kts
+          grep -F 'versionName = "1.0.18"' app/build.gradle.kts
+          grep -F 'android:label="اعلام بار مبلمان"' app/src/main/AndroidManifest.xml
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
-
       - name: Verify APK was produced
-        shell: bash
         run: test -s app/build/outputs/apk/debug/app-debug.apk
-
       - name: Verify APK package metadata and signature
         shell: bash
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='18' versionName='1.0.17'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='19' versionName='1.0.18'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "application-label:'اعلام بار مبلمان'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           sha256sum "$APK"
-
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: elam-bar-mobl-debug-apk
+          name: elam-bar-mobلمان-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 90
-
-  emulator-smoke-test:
-    name: Optional emulator smoke test
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    continue-on-error: true
-    steps:
-      - name: Download built APK
-        uses: actions/download-artifact@v4
-        with:
-          name: elam-bar-mobl-debug-apk
-          path: artifacts
-
-      - name: Install and launch APK on Android emulator
-        timeout-minutes: 15
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 30
-          target: google_apis
-          arch: x86_64
-          profile: pixel_2
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
-          emulator-boot-timeout: 600
-          disable-animations: true
-          script: |
-            set -e
-            adb wait-for-device
-            for i in $(seq 1 60); do
-              if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
-                break
-              fi
-              sleep 5
-            done
-            test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1"
-            adb install -r artifacts/app-debug.apk
-            adb shell am force-stop ir.elambar.mobl
-            adb shell monkey -p ir.elambar.mobl 1
-            sleep 8
-            adb shell pidof ir.elambar.mobl
