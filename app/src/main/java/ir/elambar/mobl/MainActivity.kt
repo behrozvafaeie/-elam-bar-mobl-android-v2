@@ -765,6 +765,13 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                 Text(record.title, style = MaterialTheme.typography.titleSmall)
                                                 Text(record.detail, style = MaterialTheme.typography.bodySmall)
                                                 Text("وضعیت: ${record.status}")
+                                                if (adminRole == "super_admin" && selectedPanel != "مدیریت مدارک") {
+                                                    OutlinedButton(
+                                                        enabled = !adminManageBusy && record.id.isNotBlank(),
+                                                        onClick = { forceLogoutTarget = record },
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    ) { Text("خروج اجباری از همه دستگاه‌ها") }
+                                                }
                                                 if (selectedPanel == "مدیریت مدارک" && record.mediaUrl.isNotBlank()) {
                                                     val lowerUrl = record.mediaUrl.substringBefore("?").lowercase()
                                                     if (lowerUrl.endsWith(".jpg") || lowerUrl.endsWith(".jpeg") || lowerUrl.endsWith(".png") || lowerUrl.endsWith(".webp")) {
