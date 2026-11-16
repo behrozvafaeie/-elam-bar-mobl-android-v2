@@ -94,11 +94,13 @@ internal fun StoriesScreen(accessToken: String, userRole: String, onClose: () ->
     )
 }
 
-private fun storyUserId(token: String): String = try {
-    val part = token.split(".").getOrNull(1) ?: return ""
-    val decoded = Base64.decode(part, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
-    JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
-} catch (_: Exception) { "" }
+private fun storyUserId(token: String): String {
+    return try {
+        val part = token.split(".").getOrNull(1) ?: ""
+        val decoded = Base64.decode(part, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+        JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
+    } catch (_: Exception) { "" }
+}
 
 private fun storyHeaders(connection: HttpURLConnection, token: String) {
     connection.setRequestProperty("apikey", STORY_KEY)
