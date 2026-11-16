@@ -245,7 +245,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     LaunchedEffect(userLoggedIn) {
         if (userLoggedIn) {
             while (true) {
-                delay(40 * 60 * 1000L)
+                delay(10 * 60 * 1000L)
                 val saved = DeviceSessionStore.load(context)
                 if (saved == null) {
                     userLoggedIn = false
