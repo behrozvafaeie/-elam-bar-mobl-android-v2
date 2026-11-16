@@ -481,18 +481,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         ) {
                             Text("تنظیمات برنامه", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
                             Text("پوسته و رنگ‌بندی", style = MaterialTheme.typography.titleMedium)
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                listOf("روشن", "سبز", "آبی", "تیره", "خودکار").forEachIndexed { index, label ->
-                                    FilterChip(
-                                        selected = palette == index,
-                                        onClick = {
-                                            val next = index
-                                            getSharedPreferences("elambar_ui", MODE_PRIVATE).edit().putInt("palette", next).apply()
-                                            onNextPalette()
-                                        },
-                                        label = { Text(label) }
-                                    )
-                                }
+                            TextButton(onClick = onNextPalette, modifier = Modifier.fillMaxWidth()) {
+                                Text("پوسته فعلی: " + listOf("روشن", "سبز", "آبی", "تیره", "خودکار")[palette] + "  |  تغییر پوسته")
                             }
                             HorizontalDivider()
                             Text("اعلان و صدا", style = MaterialTheme.typography.titleMedium)
