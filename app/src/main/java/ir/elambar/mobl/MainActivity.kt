@@ -94,6 +94,7 @@ private data class AdminLoginResult(val success: Boolean, val message: String, v
 private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "")
 private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val priceMode: String, val freightAmount: String, val description: String)
 private data class MatchedLoad(val id: String, val companyId: String, val origin: String, val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String)
+private data class AcceptLoadResult(val success: Boolean, val message: String, val companyId: String? = null)
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1013,8 +1014,11 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                     acceptingLoadId = item.id
                                                     scope.launch {
                                                         val accepted = withContext(Dispatchers.IO) { acceptDriverLoad(userAccessToken, item.id) }
-                                                        if (accepted.second.isNullOrBlank()) {
-                                                            matchedLoadsText = accepted.first
+                                                        if (!accepted.success) {
+                                                            matchedLoadsText = accepted.message
+                                                        } else if (accepted.companyId.isNullOrBlank()) {
+                                                            matchedLoads = matchedLoads.filterNot { it.id == item.id }
+                                                            matchedLoadsText = "بار قبول شد؛ برای این بار شرکت مشخصی ثبت نشده و گفتگوی شرکت-راننده ایجاد نشد."
                                                         } else {
                                                             val driverId = try {
                                                                 val tokenPart = userAccessToken.split(".").getOrNull(1) ?: ""
@@ -1023,15 +1027,14 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                             } catch (_: Exception) { "" }
                                                             val chat = withContext(Dispatchers.IO) {
                                                                 CommunicationRepository(userAccessToken).createAssignedLoadConversation(
-                                                                    item.id, accepted.second!!, driverId, driverId
+                                                                    item.id, accepted.companyId, driverId, driverId
                                                                 )
                                                             }
+                                                            matchedLoads = matchedLoads.filterNot { it.id == item.id }
                                                             if (chat.first == null && !chat.second.isNullOrBlank()) {
-                                                                matchedLoads = matchedLoads.filterNot { it.id == item.id }
                                                                 matchedLoadsText = "بار با موفقیت قبول شد؛ گفتگوی خصوصی همین بار ایجاد شد."
                                                                 showCommunication = true
                                                             } else {
-                                                                matchedLoads = matchedLoads.filterNot { it.id == item.id }
                                                                 matchedLoadsText = "بار قبول شد، اما ایجاد گفتگوی خصوصی ناموفق بود: ${chat.first ?: "پاسخ گفتگو معتبر نبود."}"
                                                             }
                                                         }
@@ -2088,8 +2091,8 @@ private fun fetchMatchedLoads(accessToken: String): Pair<String, List<MatchedLoa
     }
 }
 
-private fun acceptDriverLoad(accessToken: String, loadId: String): Pair<String, String?> {
-    if (accessToken.isBlank() || loadId.isBlank()) return "نشست یا شناسه بار معتبر نیست." to null
+private fun acceptDriverLoad(accessToken: String, loadId: String): AcceptLoadResult {
+    if (accessToken.isBlank() || loadId.isBlank()) return AcceptLoadResult(false, "نشست یا شناسه بار معتبر نیست.")
     var connection: HttpURLConnection? = null
     return try {
         connection = (URL("$SUPABASE_URL/rest/v1/rpc/driver_accept_load").openConnection() as HttpURLConnection).apply {
@@ -2110,16 +2113,15 @@ private fun acceptDriverLoad(accessToken: String, loadId: String): Pair<String, 
         val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
         if (code !in 200..299) {
             val detail = runCatching { JSONObject(raw).optString("message") }.getOrDefault("")
-            return (detail.ifBlank { "قبول بار انجام نشد (کد $code)." }) to null
+            return AcceptLoadResult(false, detail.ifBlank { "قبول بار انجام نشد (کد $code)." })
         }
         val row = runCatching {
             if (raw.trimStart().startsWith("[")) JSONArray(raw).optJSONObject(0) else JSONObject(raw)
         }.getOrNull()
         val companyId = row?.optString("company_id")?.takeUnless { it.isNullOrBlank() || it == "null" }
-        if (companyId.isNullOrBlank()) "بار قبول شد، اما شناسه شرکت برای ایجاد گفتگو دریافت نشد." to null
-        else "بار با موفقیت قبول شد." to companyId
+        AcceptLoadResult(true, "بار با موفقیت قبول شد.", companyId)
     } catch (_: Exception) {
-        "ارتباط با سامانه برای قبول بار برقرار نشد." to null
+        AcceptLoadResult(false, "ارتباط با سامانه برای قبول بار برقرار نشد.")
     } finally {
         connection?.disconnect()
     }
