@@ -267,8 +267,11 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     }
 
 
-    if (showCommunication && userLoggedIn && userStatus == "approved") {
-        CommunicationScreen(accessToken = userAccessToken) { showCommunication = false }
+    if (showCommunication && ((userLoggedIn && userStatus == "approved") || (adminLoggedIn && adminRole == "super_admin"))) {
+        CommunicationScreen(
+            accessToken = if (adminLoggedIn) adminAccessToken else userAccessToken,
+            isSuperAdmin = adminLoggedIn && adminRole == "super_admin"
+        ) { showCommunication = false }
     }
 
     ModalNavigationDrawer(
@@ -334,8 +337,16 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
+                    if (adminLoggedIn && adminRole == "super_admin") {
+                        NavigationDrawerItem(
+                            label = { Text("پیام‌ها و گفتگوها") },
+                            selected = showCommunication,
+                            onClick = { showCommunication = true; scope.launch { drawerState.close() } },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     if (adminLoggedIn) {
-                        adminPanels.filter { it != "مدیریت بارها" && (adminRole == "super_admin" || (it != "مدیریت مدیران" && it != "تنظیمات کل برنامه")) }.forEach { title ->
+                        adminPanels.filter { it != "مدیریت بارها" && it != "گفتگوها" && (adminRole == "super_admin" || (it != "مدیریت مدیران" && it != "تنظیمات کل برنامه")) }.forEach { title ->
                             NavigationDrawerItem(
                                 label = { Text(title) },
                                 selected = selectedPanel == title,
