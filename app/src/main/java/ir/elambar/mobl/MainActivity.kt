@@ -64,7 +64,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            var palette by remember { mutableIntStateOf(getSharedPreferences("elambar_ui", MODE_PRIVATE).getInt("palette", 0).coerceIn(0, 4)) }
+            var palette by remember { mutableIntStateOf(getSharedPreferences("elambar_ui", MODE_PRIVATE).getInt("palette", 1).coerceIn(0, 4)) }
             val schemes = listOf(
                 lightColorScheme(
                     primary = androidx.compose.ui.graphics.Color(0xFF667C32),
@@ -75,7 +75,7 @@ class MainActivity : ComponentActivity() {
                     secondaryContainer = androidx.compose.ui.graphics.Color(0xFFF0EBCB),
                     surface = androidx.compose.ui.graphics.Color(0xFFFAFAF2)
                 ),
-                lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF176B5B), secondary = androidx.compose.ui.graphics.Color(0xFFB06B32), primaryContainer = androidx.compose.ui.graphics.Color(0xFFD8EFE7)),
+                lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF657B35), onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF), secondary = androidx.compose.ui.graphics.Color(0xFFB58A45), onSecondary = androidx.compose.ui.graphics.Color(0xFFFFFFFF), primaryContainer = androidx.compose.ui.graphics.Color(0xFFE6EBCF), onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF29351B), secondaryContainer = androidx.compose.ui.graphics.Color(0xFFF1EBD9), onSecondaryContainer = androidx.compose.ui.graphics.Color(0xFF39301F), background = androidx.compose.ui.graphics.Color(0xFFF8F8F0), surface = androidx.compose.ui.graphics.Color(0xFFFFFEF8), outline = androidx.compose.ui.graphics.Color(0xFF8A956B)),
                 lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF244B91), secondary = androidx.compose.ui.graphics.Color(0xFF9A5E9E), primaryContainer = androidx.compose.ui.graphics.Color(0xFFDCE6FA)),
                 darkColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF8ECDBA), secondary = androidx.compose.ui.graphics.Color(0xFFFFC18B))
             )
@@ -920,9 +920,20 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     shape = MaterialTheme.shapes.extraLarge
                                 ) {
                                     Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                                        Text("ثبت و اعلام بار جدید", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                        Text("فرم گروهی شرکت‌ها | مبدأ ثابت: تهران", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                        Text("مقصدهای مختلف را یکی‌یکی به فهرست اضافه کنید و در پایان همه را با هم منتشر کنید.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp)) {
+                                                Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.LocalShipping, contentDescription = null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(27.dp)) }
+                                            }
+                                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                Text("اعلام بار جدید", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                                Text("پنل اختصاصی شرکت باربری", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                            }
+                                        }
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            AssistChip(onClick = {}, label = { Text("مبدأ ثابت: تهران") }, leadingIcon = { Icon(Icons.Filled.LocalShipping, contentDescription = null) })
+                                            AssistChip(onClick = {}, label = { Text("ثبت گروهی نامحدود") })
+                                        }
+                                        Text("مقصدها را جداگانه وارد کنید، به فهرست اضافه کنید و در پایان همه بارها را یکجا منتشر کنید.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                                     }
                                 }
                                 Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge) {
