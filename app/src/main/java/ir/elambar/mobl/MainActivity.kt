@@ -125,12 +125,12 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var companyLoadsText by remember { mutableStateOf("برای مشاهده بارهای ثبت‌شده، بروزرسانی را بزنید.") }
     var companyLoadsLoading by remember { mutableStateOf(false) }
     var driverSearchDestination by remember { mutableStateOf("") }
-    var driverSearchVehicle by remember { mutableStateOf("وانت مبلی") }
+    var driverSearchVehicle by remember { mutableStateOf("وانت") }
     var driverSearchResults by remember { mutableStateOf("برای پیدا کردن راننده، مقصد را وارد کنید.") }
     var driverSearchLoading by remember { mutableStateOf(false) }
     var loadDestination by remember { mutableStateOf("") }
     var loadCargoType by remember { mutableStateOf("مبل") }
-    var loadVehicleType by remember { mutableStateOf("وانت مبلی") }
+    var loadVehicleType by remember { mutableStateOf("وانت") }
     var loadLoadingType by remember { mutableStateOf("روباری") }
     var loadFreightAmount by remember { mutableStateOf("") }
     var loadPriceMode by remember { mutableStateOf("fixed") }
@@ -146,7 +146,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var officeAddress by remember { mutableStateOf("") }
     var nationalId by remember { mutableStateOf("") }
     var smartCardNumber by remember { mutableStateOf("") }
-    var vehicleType by remember { mutableStateOf("وانت مبلی") }
+    var vehicleType by remember { mutableStateOf("وانت") }
     var licensePlate by remember { mutableStateOf("") }
     var primaryDestination by remember { mutableStateOf("") }
     var destinationsText by remember { mutableStateOf("") }
@@ -283,16 +283,16 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 drawerTonalElevation = 6.dp
             ) {
                 Column(
-                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = MaterialTheme.shapes.extraLarge,
                         color = MaterialTheme.colorScheme.primaryContainer
                     ) {
-                        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("اعلام بار مبل", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("اعلام بار مبل", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
                             Text(if (adminLoggedIn) "پنل " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" } else if (userLoggedIn) "پنل کاربر" else "سامانه اعلام بار", color = MaterialTheme.colorScheme.onPrimaryContainer)
                         }
                     }
@@ -301,7 +301,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             label = { Text("پروفایل من") },
                             selected = showProfile,
                             onClick = { showProfile = true; scope.launch { drawerState.close() } },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
                         )
                     }
                     if (userLoggedIn && userStatus == "approved") {
@@ -621,7 +621,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         FilterChip(selected = loadCargoType == cargo, onClick = { loadCargoType = cargo }, label = { Text(cargo) })
                                     }
                                     Text("نوع خودرو")
-                                    listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون بزرگ","خاور مبلی پتو دار","کامیون دربستی کار","سایر خودروهای مبلی").forEach { v ->
+                                    listOf("مبلی ۶ متری","روباری کار","وانت","مبلی").forEach { v ->
                                         FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
                                     }
                                     Text("نوع بارگیری")
@@ -913,7 +913,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         FilterChip(selected = loadCargoType == cargo, onClick = { loadCargoType = cargo }, label = { Text(cargo) })
                                     }
                                 Text("نوع خودرو")
-                                listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون بزرگ","خاور مبلی پتو دار","کامیون دربستی کار","سایر خودروهای مبلی").forEach { v ->
+                                listOf("مبلی ۶ متری","روباری کار","وانت","مبلی").forEach { v ->
                                     FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
                                 }
                                 Text("نوع بارگیری")
@@ -976,7 +976,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 HorizontalDivider()
                                 Text("جست‌وجوی راننده مناسب", style = MaterialTheme.typography.titleMedium)
                                 OutlinedTextField(driverSearchDestination, { driverSearchDestination = it }, label = { Text("مقصد موردنظر") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                                listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون بزرگ","خاور مبلی پتو دار","کامیون دربستی کار","سایر خودروهای مبلی").forEach { v ->
+                                listOf("مبلی ۶ متری","روباری کار","وانت","مبلی").forEach { v ->
                                     FilterChip(selected = driverSearchVehicle == v, onClick = { driverSearchVehicle = v }, label = { Text(v) })
                                 }
                                 OutlinedButton(enabled = !driverSearchLoading && driverSearchDestination.trim().length >= 2, onClick = {
@@ -1140,7 +1140,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             OutlinedTextField(nationalId, { nationalId = it.filter { c -> c.isDigit() }.take(10) }, label = { Text("کد ملی ۱۰ رقمی") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
                             OutlinedTextField(smartCardNumber, { smartCardNumber = it }, label = { Text("شماره کارت هوشمند") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                             Text("نوع خودرو")
-                            listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون بزرگ","خاور مبلی پتو دار","کامیون دربستی کار","سایر خودروهای مبلی").forEach { v ->
+                            listOf("مبلی ۶ متری","روباری کار","وانت","مبلی").forEach { v ->
                                 FilterChip(selected = vehicleType == v, onClick = { vehicleType = v }, label = { Text(v) })
                             }
                             OutlinedTextField(licensePlate, { licensePlate = it }, label = { Text("شماره پلاک") }, singleLine = true, modifier = Modifier.fillMaxWidth())
