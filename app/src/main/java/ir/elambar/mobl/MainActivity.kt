@@ -876,7 +876,12 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     HorizontalDivider()
                                     }
                                 }
-                                if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها" || selectedPanel == "مدیریت مدارک") {
+                                if (selectedPanel == "اعضای سامانه") {
+                                    Text("اعضای ثبت‌شده: ${adminRecords.size}", style = MaterialTheme.typography.titleMedium)
+                                    Text("این فهرست فقط برای مدیر ارشد اصلی نمایش داده می‌شود.", style = MaterialTheme.typography.bodySmall)
+                                }
+                                if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها" || selectedPanel == "مدیریت مدارک" || selectedPanel == "اعضای سامانه") {
+                                    if (adminRecords.isEmpty()) Text("عضوی برای نمایش پیدا نشد یا دسترسی مشاهده ندارید.")
                                     adminRecords.forEach { record ->
                                         Card(Modifier.fillMaxWidth()) {
                                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -914,7 +919,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                             }) { Text("رد مدرک") }
                                                         }
                                                     }
-                                                } else {
+                                                } else if (selectedPanel != "اعضای سامانه") {
                                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                     if (record.status != "approved") {
                                                         Button(onClick = {
