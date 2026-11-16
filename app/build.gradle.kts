@@ -7,11 +7,11 @@ android {
     namespace = "ir.elambar.mobl"
     compileSdk = 35
     defaultConfig {
-        applicationId = "ir.elambar.mobl"
+        applicationId = "ir.elambar.mobl.standalone"
         minSdk = 24
         targetSdk = 35
-        versionCode = 19
-        versionName = "1.0.18"
+        versionCode = 1
+        versionName = "1.0.0"
     }
     buildFeatures { compose = true }
     compileOptions {
