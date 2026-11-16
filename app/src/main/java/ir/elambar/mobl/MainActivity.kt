@@ -353,7 +353,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         )
                     }
                     Text("بخش‌های مدیریتی", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                    if (adminLoggedIn) {
+                    if (adminLoggedIn && (adminRole == "super_admin" || adminMenuVisibleToOtherAdmins)) {
                         NavigationDrawerItem(
                             label = { Text("اعلام بار") },
                             selected = selectedPanel == "مدیریت بارها",
