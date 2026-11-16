@@ -1,7 +1,7 @@
 name: Android APK
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "feature/real-navigation-drawer-settings" ]
   workflow_dispatch:
 
 permissions:
