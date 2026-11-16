@@ -112,7 +112,7 @@ private fun fetchActiveStories(token: String): Pair<String, List<UserStory>> {
     if (token.isBlank()) return "نشست ورود معتبر نیست." to emptyList()
     var connection: HttpURLConnection? = null
     return try {
-        val url = "$STORY_URL/rest/v1/user_stories?select=id,user_id,caption,media_path,created_at&expires_at=gt.now()&order=created_at.desc&limit=60"
+        val url = "$STORY_URL/rest/v1/user_stories?select=id,user_id,caption,media_path,created_at&order=created_at.desc&limit=60"
         connection = (URL(url).openConnection() as HttpURLConnection).apply { requestMethod = "GET"; connectTimeout = 15000; readTimeout = 20000; storyHeaders(this, token) }
         val code = connection.responseCode
         val raw = (if (code in 200..299) connection.inputStream else connection.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
