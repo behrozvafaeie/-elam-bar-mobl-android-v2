@@ -166,6 +166,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var managedAdmins by remember { mutableStateOf<List<AdminAccount>>(emptyList()) }
     var adminNewRole by remember { mutableStateOf("admin") }
     var adminManageBusy by remember { mutableStateOf(false) }
+    var adminMenuVisibleToOtherAdmins by remember { mutableStateOf(true) }
     var forceLogoutTarget by remember { mutableStateOf<AdminRecord?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -377,7 +378,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
-                    if (adminLoggedIn) {
+                    if (adminLoggedIn && (adminRole == "super_admin" || adminMenuVisibleToOtherAdmins)) {
                         adminPanels.filter { it != "مدیریت بارها" && (adminRole == "super_admin" || (it != "مدیریت مدیران" && it != "تنظیمات کل برنامه")) }.forEach { title ->
                             NavigationDrawerItem(
                                 label = { Text(title) },
@@ -405,6 +406,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
+                    } else if (adminLoggedIn) {
+                        Text("منوی مدیریتی برای مدیران دیگر توسط مدیر ارشد اصلی خاموش شده است.", style = MaterialTheme.typography.bodySmall)
                     } else {
                         Text(if (userLoggedIn) "بخش‌های حساب شما از این منو در دسترس خواهند بود." else "برای ورود به بخش‌های برنامه، ابتدا وارد حساب شوید.", style = MaterialTheme.typography.bodySmall)
                     }
@@ -699,7 +702,25 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     HorizontalDivider()
                                 }
                                 if (selectedPanel == "تنظیمات کل برنامه" && adminRole == "super_admin") {
-                                    Text("این بخش مربوط به تنظیمات سراسری سامانه است و تغییرات آن باید برای همه شرکت‌ها، رانندگان و مدیران اعمال شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                    Text("تنظیمات سراسری سامانه", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                                    Text("نمایش منوی مدیریتی برای مدیران غیرارشد", style = MaterialTheme.typography.bodyMedium)
+                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text(if (adminMenuVisibleToOtherAdmins) "روشن" else "خاموش")
+                                        Switch(
+                                            checked = adminMenuVisibleToOtherAdmins,
+                                            enabled = !adminManageBusy,
+                                            onCheckedChange = { visible ->
+                                                adminManageBusy = true
+                                                scope.launch {
+                                                    val result = withContext(Dispatchers.IO) { setAdminMenuVisibility(adminAccessToken, visible) }
+                                                    if (result.startsWith("ذخیره شد")) adminMenuVisibleToOtherAdmins = visible
+                                                    adminActionMessage = result
+                                                    adminManageBusy = false
+                                                }
+                                            }
+                                        )
+                                    }
+                                    Text("تغییر این گزینه برای همه مدیران دیگر اعمال می‌شود و در گزارش مدیریتی ثبت خواهد شد.", style = MaterialTheme.typography.bodySmall)
                                 }
                                 if (selectedPanel == "مدیریت بارها") {
                                     Text("اعلام بار به نام مدیریت سامانه", style = MaterialTheme.typography.titleMedium)
@@ -1273,6 +1294,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                 adminRole = result.role
                                                 adminLoggedIn = true
                                                 adminProfilePhotoUrl = withContext(Dispatchers.IO) { fetchAdminProfilePhoto(result.accessToken) }
+                                                adminMenuVisibleToOtherAdmins = withContext(Dispatchers.IO) { fetchAdminMenuVisibility(result.accessToken) }
                                             }
                                         }
                                     }
@@ -1694,6 +1716,16 @@ private fun setAdminUserRole(accessToken: String, userId: String, role: String):
     else "تغییر سطح دسترسی انجام نشد؛ مجوزها را بررسی کنید."
 }
 
+private fun fetchAdminMenuVisibility(accessToken: String): Boolean {
+    val (code, body) = adminRpc(accessToken, "admin_get_menu_visibility", JSONObject())
+    return code in 200..299 && body.trim().equals("true", ignoreCase = true)
+}
+
+private fun setAdminMenuVisibility(accessToken: String, visible: Boolean): String {
+    val (code, _) = adminRpc(accessToken, "admin_set_menu_visibility", JSONObject().put("p_visible", visible))
+    return if (code in 200..299) "ذخیره شد؛ نمایش منوی مدیران دیگر به‌روزرسانی شد."
+    else "ذخیره تنظیمات منو ناموفق بود؛ فقط مدیر ارشد اصلی اجازه تغییر دارد."
+}
 private fun forceLogoutMember(accessToken: String, userId: String): String {
     val (code, body) = adminRpc(accessToken, "admin_force_logout_member", JSONObject().put("p_target_user_id", userId))
     return if (code in 200..299) {
