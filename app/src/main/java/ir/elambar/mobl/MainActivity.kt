@@ -481,18 +481,31 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         ) {
                             Text("تنظیمات برنامه", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
                             Text("پوسته و رنگ‌بندی", style = MaterialTheme.typography.titleMedium)
-                            TextButton(onClick = onNextPalette, modifier = Modifier.fillMaxWidth()) {
-                                Text("پوسته فعلی: " + listOf("روشن", "سبز", "آبی", "تیره", "خودکار")[palette] + "  |  تغییر پوسته")
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                listOf("روشن", "سبز", "آبی", "تیره", "خودکار").forEachIndexed { index, label ->
+                                    FilterChip(
+                                        selected = palette == index,
+                                        onClick = {
+                                            val next = index
+                                            getSharedPreferences("elambar_ui", MODE_PRIVATE).edit().putInt("palette", next).apply()
+                                            onNextPalette()
+                                        },
+                                        label = { Text(label) }
+                                    )
+                                }
                             }
                             HorizontalDivider()
                             Text("اعلان و صدا", style = MaterialTheme.typography.titleMedium)
-                            OutlinedButton(
-                                onClick = {
-                                    soundEnabled = !soundEnabled
-                                    context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putBoolean("sound", soundEnabled).apply()
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) { Text(if (soundEnabled) "صدای اعلان روشن است" else "صدای اعلان خاموش است") }
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(if (soundEnabled) "صدای اعلان روشن" else "صدای اعلان خاموش")
+                                Switch(
+                                    checked = soundEnabled,
+                                    onCheckedChange = { enabled ->
+                                        soundEnabled = enabled
+                                        context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putBoolean("sound", enabled).apply()
+                                    }
+                                )
+                            }
                             HorizontalDivider()
                             Text("اندازه نوشته‌ها", style = MaterialTheme.typography.titleMedium)
                             listOf("کوچک" to 0.9f, "متوسط" to 1f, "بزرگ" to 1.15f, "خیلی بزرگ" to 1.3f).forEach { (label, scale) ->
