@@ -63,7 +63,9 @@ internal fun ChatRoomScreen(accessToken: String, onClose: () -> Unit) {
             val result = withContext(Dispatchers.IO) { fetchPublicRoom(accessToken) }
             roomId = result.roomId
             roomTitle = result.title.ifBlank { "اتاق گفتگوی عمومی" }
-            canSend = result.canSend
+            canSend = if (result.roomId.isNotBlank() && result.error == null) {
+                withContext(Dispatchers.IO) { canUserSendPublicRoomMessage(accessToken, userId, result.roomId) }
+            } else false
             status = result.error ?: if (roomId.isBlank()) "اتاق عمومی هنوز توسط مدیر ارشد ایجاد نشده است." else ""
             busy = false
             if (roomId.isNotBlank()) loadMessages()
@@ -175,6 +177,47 @@ private fun fetchPublicRoomMessages(accessToken: String, roomId: String): Pair<S
     finally { c?.disconnect() }
 }
 
+
+private fun canUserSendPublicRoomMessage(accessToken: String, userId: String, roomId: String): Boolean {
+    if (accessToken.isBlank() || userId.isBlank() || roomId.isBlank()) return false
+    fun get(path: String): JSONArray? {
+        var c: HttpURLConnection? = null
+        return try {
+            c = (URL("$CHAT_ROOM_URL/rest/v1/$path").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"; connectTimeout = 10000; readTimeout = 12000
+                setRequestProperty("apikey", CHAT_ROOM_KEY)
+                setRequestProperty("Authorization", "Bearer $accessToken")
+                setRequestProperty("Accept", "application/json")
+            }
+            if (c.responseCode !in 200..299) null else JSONArray(c.inputStream.bufferedReader().use { it.readText() })
+        } catch (_: Exception) { null }
+        finally { c?.disconnect() }
+    }
+    val encodedUser = URLEncoder.encode(userId, "UTF-8")
+    val encodedRoom = URLEncoder.encode(roomId, "UTF-8")
+    val companies = get("companies?select=status&id=eq.$encodedUser&limit=1")
+    if (companies != null && companies.length() > 0) {
+        if (companies.getJSONObject(0).optString("status") != "approved") return false
+        val settings = get("chat_room_company_settings?select=is_muted,read_only&room_id=eq.$encodedRoom&company_id=eq.$encodedUser&limit=1")
+        if (settings != null && settings.length() > 0) {
+            val row = settings.getJSONObject(0)
+            if (row.optBoolean("is_muted") || row.optBoolean("read_only")) return false
+        }
+        return true
+    }
+    val admins = get("admin_users?select=role,is_blocked,access_expires_at&user_id=eq.$encodedUser&limit=1")
+    if (admins != null && admins.length() > 0) {
+        val admin = admins.getJSONObject(0)
+        if (admin.optBoolean("is_blocked")) return false
+        val role = admin.optString("role")
+        if (role == "super_admin") return true
+        val permissions = get("admin_section_permissions?select=can_create&admin_user_id=eq.$encodedUser&section_key=eq.chat&limit=1")
+        return permissions != null && permissions.length() > 0 && permissions.getJSONObject(0).optBoolean("can_create")
+    }
+    // Drivers remain read-only in the public room unless server policy grants a different membership.
+    return false
+}
+
 private fun sendPublicRoomMessage(accessToken: String, roomId: String, userId: String, body: String): String {
     var c: HttpURLConnection? = null
     return try {
@@ -187,8 +230,16 @@ private fun sendPublicRoomMessage(accessToken: String, roomId: String, userId: S
         c.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
         val code = c.responseCode
         if (code in 200..299) "پیام ارسال شد."
-        else if (code == 401 || code == 403) "ارسال پیام مجاز نیست؛ حساب شما احتمالاً فقط دسترسی خواندن دارد یا مجوز مدیر ارشد فعال نیست."
-        else "ارسال پیام انجام نشد (کد $code)."
+        else {
+            val detail = runCatching {
+                val json = JSONObject(c.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty())
+                json.optString("message").ifBlank { json.optString("details") }
+            }.getOrDefault("")
+            "ارسال پیام انجام نشد (کد $code). " + detail.ifBlank {
+                if (code == 401 || code == 403) "مجوز ارسال برای حساب شما فعال نیست؛ وضعیت عضویت و مجوز اتاق را بررسی کنید."
+                else "لطفاً دوباره تلاش کنید."
+            }
+        }
     } catch (_: Exception) { "ارتباط برای ارسال پیام برقرار نشد." }
     finally { c?.disconnect() }
 }
