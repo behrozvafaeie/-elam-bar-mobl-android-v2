@@ -3,6 +3,7 @@ package ir.elambar.mobl
 import android.os.Bundle
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
@@ -159,6 +160,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var showCommunication by remember { mutableStateOf(false) }
     var showChatRoom by remember { mutableStateOf(false) }
     var showContacts by remember { mutableStateOf(false) }
+    var showStories by remember { mutableStateOf(false) }
+    var profileUsername by remember { mutableStateOf("") }
+    var profileMobile by remember { mutableStateOf("") }
     var activeChatRoomId by remember { mutableStateOf<String?>(null) }
     var showNotifications by remember { mutableStateOf(false) }
     var selectedDriverDocType by remember { mutableStateOf("کارت هوشمند") }
@@ -251,7 +255,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var clockUsesServerTime by remember { mutableStateOf(false) }
     val adminPanels = listOf(
         "مدیریت رانندگان", "مدیریت شرکت‌ها", "مدیریت بارها", "مدیریت مدیران",
-        "مدیریت مدارک", "گفتگوها", "شکایات", "گزارش‌ها", "تنظیمات کل برنامه"
+        "مدیریت مدارک", "اعضای سامانه", "گفتگوها", "شکایات", "گزارش‌ها", "تنظیمات کل برنامه"
     )
     LaunchedEffect(Unit) {
         while (true) {
@@ -281,6 +285,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
             if (restored.success && restored.refreshToken.isNotBlank()) {
                 role = savedRole; userLoggedIn = true; userDisplayName = restored.displayName
                 userStatus = restored.status; userAccessToken = restored.accessToken; profilePhotoUrl = restored.photoUrl
+                profileUsername = restored.username; profileMobile = restored.mobile
                 DeviceSessionStore.save(context, restored.refreshToken, savedRole.name)
                 message = "نشست امن قبلی بازیابی شد."
             } else { DeviceSessionStore.clear(context); message = "نشست قبلی منقضی شده است؛ ورود مجدد نیازمند احراز شماره است." }
@@ -306,6 +311,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     userStatus = refreshed.status
                     userDisplayName = refreshed.displayName
                     profilePhotoUrl = refreshed.photoUrl
+                    profileUsername = refreshed.username; profileMobile = refreshed.mobile
                     DeviceSessionStore.save(context, refreshed.refreshToken, savedRole.name)
                 } else {
                     DeviceSessionStore.clear(context)
@@ -318,6 +324,26 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         }
     }
 
+
+    BackHandler(enabled = showProfile || showCommunication || showChatRoom || showContacts || showNotifications || showStories || selectedPanel != null) {
+        when {
+            showContacts -> showContacts = false
+            showChatRoom -> { showChatRoom = false; activeChatRoomId = null }
+            showCommunication -> showCommunication = false
+            showNotifications -> showNotifications = false
+            showStories -> showStories = false
+            showProfile -> showProfile = false
+            selectedPanel != null -> selectedPanel = null
+        }
+    }
+
+    if (showStories && (adminLoggedIn || (userLoggedIn && userStatus == "approved"))) {
+        StoriesScreen(
+            accessToken = if (adminLoggedIn) adminAccessToken else userAccessToken,
+            userRole = if (adminLoggedIn) "admin" else if (role == UserRole.COMPANY) "company" else "driver",
+            onClose = { showStories = false }
+        )
+    }
 
     if (showCommunication && ((userLoggedIn && userStatus == "approved") || (adminLoggedIn && adminRole == "super_admin"))) {
         CommunicationScreen(
@@ -400,6 +426,12 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     }
                     if (adminLoggedIn || (userLoggedIn && userStatus == "approved")) {
                         NavigationDrawerItem(
+                            label = { Text("استوری‌ها") },
+                            selected = showStories,
+                            onClick = { showStories = true; scope.launch { drawerState.close() } },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        NavigationDrawerItem(
                             label = { Text("اتاق گفتگوی عمومی") },
                             selected = showChatRoom && activeChatRoomId == null,
                             onClick = { activeChatRoomId = null; showChatRoom = true; scope.launch { drawerState.close() } },
@@ -447,7 +479,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         )
                     }
                     if (adminLoggedIn) {
-                        adminPanels.filter { it != "مدیریت بارها" && it != "گفتگوها" && (adminRole == "super_admin" || (it != "مدیریت مدیران" && it != "تنظیمات کل برنامه")) }.forEach { title ->
+                        adminPanels.filter { it != "مدیریت بارها" && it != "گفتگوها" && (adminRole == "super_admin" || (it != "مدیریت مدیران" && it != "تنظیمات کل برنامه" && it != "اعضای سامانه")) }.forEach { title ->
                             NavigationDrawerItem(
                                 label = { Text(title) },
                                 selected = selectedPanel == title,
@@ -459,7 +491,12 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     scope.launch {
                                         drawerState.close()
                                         adminPanelLoading = true
-                                        adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, title) }
+                                        adminPanelData = if (title == "اعضای سامانه") "فهرست حساب‌های رانندگان و شرکت‌های ثبت‌شده در سامانه" else withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, title) }
+                                        if (title == "اعضای سامانه") {
+                                            val drivers = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, "مدیریت رانندگان") }
+                                            val companies = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, "مدیریت شرکت‌ها") }
+                                            adminRecords = drivers.map { it.copy(detail = "راننده | " + it.detail) } + companies.map { it.copy(detail = "شرکت باربری | " + it.detail) }
+                                        }
                                         if (title == "مدیریت رانندگان" || title == "مدیریت شرکت‌ها" || title == "مدیریت مدارک") {
                                             adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, title) }
                                         }
@@ -941,6 +978,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 }
                             }
                             Text(userDisplayName.ifBlank { "کاربر اعلام بار مبلمان" }, style = MaterialTheme.typography.headlineSmall)
+                            Text("نام کاربری: " + profileUsername.ifBlank { username.ifBlank { "ثبت نشده" } }, style = MaterialTheme.typography.bodyMedium)
+                            Text("شماره تماس: " + profileMobile.ifBlank { mobile.ifBlank { "ثبت نشده" } }, style = MaterialTheme.typography.bodyMedium)
                             Text(if (role == UserRole.DRIVER) "پروفایل راننده" else "پروفایل شرکت باربری", style = MaterialTheme.typography.titleMedium)
                             Surface(
                                 shape = MaterialTheme.shapes.large,
@@ -1346,6 +1385,10 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                             userStatus = result.status
                                             userAccessToken = result.accessToken
                                             profilePhotoUrl = result.photoUrl
+                                            profileUsername = result.username.ifBlank { username }
+                                            profileMobile = result.mobile.ifBlank { mobile }
+                                            profileUsername = result.username.ifBlank { username }
+                                            profileMobile = result.mobile.ifBlank { mobile }
                                             DeviceSessionStore.save(context, result.refreshToken, role.name)
                                             if (soundEnabled) playAppTone()
                                         }
