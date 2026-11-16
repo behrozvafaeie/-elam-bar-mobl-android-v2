@@ -5,6 +5,7 @@ on:
       - "main"
       - "integration/v1.5.3-communication-loadrules"
       - "release/base-244-preserved"
+      - "integration/full-platform-upgrade"
   workflow_dispatch:
 
 permissions:
@@ -56,8 +57,8 @@ jobs:
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 19' app/build.gradle.kts
-          grep -F 'versionName = "1.0.18"' app/build.gradle.kts
+          grep -F 'versionCode = 20' app/build.gradle.kts
+          grep -F 'versionName = "1.0.19"' app/build.gradle.kts
           grep -F 'android:label="اعلام بار مبلمان"' app/src/main/AndroidManifest.xml
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
@@ -67,7 +68,7 @@ jobs:
         shell: bash
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='19' versionName='1.0.18'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='20' versionName='1.0.19'"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "application-label:'اعلام بار مبلمان'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           sha256sum "$APK"
