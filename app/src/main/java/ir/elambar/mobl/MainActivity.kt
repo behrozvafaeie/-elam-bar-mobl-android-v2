@@ -2,6 +2,7 @@ package ir.elambar.mobl
 
 import android.os.Bundle
 import android.net.Uri
+import android.location.Geocoder
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
@@ -58,6 +59,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
+import java.util.Locale
 import java.net.URLEncoder
 
 private const val SUPABASE_URL = "https://sckcxtceybwtiecyxqsy.supabase.co"
@@ -170,7 +172,7 @@ private enum class UserRole(val label: String) {
 
 private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "", val role: String = "")
 private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "", val username: String = "", val mobile: String = "")
-private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val priceMode: String, val freightAmount: String, val description: String)
+private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val priceMode: String, val freightAmount: String, val description: String, val destinationLatitude: Double? = null, val destinationLongitude: Double? = null)
 private data class DriverLoad(val id: String, val destination: String, val cargoType: String, val vehicleType: String, val freightAmount: String, val description: String, val loadingType: String, val createdAt: String)
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
 
@@ -840,12 +842,25 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || (loadPriceMode == "fixed" && (loadFreightAmount.isBlank() || loadFreightAmount.toLongOrNull() == null || loadFreightAmount.toLong() <= 0))) {
                                             adminActionMessage = "مقصد، نوع بار و کرایه را کامل کنید."
                                         } else {
-                                            loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", loadDescription.trim()))
-                                            loadDestination = ""
-                                            loadDescription = ""
-                                            adminActionMessage = "بار به فهرست انتشار مدیریت اضافه شد."
+                                            val destination = loadDestination.trim()
+                                            val cargo = loadCargoType
+                                            val vehicle = loadVehicleType
+                                            val loadingType = loadLoadingType
+                                            val priceMode = loadPriceMode
+                                            val fare = if (loadPriceMode == "fixed") loadFreightAmount else "0"
+                                            val description = loadDescription.trim()
+                                            adminPanelLoading = true
+                                            adminActionMessage = "در حال بررسی مختصات مقصد..."
+                                            scope.launch {
+                                                val coordinates = withContext(Dispatchers.IO) { geocodeLoadDestination(context, destination) }
+                                                loadDrafts.add(LoadDraft(destination, cargo, vehicle, loadingType, priceMode, fare, description, coordinates?.first, coordinates?.second))
+                                                loadDestination = ""
+                                                loadDescription = ""
+                                                adminActionMessage = if (coordinates == null) "بار اضافه شد؛ مختصات مقصد پیدا نشد و در اطراف من نمایش داده نمی‌شود." else "بار با مختصات مقصد به فهرست انتشار اضافه شد."
+                                                adminPanelLoading = false
+                                            }
                                         }
-                                    }, modifier = Modifier.fillMaxWidth()) { Text("افزودن بار به فهرست") }
+                                    }, enabled = !adminPanelLoading, modifier = Modifier.fillMaxWidth()) { Text("افزودن بار به فهرست") }
                                     if (loadDrafts.isNotEmpty()) {
                                         Text("بارهای آماده انتشار: ${loadDrafts.size}", style = MaterialTheme.typography.titleSmall)
                                         loadDrafts.forEachIndexed { index, draft ->
@@ -1157,12 +1172,25 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || (loadPriceMode == "fixed" && (loadFreightAmount.isBlank() || loadFreightAmount.toLongOrNull() == null || loadFreightAmount.toLong() <= 0))) {
                                         loadActionMessage = "مقصد، نوع بار و کرایه را کامل کنید."
                                     } else {
-                                        loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", loadDescription.trim()))
-                                        loadDestination = ""
-                                        loadDescription = ""
-                                        loadActionMessage = "بار به فهرست گروهی اضافه شد."
+                                        val destination = loadDestination.trim()
+                                        val cargo = loadCargoType
+                                        val vehicle = loadVehicleType
+                                        val loadingType = loadLoadingType
+                                        val priceMode = loadPriceMode
+                                        val fare = if (loadPriceMode == "fixed") loadFreightAmount else "0"
+                                        val description = loadDescription.trim()
+                                        companyLoadsLoading = true
+                                        loadActionMessage = "در حال بررسی مختصات مقصد..."
+                                        scope.launch {
+                                            val coordinates = withContext(Dispatchers.IO) { geocodeLoadDestination(context, destination) }
+                                            loadDrafts.add(LoadDraft(destination, cargo, vehicle, loadingType, priceMode, fare, description, coordinates?.first, coordinates?.second))
+                                            loadDestination = ""
+                                            loadDescription = ""
+                                            loadActionMessage = if (coordinates == null) "بار اضافه شد؛ مختصات مقصد پیدا نشد و در اطراف من نمایش داده نمی‌شود." else "بار با مختصات مقصد به فهرست گروهی اضافه شد."
+                                            companyLoadsLoading = false
+                                        }
                                     }
-                                }, modifier = Modifier.fillMaxWidth()) { Text("افزودن بار به فهرست") }
+                                }, enabled = !companyLoadsLoading, modifier = Modifier.fillMaxWidth()) { Text("افزودن بار به فهرست") }
                                 if (loadDrafts.isNotEmpty()) {
                                     Text("بارهای آماده انتشار: ${loadDrafts.size}", style = MaterialTheme.typography.titleSmall)
                                     loadDrafts.forEachIndexed { index, draft ->
@@ -2108,6 +2136,16 @@ private fun authenticateUser(username: String, password: String, role: UserRole)
 }
 
 
+private fun geocodeLoadDestination(context: Context, destination: String): Pair<Double, Double>? {
+    if (destination.trim().length < 2 || !Geocoder.isPresent()) return null
+    return try {
+        @Suppress("DEPRECATION")
+        val addresses = Geocoder(context, Locale("fa", "IR")).getFromLocationName(destination.trim() + ", ایران", 1)
+        val address = addresses?.firstOrNull()
+        if (address != null && address.hasLatitude() && address.hasLongitude()) address.latitude to address.longitude else null
+    } catch (_: Exception) { null }
+}
+
 private fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>, publisherType: String = "company"): String {
     if (accessToken.isBlank()) return "نشست ورود معتبر نیست؛ خارج شوید و دوباره وارد شوید."
     if (drafts.isEmpty()) return "ابتدا حداقل یک بار به فهرست اضافه کنید."
@@ -2122,7 +2160,9 @@ private fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>, publi
                 .put("loading_type", d.loadingType)
                 .put("price_mode", d.priceMode)
                 .put("freight_amount", d.freightAmount)
-                .put("description", d.description))
+                .put("description", d.description)
+                .put("destination_latitude", d.destinationLatitude ?: JSONObject.NULL)
+                .put("destination_longitude", d.destinationLongitude ?: JSONObject.NULL))
         }
         val body = JSONObject()
             .put("p_items", items)
