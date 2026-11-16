@@ -28,7 +28,7 @@ private const val CHAT_ROOM_KEY = "sb_publishable_rcJe7tZqCkHPgnAXZffzUg_f9ixVbw
 private data class PublicRoomMessage(val id: String, val senderId: String, val body: String, val createdAt: String, val pinned: Boolean)
 
 @Composable
-internal fun ChatRoomScreen(accessToken: String, onClose: () -> Unit) {
+internal fun ChatRoomScreen(accessToken: String, onClose: () -> Unit, initialRoomId: String? = null) {
     val scope = rememberCoroutineScope()
     val userId = remember(accessToken) {
         runCatching {
@@ -39,6 +39,7 @@ internal fun ChatRoomScreen(accessToken: String, onClose: () -> Unit) {
     }
     var roomId by remember { mutableStateOf("") }
     var roomTitle by remember { mutableStateOf("اتاق گفتگوی عمومی") }
+    var roomType by remember { mutableStateOf("public") }
     var messages by remember { mutableStateOf<List<PublicRoomMessage>>(emptyList()) }
     var draft by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("در حال اتصال به اتاق گفتگو...") }
@@ -60,13 +61,14 @@ internal fun ChatRoomScreen(accessToken: String, onClose: () -> Unit) {
         }
         busy = true
         scope.launch {
-            val result = withContext(Dispatchers.IO) { fetchPublicRoom(accessToken) }
+            val result = withContext(Dispatchers.IO) { fetchChatRoom(accessToken, initialRoomId) }
             roomId = result.roomId
-            roomTitle = result.title.ifBlank { "اتاق گفتگوی عمومی" }
+            roomTitle = result.title.ifBlank { if (initialRoomId.isNullOrBlank()) "اتاق گفتگوی عمومی" else "گفتگوی خصوصی" }
+            roomType = result.roomType
             canSend = if (result.roomId.isNotBlank() && result.error == null) {
-                withContext(Dispatchers.IO) { canUserSendPublicRoomMessage(accessToken, userId, result.roomId) }
+                withContext(Dispatchers.IO) { canUserSendChatRoomMessage(accessToken, userId, result.roomId, result.roomType) }
             } else false
-            status = result.error ?: if (roomId.isBlank()) "اتاق عمومی هنوز توسط مدیر ارشد ایجاد نشده است." else ""
+            status = result.error ?: if (roomId.isBlank()) "اتاق گفتگو پیدا نشد یا دسترسی مشاهده آن را ندارید." else ""
             busy = false
             if (roomId.isNotBlank()) loadMessages()
         }
@@ -86,7 +88,7 @@ internal fun ChatRoomScreen(accessToken: String, onClose: () -> Unit) {
         }
     }
 
-    LaunchedEffect(accessToken) { loadRoom() }
+    LaunchedEffect(accessToken, initialRoomId) { loadRoom() }
     LaunchedEffect(roomId, accessToken) {
         if (roomId.isBlank()) return@LaunchedEffect
         while (true) {
@@ -102,7 +104,7 @@ internal fun ChatRoomScreen(accessToken: String, onClose: () -> Unit) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(roomTitle, style = MaterialTheme.typography.titleLarge)
-                    Text("گفتگوی عمومی شرکت‌ها و مدیران", style = MaterialTheme.typography.bodySmall)
+                    Text(if (roomType == "private") "گفتگوی خصوصی اعضای مجاز" else "گفتگوی عمومی شرکت‌ها و مدیران", style = MaterialTheme.typography.bodySmall)
                 }
                 TextButton(onClick = onClose) { Text("برگشت") }
             }
@@ -136,24 +138,25 @@ internal fun ChatRoomScreen(accessToken: String, onClose: () -> Unit) {
     }
 }
 
-private data class PublicRoomResult(val roomId: String, val title: String, val canSend: Boolean, val error: String?)
+private data class PublicRoomResult(val roomId: String, val title: String, val roomType: String, val error: String?)
 
-private fun fetchPublicRoom(accessToken: String): PublicRoomResult {
+private fun fetchChatRoom(accessToken: String, requestedRoomId: String?): PublicRoomResult {
     var c: HttpURLConnection? = null
     return try {
-        c = (URL("$CHAT_ROOM_URL/rest/v1/chat_rooms?select=id,title,is_locked&room_type=eq.public&order=created_at.asc&limit=1").openConnection() as HttpURLConnection).apply {
+        val filter = if (requestedRoomId.isNullOrBlank()) "room_type=eq.public&order=created_at.asc&limit=1" else "id=eq." + URLEncoder.encode(requestedRoomId, "UTF-8") + "&limit=1"
+        c = (URL("$CHAT_ROOM_URL/rest/v1/chat_rooms?select=id,title,is_locked,room_type&" + filter).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"; connectTimeout = 15000; readTimeout = 20000
             setRequestProperty("apikey", CHAT_ROOM_KEY); setRequestProperty("Authorization", "Bearer $accessToken"); setRequestProperty("Accept", "application/json")
         }
         val code = c.responseCode
         val raw = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
-        if (code !in 200..299) return PublicRoomResult("", "", false, "دریافت اتاق توسط مجوزهای امنیتی رد شد (کد $code).")
+        if (code !in 200..299) return PublicRoomResult("", "", "public", "دریافت اتاق توسط سیاست امنیتی رد شد (کد $code).")
         val rows = JSONArray(raw)
-        if (rows.length() == 0) return PublicRoomResult("", "", false, null)
+        if (rows.length() == 0) return PublicRoomResult("", "", "public", null)
         val room = rows.getJSONObject(0)
         val locked = room.optBoolean("is_locked", false)
-        PublicRoomResult(room.optString("id"), room.optString("title"), !locked, if (locked) "اتاق گفتگو موقتاً توسط مدیر قفل شده است." else null)
-    } catch (_: Exception) { PublicRoomResult("", "", false, "ارتباط با اتاق گفتگو برقرار نشد؛ اینترنت را بررسی کنید.") }
+        PublicRoomResult(room.optString("id"), room.optString("title"), room.optString("room_type", "public"), if (locked) "اتاق گفتگو موقتاً توسط مدیر قفل شده است." else null)
+    } catch (_: Exception) { PublicRoomResult("", "", "public", "ارتباط با اتاق گفتگو برقرار نشد؛ اینترنت را بررسی کنید.") }
     finally { c?.disconnect() }
 }
 
@@ -178,7 +181,7 @@ private fun fetchPublicRoomMessages(accessToken: String, roomId: String): Pair<S
 }
 
 
-private fun canUserSendPublicRoomMessage(accessToken: String, userId: String, roomId: String): Boolean {
+private fun canUserSendChatRoomMessage(accessToken: String, userId: String, roomId: String, roomType: String): Boolean {
     if (accessToken.isBlank() || userId.isBlank() || roomId.isBlank()) return false
     fun get(path: String): JSONArray? {
         var c: HttpURLConnection? = null
@@ -195,6 +198,12 @@ private fun canUserSendPublicRoomMessage(accessToken: String, userId: String, ro
     }
     val encodedUser = URLEncoder.encode(userId, "UTF-8")
     val encodedRoom = URLEncoder.encode(roomId, "UTF-8")
+    if (roomType == "private") {
+        val membership = get("chat_room_members?select=can_read,can_send&room_id=eq.$encodedRoom&user_id=eq.$encodedUser&limit=1")
+        return membership != null && membership.length() > 0 &&
+            membership.getJSONObject(0).optBoolean("can_read") &&
+            membership.getJSONObject(0).optBoolean("can_send")
+    }
     val companies = get("companies?select=status&id=eq.$encodedUser&limit=1")
     if (companies != null && companies.length() > 0) {
         if (companies.getJSONObject(0).optString("status") != "approved") return false
