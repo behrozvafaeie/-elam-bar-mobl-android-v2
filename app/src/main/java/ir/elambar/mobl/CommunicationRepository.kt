@@ -37,8 +37,16 @@ internal class CommunicationRepository(
     private val supabaseUrl: String = "https://sckcxtceybwtiecyxqsy.supabase.co",
     private val publishableKey: String = "sb_publishable_rcJe7tZqCkHPgnAXZffzUg_f9ixVbwg"
 ) {
-    fun conversationsFor(userId: String): Pair<String?, List<ChatConversation>> {
+    fun conversationsFor(userId: String, isSuperAdmin: Boolean = false): Pair<String?, List<ChatConversation>> {
         if (accessToken.isBlank() || userId.isBlank()) return "نشست معتبر نیست." to emptyList()
+        if (isSuperAdmin) {
+            val (code, body) = request(
+                "GET",
+                "conversations?select=id,load_id,company_id,driver_id,last_message_at&order=last_message_at.desc.nullslast&limit=100"
+            )
+            if (code !in 200..299) return "دریافت گفتگوها برای مدیر ارشد توسط سیاست امنیتی سامانه رد شد." to emptyList()
+            return parseConversations(listOf(body))
+        }
         val companyRows = request(
             "GET",
             "conversations?select=id,load_id,company_id,driver_id,last_message_at&company_id=eq.${enc(userId)}&order=last_message_at.desc.nullslast&limit=100"
@@ -50,9 +58,13 @@ internal class CommunicationRepository(
         if (companyRows.first !in 200..299 || driverRows.first !in 200..299) {
             return "دریافت گفتگوها توسط سیاست امنیتی سامانه رد شد." to emptyList()
         }
-        return runCatching {
+        return parseConversations(listOf(companyRows.second, driverRows.second))
+    }
+
+    private fun parseConversations(rawResponses: List<String>): Pair<String?, List<ChatConversation>> =
+        runCatching {
             val combined = linkedMapOf<String, ChatConversation>()
-            listOf(companyRows.second, driverRows.second).forEach { raw ->
+            rawResponses.forEach { raw ->
                 val rows = JSONArray(raw)
                 for (i in 0 until rows.length()) {
                     val row = rows.getJSONObject(i)
@@ -66,7 +78,6 @@ internal class CommunicationRepository(
             }
             null to combined.values.sortedByDescending { it.lastMessageAt }
         }.getOrElse { "پاسخ گفتگوها قابل خواندن نیست." to emptyList() }
-    }
 
     fun messages(conversationId: String): Pair<String?, List<ChatMessage>> {
         if (accessToken.isBlank() || conversationId.isBlank()) return "نشست یا شناسه گفتگو معتبر نیست." to emptyList()
