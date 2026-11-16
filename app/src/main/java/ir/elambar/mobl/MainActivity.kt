@@ -128,6 +128,40 @@ private fun VehicleTypeDropdown(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LoadChoiceDropdown(
+    label: String,
+    value: String,
+    options: List<String>,
+    onValueChange: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier.fillMaxWidth().menuAnchor()
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option) },
+                    onClick = { onValueChange(option); expanded = false }
+                )
+            }
+        }
+    }
+}
+
 private enum class UserRole(val label: String) {
     DRIVER("راننده"),
     COMPANY("شرکت باربری"),
@@ -781,16 +815,20 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     Text("اعلام بار به نام مدیریت سامانه", style = MaterialTheme.typography.titleMedium)
                                     Text("ثبت این بار با مجوز مدیر ارشد و بدون انتساب به شرکت انجام می‌شود.", style = MaterialTheme.typography.bodySmall)
                                     OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("مقصد از تهران") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                                    Text("نوع بار")
-                                    listOf("مبل", "اثاث منزل", "سرویس خواب", "سایر موارد").forEach { cargo ->
-                                        FilterChip(selected = loadCargoType == cargo, onClick = { loadCargoType = cargo }, label = { Text(cargo) })
-                                    }
+                                    LoadChoiceDropdown(
+                                        label = "نوع بار",
+                                        value = loadCargoType,
+                                        options = listOf("مبل", "اثاث منزل", "سرویس خواب", "سایر موارد"),
+                                        onValueChange = { loadCargoType = it }
+                                    )
                                     Text("نوع خودرو")
                                     VehicleTypeDropdown(value = loadVehicleType, onValueChange = { loadVehicleType = it }, modifier = Modifier.fillMaxWidth())
-                                    Text("نوع بارگیری")
-                                    listOf("دربست","روباری","نیم بار").forEach { v ->
-                                        FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
-                                    }
+                                    LoadChoiceDropdown(
+                                        label = "مدل بار",
+                                        value = loadLoadingType,
+                                        options = listOf("دربست", "روباری", "نیم بار"),
+                                        onValueChange = { loadLoadingType = it }
+                                    )
                                     Text("نحوه تعیین کرایه")
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
@@ -1091,10 +1129,12 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 if (companyLoadPanelExpanded) {
                                 Text("اعلام بار | ثبت گروهی از مبدأ تهران", style = MaterialTheme.typography.titleMedium)
                                 OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                                Text("نوع بار")
-                                    listOf("مبل", "اثاث منزل", "سرویس خواب", "سایر موارد").forEach { cargo ->
-                                        FilterChip(selected = loadCargoType == cargo, onClick = { loadCargoType = cargo }, label = { Text(cargo) })
-                                    }
+                                LoadChoiceDropdown(
+                                        label = "نوع بار",
+                                        value = loadCargoType,
+                                        options = listOf("مبل", "اثاث منزل", "سرویس خواب", "سایر موارد"),
+                                        onValueChange = { loadCargoType = it }
+                                    )
                                 Text("نوع خودرو")
                                 VehicleTypeDropdown(value = loadVehicleType, onValueChange = { loadVehicleType = it }, modifier = Modifier.fillMaxWidth())
                                 Text("نوع بارگیری")
