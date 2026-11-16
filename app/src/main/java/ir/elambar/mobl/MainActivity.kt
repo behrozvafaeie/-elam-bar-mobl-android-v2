@@ -241,6 +241,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var soundEnabled by remember { mutableStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getBoolean("sound", true)) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var selectedPanel by remember { mutableStateOf<String?>(null) }
+    var loadPanelExpanded by remember { mutableStateOf(true) }
     var settingsExpanded by remember { mutableStateOf(false) }
     var clockNowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var serverTimeOffsetMillis by remember { mutableLongStateOf(0L) }
@@ -326,6 +327,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         ChatRoomScreen(
             accessToken = if (adminLoggedIn) adminAccessToken else userAccessToken,
             initialRoomId = activeChatRoomId,
+            canAttemptPublicSend = adminLoggedIn || (userLoggedIn && role == UserRole.COMPANY && userStatus == "approved"),
             onClose = { showChatRoom = false; activeChatRoomId = null }
         )
     }
@@ -716,6 +718,26 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     Text("این بخش مربوط به تنظیمات سراسری سامانه است و تغییرات آن باید برای همه شرکت‌ها، رانندگان و مدیران اعمال شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                                 }
                                 if (selectedPanel == "مدیریت بارها") {
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        onClick = { loadPanelExpanded = !loadPanelExpanded },
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(14.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text("پنل اعلام بار", style = MaterialTheme.typography.titleMedium)
+                                                Text(if (loadPanelExpanded) "برای جمع‌کردن پنل لمس کنید" else "برای بازکردن فرم ثبت بار لمس کنید", style = MaterialTheme.typography.bodySmall)
+                                            }
+                                            Icon(
+                                                imageVector = if (loadPanelExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                                contentDescription = if (loadPanelExpanded) "بستن پنل اعلام بار" else "بازکردن پنل اعلام بار"
+                                            )
+                                        }
+                                    }
+                                    if (loadPanelExpanded) {
                                     Text("اعلام بار به نام مدیریت سامانه", style = MaterialTheme.typography.titleMedium)
                                     Text("ثبت این بار با مجوز مدیر ارشد و بدون انتساب به شرکت انجام می‌شود.", style = MaterialTheme.typography.bodySmall)
                                     OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("مقصد از تهران") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -774,6 +796,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     }
                                     if (adminActionMessage.isNotBlank()) Text(adminActionMessage, color = MaterialTheme.colorScheme.secondary)
                                     HorizontalDivider()
+                                    }
                                 }
                                 if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها" || selectedPanel == "مدیریت مدارک") {
                                     adminRecords.forEach { record ->
