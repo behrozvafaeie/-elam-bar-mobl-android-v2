@@ -990,13 +990,13 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 if (loadDrafts.isNotEmpty()) {
                                     Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
                                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                                            Text("۴. فهرست آماده انتشار (\${loadDrafts.size} بار)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                            Text("۴. فهرست آماده انتشار (${loadDrafts.size} بار)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
                                             loadDrafts.forEachIndexed { index, draft ->
                                                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                                                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                                        Text("\${index + 1}. تهران ← \${draft.destination}", style = MaterialTheme.typography.titleSmall)
-                                                        Text("\${draft.cargoType} | \${draft.vehicleType} | \${draft.loadingType}", style = MaterialTheme.typography.bodySmall)
-                                                        Text(if (draft.priceMode == "negotiable") "کرایه: توافقی" else "کرایه: \${draft.freightAmount} تومان", style = MaterialTheme.typography.bodySmall)
+                                                        Text("${index + 1}. تهران ← ${draft.destination}", style = MaterialTheme.typography.titleSmall)
+                                                        Text("${draft.cargoType} | ${draft.vehicleType} | ${draft.loadingType}", style = MaterialTheme.typography.bodySmall)
+                                                        Text(if (draft.priceMode == "negotiable") "کرایه: توافقی" else "کرایه: ${draft.freightAmount} تومان", style = MaterialTheme.typography.bodySmall)
                                                         TextButton(onClick = { loadDrafts.removeAt(index) }) { Text("حذف این بار") }
                                                     }
                                                 }
