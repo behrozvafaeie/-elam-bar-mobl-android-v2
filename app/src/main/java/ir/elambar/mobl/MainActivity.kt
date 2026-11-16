@@ -169,7 +169,7 @@ private enum class UserRole(val label: String) {
 }
 
 private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "", val role: String = "")
-private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "")
+private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "", val username: String = "", val mobile: String = "")
 private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val priceMode: String, val freightAmount: String, val description: String)
 private data class DriverLoad(val id: String, val destination: String, val cargoType: String, val vehicleType: String, val freightAmount: String, val description: String, val loadingType: String, val createdAt: String)
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
@@ -1427,8 +1427,6 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                             profilePhotoUrl = result.photoUrl
                                             profileUsername = result.username.ifBlank { username }
                                             profileMobile = result.mobile.ifBlank { mobile }
-                                            profileUsername = result.username.ifBlank { username }
-                                            profileMobile = result.mobile.ifBlank { mobile }
                                             DeviceSessionStore.save(context, result.refreshToken, role.name)
                                             if (soundEnabled) playAppTone()
                                         }
@@ -1452,6 +1450,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                             userStatus = result.status
                                             userAccessToken = result.accessToken
                                             profilePhotoUrl = result.photoUrl
+                                            profileUsername = result.username.ifBlank { username }
+                                            profileMobile = result.mobile.ifBlank { mobile }
                                             DeviceSessionStore.save(context, result.refreshToken, role.name)
                                         }
                                     }
@@ -1729,7 +1729,7 @@ private fun restoreDeviceSession(refreshToken: String, role: UserRole): UserLogi
         val access=json.optString("access_token"); val fresh=json.optString("refresh_token"); val id=user.optString("id")
         if(access.isBlank()||fresh.isBlank()||id.isBlank()) return UserLoginResult(false,"نشست جدید ناقص است.")
         val table=if(role==UserRole.DRIVER)"drivers" else "companies"
-        val select=if(role==UserRole.DRIVER)"status,first_name,last_name,full_name,profile_photo_path" else "status,first_name,last_name,company_name,manager_name,profile_photo_path"
+        val select=if(role==UserRole.DRIVER)"status,first_name,last_name,full_name,profile_photo_path,mobile" else "status,first_name,last_name,company_name,manager_name,profile_photo_path,mobile"
         profile=(URL(SUPABASE_URL + "/rest/v1/" + table + "?select=" + select + "&id=eq." + id + "&limit=1").openConnection() as HttpURLConnection).apply{
             requestMethod="GET";connectTimeout=15000;readTimeout=15000
             setRequestProperty("apikey",SUPABASE_PUBLISHABLE_KEY);setRequestProperty("Authorization","Bearer " + access)
@@ -1741,7 +1741,7 @@ private fun restoreDeviceSession(refreshToken: String, role: UserRole): UserLogi
         val p=rows.getJSONObject(0);val status=p.optString("status")
         if(status !in listOf("pending","approved"))return UserLoginResult(false,"دسترسی حساب فعال نیست.")
         val name=if(role==UserRole.COMPANY)p.optString("company_name").ifBlank{p.optString("first_name")+" "+p.optString("last_name")} else (p.optString("first_name")+" "+p.optString("last_name")).trim()
-        UserLoginResult(true,"نشست قبلی بازیابی شد.",name,status,access,fresh,profilePhotoPublicUrl(p.optString("profile_photo_path")))
+        UserLoginResult(true,"نشست قبلی بازیابی شد.",name,status,access,fresh,profilePhotoPublicUrl(p.optString("profile_photo_path")),user.optJSONObject("user_metadata")?.optString("username").orEmpty(),p.optString("mobile"))
     } catch (_:Exception) { UserLoginResult(false,"ارتباط با سامانه برقرار نشد.") }
     finally { auth?.disconnect(); profile?.disconnect() }
 }
@@ -2053,7 +2053,7 @@ private fun authenticateUser(username: String, password: String, role: UserRole)
         if (userId.isBlank() || accessToken.isBlank() || refreshToken.isBlank()) return UserLoginResult(false, "اطلاعات نشست ورود ناقص است.")
 
         val table = if (role == UserRole.DRIVER) "drivers" else "companies"
-        val select = if (role == UserRole.DRIVER) "status,first_name,last_name,full_name" else "status,first_name,last_name,company_name,manager_name"
+        val select = if (role == UserRole.DRIVER) "status,first_name,last_name,full_name,mobile" else "status,first_name,last_name,company_name,manager_name,mobile"
         val profileUrl = "$SUPABASE_URL/rest/v1/$table?select=$select&id=eq.$userId&limit=1"
         profileConnection = (URL(profileUrl).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
@@ -2088,7 +2088,9 @@ private fun authenticateUser(username: String, password: String, role: UserRole)
                 displayName = displayName,
                 status = status,
                 accessToken = accessToken,
-                refreshToken = refreshToken
+                refreshToken = refreshToken,
+                username = username.trim().lowercase(),
+                mobile = profile.optString("mobile")
             )
             else -> UserLoginResult(false, "وضعیت حساب در سامانه معتبر نیست.")
         }
