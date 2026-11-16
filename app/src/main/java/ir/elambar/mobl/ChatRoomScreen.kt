@@ -69,8 +69,12 @@ internal fun ChatRoomScreen(accessToken: String, onClose: () -> Unit, initialRoo
                 withContext(Dispatchers.IO) { canUserSendChatRoomMessage(accessToken, userId, result.roomId, result.roomType) }
             } else false
             status = result.error ?: if (roomId.isBlank()) "اتاق گفتگو پیدا نشد یا دسترسی مشاهده آن را ندارید." else ""
+            if (result.roomId.isNotBlank()) {
+                val initialMessages = withContext(Dispatchers.IO) { fetchPublicRoomMessages(accessToken, result.roomId) }
+                if (initialMessages.first == null) messages = initialMessages.second
+                else status = initialMessages.first.orEmpty()
+            }
             busy = false
-            if (roomId.isNotBlank()) loadMessages()
         }
     }
     fun sendMessage() {
