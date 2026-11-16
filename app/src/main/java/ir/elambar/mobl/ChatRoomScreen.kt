@@ -28,7 +28,7 @@ private const val CHAT_ROOM_KEY = "sb_publishable_rcJe7tZqCkHPgnAXZffzUg_f9ixVbw
 private data class PublicRoomMessage(val id: String, val senderId: String, val body: String, val createdAt: String, val pinned: Boolean)
 
 @Composable
-internal fun ChatRoomScreen(accessToken: String, onClose: () -> Unit, initialRoomId: String? = null) {
+internal fun ChatRoomScreen(accessToken: String, onClose: () -> Unit, initialRoomId: String? = null, canAttemptPublicSend: Boolean = false) {
     val scope = rememberCoroutineScope()
     val userId = remember(accessToken) {
         runCatching {
@@ -66,7 +66,7 @@ internal fun ChatRoomScreen(accessToken: String, onClose: () -> Unit, initialRoo
             roomTitle = result.title.ifBlank { if (initialRoomId.isNullOrBlank()) "اتاق گفتگوی عمومی" else "گفتگوی خصوصی" }
             roomType = result.roomType
             canSend = if (result.roomId.isNotBlank() && result.error == null) {
-                withContext(Dispatchers.IO) { canUserSendChatRoomMessage(accessToken, userId, result.roomId, result.roomType) }
+                withContext(Dispatchers.IO) { canUserSendChatRoomMessage(accessToken, userId, result.roomId, result.roomType, canAttemptPublicSend) }
             } else false
             status = result.error ?: if (roomId.isBlank()) "اتاق گفتگو پیدا نشد یا دسترسی مشاهده آن را ندارید." else ""
             if (result.roomId.isNotBlank()) {
@@ -185,7 +185,7 @@ private fun fetchPublicRoomMessages(accessToken: String, roomId: String): Pair<S
 }
 
 
-private fun canUserSendChatRoomMessage(accessToken: String, userId: String, roomId: String, roomType: String): Boolean {
+private fun canUserSendChatRoomMessage(accessToken: String, userId: String, roomId: String, roomType: String, canAttemptPublicSend: Boolean): Boolean {
     if (accessToken.isBlank() || userId.isBlank() || roomId.isBlank()) return false
     fun get(path: String): JSONArray? {
         var c: HttpURLConnection? = null
@@ -208,27 +208,10 @@ private fun canUserSendChatRoomMessage(accessToken: String, userId: String, room
             membership.getJSONObject(0).optBoolean("can_read") &&
             membership.getJSONObject(0).optBoolean("can_send")
     }
-    val companies = get("companies?select=status&id=eq.$encodedUser&limit=1")
-    if (companies != null && companies.length() > 0) {
-        if (companies.getJSONObject(0).optString("status") != "approved") return false
-        val settings = get("chat_room_company_settings?select=is_muted,read_only&room_id=eq.$encodedRoom&company_id=eq.$encodedUser&limit=1")
-        if (settings != null && settings.length() > 0) {
-            val row = settings.getJSONObject(0)
-            if (row.optBoolean("is_muted") || row.optBoolean("read_only")) return false
-        }
-        return true
-    }
-    val admins = get("admin_users?select=role,is_blocked,access_expires_at&user_id=eq.$encodedUser&limit=1")
-    if (admins != null && admins.length() > 0) {
-        val admin = admins.getJSONObject(0)
-        if (admin.optBoolean("is_blocked")) return false
-        val role = admin.optString("role")
-        if (role == "super_admin") return true
-        val permissions = get("admin_section_permissions?select=can_create&admin_user_id=eq.$encodedUser&section_key=eq.chat&limit=1")
-        return permissions != null && permissions.length() > 0 && permissions.getJSONObject(0).optBoolean("can_create")
-    }
-    // Drivers remain read-only in the public room unless server policy grants a different membership.
-    return false
+    // Public-room visibility and send authorization are separate. Show the composer for
+    // approved companies/admins; PostgreSQL RLS remains the final authority for mute/read-only
+    // and manager permissions, so the app must not rely on a client-side table read.
+    return canAttemptPublicSend
 }
 
 private fun sendPublicRoomMessage(accessToken: String, roomId: String, userId: String, body: String): String {
