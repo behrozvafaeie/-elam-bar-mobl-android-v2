@@ -66,7 +66,15 @@ class MainActivity : ComponentActivity() {
         setContent {
             var palette by remember { mutableIntStateOf(getSharedPreferences("elambar_ui", MODE_PRIVATE).getInt("palette", 0).coerceIn(0, 4)) }
             val schemes = listOf(
-                lightColorScheme(),
+                lightColorScheme(
+                    primary = androidx.compose.ui.graphics.Color(0xFF667C32),
+                    onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
+                    secondary = androidx.compose.ui.graphics.Color(0xFF9A8F45),
+                    primaryContainer = androidx.compose.ui.graphics.Color(0xFFE7EDCF),
+                    onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF27320F),
+                    secondaryContainer = androidx.compose.ui.graphics.Color(0xFFF0EBCB),
+                    surface = androidx.compose.ui.graphics.Color(0xFFFAFAF2)
+                ),
                 lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF176B5B), secondary = androidx.compose.ui.graphics.Color(0xFFB06B32), primaryContainer = androidx.compose.ui.graphics.Color(0xFFD8EFE7)),
                 lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF244B91), secondary = androidx.compose.ui.graphics.Color(0xFF9A5E9E), primaryContainer = androidx.compose.ui.graphics.Color(0xFFDCE6FA)),
                 darkColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF8ECDBA), secondary = androidx.compose.ui.graphics.Color(0xFFFFC18B))
@@ -130,7 +138,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var driverSearchLoading by remember { mutableStateOf(false) }
     var loadDestination by remember { mutableStateOf("") }
     var loadCargoType by remember { mutableStateOf("مبل") }
-    var loadVehicleType by remember { mutableStateOf("وانت") }
+    var loadVehicleType by remember { mutableStateOf("مبلی ۶ متری") }
     var loadLoadingType by remember { mutableStateOf("روباری") }
     var loadFreightAmount by remember { mutableStateOf("") }
     var loadPriceMode by remember { mutableStateOf("fixed") }
@@ -906,61 +914,109 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         "approved" -> {
                             Text("حساب شما تأیید شده است.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
                             if (role == UserRole.COMPANY) {
-                                Text("اعلام بار | ثبت گروهی از مبدأ تهران", style = MaterialTheme.typography.titleMedium)
-                                OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                                Text("نوع بار")
-                                    listOf("مبل", "اثاث منزل", "سرویس خواب", "سایر موارد").forEach { cargo ->
-                                        FilterChip(selected = loadCargoType == cargo, onClick = { loadCargoType = cargo }, label = { Text(cargo) })
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                    shape = MaterialTheme.shapes.extraLarge
+                                ) {
+                                    Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                        Text("ثبت و اعلام بار جدید", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                        Text("فرم گروهی شرکت‌ها | مبدأ ثابت: تهران", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                        Text("مقصدهای مختلف را یکی‌یکی به فهرست اضافه کنید و در پایان همه را با هم منتشر کنید.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                                     }
-                                Text("نوع خودرو")
-                                listOf("مبلی ۶ متری","روباری کار","وانت","مبلی").forEach { v ->
-                                    FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
                                 }
-                                Text("نوع بارگیری")
-                                listOf("دربست","روباری","نیم بار").forEach { v ->
-                                    FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
+                                Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge) {
+                                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                            Text("۱. مسیر بار", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                                            AssistChip(onClick = {}, label = { Text("تهران") }, leadingIcon = { Icon(Icons.Filled.LocalShipping, contentDescription = null) })
+                                        }
+                                        OutlinedTextField(loadDestination, { loadDestination = it.take(80) }, label = { Text("شهر یا مقصد بار") }, placeholder = { Text("مثلاً: اصفهان") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                        Text("مبدأ بار همیشه تهران است و قابل تغییر نیست.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                                    }
                                 }
-                                Text("نحوه تعیین کرایه")
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
-                                        FilterChip(selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
-                                    }
-                                    if (loadPriceMode == "fixed") OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("مبلغ کرایه (تومان)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                                OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
-                                OutlinedButton(onClick = {
-                                    if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || (loadPriceMode == "fixed" && (loadFreightAmount.isBlank() || loadFreightAmount.toLongOrNull() == null || loadFreightAmount.toLong() <= 0))) {
-                                        loadActionMessage = "مقصد، نوع بار و کرایه را کامل کنید."
-                                    } else {
-                                        loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", loadDescription.trim()))
-                                        loadDestination = ""
-                                        loadDescription = ""
-                                        loadActionMessage = "بار به فهرست گروهی اضافه شد."
-                                    }
-                                }, modifier = Modifier.fillMaxWidth()) { Text("افزودن بار به فهرست") }
-                                if (loadDrafts.isNotEmpty()) {
-                                    Text("بارهای آماده انتشار: ${loadDrafts.size}", style = MaterialTheme.typography.titleSmall)
-                                    loadDrafts.forEachIndexed { index, draft ->
-                                        Card(Modifier.fillMaxWidth()) {
-                                            Column(Modifier.padding(horizontal = 9.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                                Text("${index + 1}. تهران ← ${draft.destination}")
-                                                Text("${draft.cargoType} | ${draft.vehicleType} | ${draft.loadingType}")
-                                                Text(if (draft.priceMode == "negotiable") "کرایه: توافقی" else "کرایه: ${draft.freightAmount} تومان")
-                                                TextButton(onClick = { loadDrafts.removeAt(index) }) { Text("حذف از فهرست") }
+                                Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge) {
+                                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Text("۲. مشخصات بار و خودرو", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                                        Text("نوع بار")
+                                        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                            listOf("مبل", "اثاث منزل", "سرویس خواب", "سایر موارد").forEach { cargo ->
+                                                FilterChip(selected = loadCargoType == cargo, onClick = { loadCargoType = cargo }, label = { Text(cargo) })
+                                            }
+                                        }
+                                        HorizontalDivider()
+                                        Text("نوع خودرو")
+                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            listOf("مبلی ۶ متری", "روباری کار", "وانت", "مبلی").forEach { v ->
+                                                FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) }, modifier = Modifier.fillMaxWidth())
+                                            }
+                                        }
+                                        HorizontalDivider()
+                                        Text("نوع بارگیری")
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            listOf("دربست", "روباری", "نیم بار").forEach { v ->
+                                                FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
                                             }
                                         }
                                     }
-                                    Button(enabled = !loadPublishing, onClick = {
-                                        loadPublishing = true
-                                        loadActionMessage = "در حال ثبت بارها..."
-                                        scope.launch {
-                                            val result = withContext(Dispatchers.IO) { publishLoadBatch(userAccessToken, loadDrafts.toList()) }
-                                            loadPublishing = false
-                                            loadActionMessage = result
-                                            if (result.startsWith("ثبت شد")) loadDrafts.clear()
-                                        }
-                                    }, modifier = Modifier.fillMaxWidth()) { Text(if (loadPublishing) "در حال ثبت..." else "انتشار همه بارهای فهرست") }
                                 }
-                                if (loadActionMessage.isNotBlank()) Text(loadActionMessage, color = MaterialTheme.colorScheme.secondary)
+                                Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge) {
+                                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Text("۳. کرایه و توضیحات", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("کرایه مشخص") })
+                                            FilterChip(selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
+                                        }
+                                        if (loadPriceMode == "fixed") OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("مبلغ کرایه (تومان)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                        OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات بار (اختیاری)") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+                                    }
+                                }
+                                Button(
+                                    onClick = {
+                                        if (loadDestination.trim().length < 2 || (loadPriceMode == "fixed" && (loadFreightAmount.isBlank() || loadFreightAmount.toLongOrNull() == null || loadFreightAmount.toLong() <= 0))) {
+                                            loadActionMessage = "مقصد و مبلغ معتبر کرایه را کامل کنید."
+                                        } else if (loadDrafts.any { it.destination.equals(loadDestination.trim(), ignoreCase = true) }) {
+                                            loadActionMessage = "این مقصد قبلاً به فهرست اضافه شده است."
+                                        } else {
+                                            loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType, loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", loadDescription.trim()))
+                                            loadDestination = ""
+                                            loadDescription = ""
+                                            loadActionMessage = "مقصد به فهرست بارهای آماده اضافه شد."
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                                    shape = MaterialTheme.shapes.large
+                                ) { Text("افزودن مقصد به فهرست", style = MaterialTheme.typography.titleMedium) }
+                                if (loadDrafts.isNotEmpty()) {
+                                    Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                                            Text("۴. فهرست آماده انتشار (\${loadDrafts.size} بار)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                            loadDrafts.forEachIndexed { index, draft ->
+                                                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                                                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                        Text("\${index + 1}. تهران ← \${draft.destination}", style = MaterialTheme.typography.titleSmall)
+                                                        Text("\${draft.cargoType} | \${draft.vehicleType} | \${draft.loadingType}", style = MaterialTheme.typography.bodySmall)
+                                                        Text(if (draft.priceMode == "negotiable") "کرایه: توافقی" else "کرایه: \${draft.freightAmount} تومان", style = MaterialTheme.typography.bodySmall)
+                                                        TextButton(onClick = { loadDrafts.removeAt(index) }) { Text("حذف این بار") }
+                                                    }
+                                                }
+                                            }
+                                            Button(enabled = !loadPublishing, onClick = {
+                                                loadPublishing = true
+                                                loadActionMessage = "در حال انتشار بارها..."
+                                                scope.launch {
+                                                    val result = withContext(Dispatchers.IO) { publishLoadBatch(userAccessToken, loadDrafts.toList()) }
+                                                    loadPublishing = false
+                                                    loadActionMessage = result
+                                                    if (result.startsWith("ثبت شد")) loadDrafts.clear()
+                                                }
+                                            }, modifier = Modifier.fillMaxWidth().height(54.dp)) {
+                                                Text(if (loadPublishing) "در حال انتشار..." else "انتشار همه بارها")
+                                            }
+                                        }
+                                    }
+                                }
+                                if (loadActionMessage.isNotBlank()) Text(loadActionMessage, color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodyMedium)
                                 HorizontalDivider()
                                 Text("بارهای ثبت‌شده شرکت", style = MaterialTheme.typography.titleMedium)
                                 OutlinedButton(enabled = !companyLoadsLoading, onClick = {
