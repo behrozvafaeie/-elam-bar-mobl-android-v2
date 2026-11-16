@@ -155,6 +155,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var showProfile by remember { mutableStateOf(false) }
     var showCommunication by remember { mutableStateOf(false) }
     var showChatRoom by remember { mutableStateOf(false) }
+    var showNotifications by remember { mutableStateOf(false) }
     var selectedDriverDocType by remember { mutableStateOf("کارت هوشمند") }
     var driverDocUploading by remember { mutableStateOf(false) }
     var driverDocMessage by remember { mutableStateOf("") }
@@ -323,6 +324,13 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         )
     }
 
+    if (showNotifications && (adminLoggedIn || userLoggedIn)) {
+        NotificationsScreen(
+            accessToken = if (adminLoggedIn) adminAccessToken else userAccessToken,
+            onClose = { showNotifications = false }
+        )
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -349,6 +357,14 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             label = { Text("پروفایل من") },
                             selected = showProfile,
                             onClick = { showProfile = true; scope.launch { drawerState.close() } },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    if (userLoggedIn || adminLoggedIn) {
+                        NavigationDrawerItem(
+                            label = { Text("اعلان‌ها") },
+                            selected = showNotifications,
+                            onClick = { showNotifications = true; scope.launch { drawerState.close() } },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
