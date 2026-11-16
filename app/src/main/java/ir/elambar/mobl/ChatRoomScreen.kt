@@ -10,6 +10,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -92,7 +94,8 @@ internal fun ChatRoomScreen(accessToken: String, onClose: () -> Unit) {
         }
     }
 
-    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+      Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -127,6 +130,7 @@ internal fun ChatRoomScreen(accessToken: String, onClose: () -> Unit) {
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             TextButton(onClick = { loadRoom() }, enabled = !busy, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("بروزرسانی اتاق") }
         }
+      }
     }
 }
 
