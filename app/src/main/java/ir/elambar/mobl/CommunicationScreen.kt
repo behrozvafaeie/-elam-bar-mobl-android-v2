@@ -182,7 +182,7 @@ internal fun CommunicationScreen(accessToken: String, isSuperAdmin: Boolean = fa
                             }
                         }
                     }
-                    OutlinedTextField(draft, { draft = it.take(4000) }, modifier = Modifier.fillMaxWidth(), label = { Text("متن پیام") }, minLines = 1, maxLines = 4)
+                    OutlinedTextField(draft, { draft = it.take(4000) }, modifier = Modifier.fillMaxWidth().heightIn(min = 132.dp), label = { Text("متن پیام") }, minLines = 4, maxLines = 8)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Button(enabled = !busy && draft.trim().isNotEmpty() && !isRecording, modifier = Modifier.weight(1f), onClick = {
                             val text = draft; val conversation = selected ?: return@Button
