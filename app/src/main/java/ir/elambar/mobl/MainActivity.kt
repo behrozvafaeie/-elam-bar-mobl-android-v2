@@ -244,6 +244,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var selectedPanel by remember { mutableStateOf<String?>(null) }
     var loadPanelExpanded by remember { mutableStateOf(true) }
+    var companyLoadPanelExpanded by remember { mutableStateOf(true) }
     var settingsExpanded by remember { mutableStateOf(false) }
     var clockNowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var serverTimeOffsetMillis by remember { mutableLongStateOf(0L) }
@@ -1032,6 +1033,23 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         "approved" -> {
                             Text("حساب شما تأیید شده است.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
                             if (role == UserRole.COMPANY) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = { companyLoadPanelExpanded = !companyLoadPanelExpanded },
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                                ) {
+                                    Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text("پنل اعلام بار شرکت", style = MaterialTheme.typography.titleMedium)
+                                            Text(if (companyLoadPanelExpanded) "برای جمع‌کردن پنل لمس کنید" else "برای بازکردن فرم ثبت بار لمس کنید", style = MaterialTheme.typography.bodySmall)
+                                        }
+                                        Icon(
+                                            imageVector = if (companyLoadPanelExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                            contentDescription = if (companyLoadPanelExpanded) "بستن پنل اعلام بار" else "بازکردن پنل اعلام بار"
+                                        )
+                                    }
+                                }
+                                if (companyLoadPanelExpanded) {
                                 Text("اعلام بار | ثبت گروهی از مبدأ تهران", style = MaterialTheme.typography.titleMedium)
                                 OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                 Text("نوع بار")
@@ -1098,6 +1116,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 }
                                 Text(companyLoadsText, textAlign = TextAlign.Start)
                                 HorizontalDivider()
+                                }
                                 Text("جست‌وجوی راننده مناسب", style = MaterialTheme.typography.titleMedium)
                                 OutlinedTextField(driverSearchDestination, { driverSearchDestination = it }, label = { Text("مقصد موردنظر") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                 VehicleTypeDropdown(value = driverSearchVehicle, onValueChange = { driverSearchVehicle = it }, modifier = Modifier.fillMaxWidth())
