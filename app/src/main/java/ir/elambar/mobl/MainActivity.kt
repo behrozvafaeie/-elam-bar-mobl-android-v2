@@ -29,6 +29,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
@@ -171,6 +176,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         }
     }
     var soundEnabled by remember { mutableStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getBoolean("sound", true)) }
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    var showSettingsDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val saved = DeviceSessionStore.load(context)
         if (saved != null) {
@@ -218,13 +226,70 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
 
 
     CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl) {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                ModalDrawerSheet {
+                    Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("اعلام بار مبل", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                        Text(if (adminLoggedIn) "مدیر ارشد" else if (userLoggedIn) userDisplayName else "ورود راننده و شرکت")
+                    }
+                    NavigationDrawerItem(
+                        label = { Text("صفحه اصلی") }, selected = true,
+                        onClick = { scope.launch { drawerState.close() } }
+                    )
+                    NavigationDrawerItem(
+                        label = { Text("تنظیمات برنامه") }, selected = false,
+                        onClick = { scope.launch { drawerState.close() }; showSettingsDialog = true }
+                    )
+                    NavigationDrawerItem(
+                        label = { Text("درباره برنامه") }, selected = false,
+                        onClick = { scope.launch { drawerState.close() }; showAboutDialog = true }
+                    )
+                }
+            }
+        ) {
         Scaffold { padding ->
             Column(
                 modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { scope.launch { drawerState.open() } }) { Text("☰  منوی برنامه") }
+                    Spacer(Modifier.weight(1f))
+                    Text("اعلام بار مبل", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                }
+                if (showSettingsDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showSettingsDialog = false },
+                        title = { Text("تنظیمات برنامه") },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text("ظاهر برنامه")
+                                TextButton(onClick = onNextPalette) { Text("تغییر تم فعلی: " + listOf("روشن", "سبز", "آبی", "تیره")[palette]) }
+                                HorizontalDivider()
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("صدای اعلان", modifier = Modifier.weight(1f))
+                                    Switch(checked = soundEnabled, onCheckedChange = {
+                                        soundEnabled = it
+                                        context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putBoolean("sound", it).apply()
+                                    })
+                                }
+                            }
+                        },
+                        confirmButton = { TextButton(onClick = { showSettingsDialog = false }) { Text("بستن") } }
+                    )
+                }
+                if (showAboutDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showAboutDialog = false },
+                        title = { Text("درباره اعلام بار مبل") },
+                        text = { Text("نسخه اندروید در حال توسعه؛ مبدأ بارها تهران است. این نسخه هنوز برای انتشار عملیاتی نهایی تأیید نشده است.") },
+                        confirmButton = { TextButton(onClick = { showAboutDialog = false }) { Text("متوجه شدم") } }
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.extraLarge,
@@ -248,13 +313,6 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             Text("مبدأ بارها: تهران", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary)
                         }
                     }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onNextPalette) { Text(listOf("تم روشن", "تم سبز", "تم آبی", "تم تیره")[palette]) }
-                    TextButton(onClick = {
-                        soundEnabled = !soundEnabled
-                        context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).edit().putBoolean("sound", soundEnabled).apply()
-                    }) { Text(if (soundEnabled) "صدای اعلان روشن" else "صدای اعلان خاموش") }
                 }
                 if (adminLoggedIn) {
                     var selectedPanel by remember { mutableStateOf<String?>(null) }
@@ -678,6 +736,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     }
                 }
             }
+        }
         }
     }
 }
