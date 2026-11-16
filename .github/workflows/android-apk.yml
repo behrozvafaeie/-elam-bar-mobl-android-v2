@@ -96,7 +96,7 @@ jobs:
       - name: Download built APK
         uses: actions/download-artifact@v4
         with:
-          name: elam-bar-mobl-debug-apk
+          name: elam-bar-mobl-independent-apk
           path: artifacts
 
       - name: Install and launch APK on Android emulator
