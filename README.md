@@ -30,11 +30,11 @@
 
 ## ساخت APK
 
-گردش‌کار **Android APK** در GitHub Actions با هر push به شاخه `main` یا با اجرای دستی فعال می‌شود. خروجی آزمایشی با نام `elam-bar-mobl-debug-apk` در بخش Artifacts قرار می‌گیرد.
+گردش‌کار **Android APK** در GitHub Actions با هر push به شاخه `main` یا با اجرای دستی فعال می‌شود. خروجی آزمایشی این شاخه با نام `elam-bar-mobl-independent-apk` در بخش Artifacts قرار می‌گیرد؛ پس از ساخت، آزمون نصب و اجرای شبیه‌ساز نیز باید موفق شود.
 
 مشخصات بسته:
-- Application ID: `ir.elambar.mobl`
-- نسخه این شاخه: `1.0.18` (versionCode: `19`)
+- Application ID: `ir.elambar.mobl.standalone`
+- نسخه این شاخه: `1.0.0` (versionCode: `1`)
 - حداقل Android: نسخه 7.0 (API 24)
 
 ## امنیت
