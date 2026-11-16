@@ -166,6 +166,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var managedAdmins by remember { mutableStateOf<List<AdminAccount>>(emptyList()) }
     var adminNewRole by remember { mutableStateOf("admin") }
     var adminManageBusy by remember { mutableStateOf(false) }
+    var forceLogoutTarget by remember { mutableStateOf<AdminRecord?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
@@ -271,6 +272,26 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         }
     }
 
+
+    if (forceLogoutTarget != null) {
+        val target = forceLogoutTarget!!
+        AlertDialog(
+            onDismissRequest = { forceLogoutTarget = null },
+            title = { Text("خروج اجباری از همه دستگاه‌ها") },
+            text = { Text("آیا می‌خواهید نشست‌های فعال «" + target.title + "» در همه دستگاه‌ها باطل شود؟") },
+            confirmButton = {
+                TextButton(enabled = !adminManageBusy, onClick = {
+                    adminManageBusy = true
+                    scope.launch {
+                        adminActionMessage = withContext(Dispatchers.IO) { forceLogoutMember(adminAccessToken, target.id) }
+                        adminManageBusy = false
+                        forceLogoutTarget = null
+                    }
+                }) { Text("تأیید خروج اجباری") }
+            },
+            dismissButton = { TextButton(onClick = { forceLogoutTarget = null }) { Text("انصراف") } }
+        )
+    }
 
     if (showCommunication && ((userLoggedIn && userStatus == "approved") || (adminLoggedIn && adminRole == "super_admin"))) {
         CommunicationScreen(
@@ -1091,7 +1112,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         }
                         else -> Text("وضعیت حساب: $userStatus", textAlign = TextAlign.Center)
                     }
-                    OutlinedButton(onClick = { userLoggedIn = false; userAccessToken = ""; DeviceSessionStore.clear(context); username = ""; password = ""; loadDrafts.clear(); message = "از حساب خارج شدید." }, modifier = Modifier.fillMaxWidth()) { Text("خروج از حساب") }
+                    Text("ورود شما روی این دستگاه محفوظ می‌ماند؛ خروج فقط با دستور مدیر ارشد اصلی یا غیرفعال‌شدن حساب انجام می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         FilterChip(selected = role == UserRole.DRIVER, onClick = { role = UserRole.DRIVER; register = true; message = "ثبت‌نام راننده" }, label = { Text("راننده") })
@@ -1656,6 +1677,14 @@ private fun setAdminUserRole(accessToken: String, userId: String, role: String):
     val (code, body) = adminRpc(accessToken, "admin_set_role", JSONObject().put("p_target_user_id", userId).put("p_new_role", role))
     return if (code in 200..299) "انجام شد؛ سطح دسترسی مدیر تغییر کرد."
     else "تغییر سطح دسترسی انجام نشد؛ مجوزها را بررسی کنید."
+}
+
+private fun forceLogoutMember(accessToken: String, userId: String): String {
+    val (code, body) = adminRpc(accessToken, "admin_force_logout_member", JSONObject().put("p_target_user_id", userId))
+    return if (code in 200..299) {
+        val count = body.trim().trim(34.toChar()).toIntOrNull()
+        "دستور خروج اجباری ثبت شد؛ نشست‌های فعال باطل شدند" + (count?.let { " (تعداد نشست: $it)." } ?: ".")
+    } else "خروج اجباری انجام نشد؛ فقط مدیر ارشد اصلی مجاز است یا حساب هدف معتبر نیست."
 }
 
 private fun fetchAdminPanelData(accessToken: String, panel: String): String {
