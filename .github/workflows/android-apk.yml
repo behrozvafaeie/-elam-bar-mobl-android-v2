@@ -60,7 +60,7 @@ jobs:
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
           grep -F 'versionCode = 23' app/build.gradle.kts
           grep -F 'versionName = "1.0.22"' app/build.gradle.kts
-          grep -F 'android:label="اعلام بار مبلمان"' app/src/main/AndroidManifest.xml
+          grep -F 'android:label="اعلام بار مبل"' app/src/main/AndroidManifest.xml
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - name: Verify APK was produced
@@ -70,7 +70,7 @@ jobs:
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='23' versionName='1.0.22'"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "application-label:'اعلام بار مبلمان'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "application-label:'اعلام بار مبل'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           sha256sum "$APK"
       - name: Upload APK artifact
