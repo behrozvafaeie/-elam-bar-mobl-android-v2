@@ -117,6 +117,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var showProfile by remember { mutableStateOf(false) }
     var showCommunication by remember { mutableStateOf(false) }
     var showChatRooms by remember { mutableStateOf(false) }
+    var showStories by remember { mutableStateOf(false) }
     var selectedDriverDocType by remember { mutableStateOf("کارت هوشمند") }
     var driverDocUploading by remember { mutableStateOf(false) }
     var driverDocMessage by remember { mutableStateOf("") }
@@ -310,6 +311,13 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
             role = if (adminLoggedIn) adminRole else role.name
         ) { showChatRooms = false }
     }
+    if (showStories && (userLoggedIn || adminLoggedIn)) {
+        StoryScreen(
+            accessToken = if (adminLoggedIn) adminAccessToken else userAccessToken,
+            role = if (adminLoggedIn) adminRole else role.name,
+            isSuperAdmin = adminLoggedIn && adminRole == "super_admin"
+        ) { showStories = false }
+    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -344,7 +352,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         NavigationDrawerItem(
                             label = { Text("پیام‌های بار") },
                             selected = showCommunication,
-                            onClick = { showCommunication = true; showChatRooms = false; scope.launch { drawerState.close() } },
+                            onClick = { showCommunication = true; showChatRooms = false; showStories = false; scope.launch { drawerState.close() } },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -352,7 +360,15 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         NavigationDrawerItem(
                             label = { Text("اتاق عمومی و گفتگوها") },
                             selected = showChatRooms,
-                            onClick = { showChatRooms = true; showCommunication = false; scope.launch { drawerState.close() } },
+                            onClick = { showChatRooms = true; showCommunication = false; showStories = false; scope.launch { drawerState.close() } },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    if (userLoggedIn || adminLoggedIn) {
+                        NavigationDrawerItem(
+                            label = { Text("استوری‌ها") },
+                            selected = showStories,
+                            onClick = { showStories = true; showChatRooms = false; showCommunication = false; scope.launch { drawerState.close() } },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
