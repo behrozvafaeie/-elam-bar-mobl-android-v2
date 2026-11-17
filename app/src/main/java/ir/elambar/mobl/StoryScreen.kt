@@ -76,6 +76,7 @@ internal fun StoryScreen(
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("استوری‌ها", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            TextButton(onClick = { refresh() }, enabled = !busy) { Text("بروزرسانی") }
             TextButton(onClick = onBack) { Text("برگشت") }
         }
         Text("همه کاربران تأییدشده می‌توانند استوری بگذارند. استوری پس از ۲۴ ساعت از نمایش عمومی خارج می‌شود و در آرشیو صاحب آن می‌ماند.")
