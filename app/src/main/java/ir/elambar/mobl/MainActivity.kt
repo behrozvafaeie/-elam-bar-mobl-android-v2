@@ -10,6 +10,7 @@ import coil.compose.AsyncImage
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.content.Context
+import android.content.Intent
 import android.util.Base64
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -95,6 +96,7 @@ private data class UserLoginResult(val success: Boolean, val message: String, va
 private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val priceMode: String, val freightAmount: String, val description: String)
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
 private data class MatchedLoad(val id: String, val origin: String, val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String)
+private data class AcceptedLoadContact(val id: String, val destination: String, val companyName: String, val managerName: String, val mobile: String)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,6 +123,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var matchedLoadsText by remember { mutableStateOf("برای دریافت بارهای متناسب، دکمه بروزرسانی را بزنید.") }
     var matchedLoads by remember { mutableStateOf<List<MatchedLoad>>(emptyList()) }
     var matchedLoadsLoading by remember { mutableStateOf(false) }
+    var acceptedLoadContacts by remember { mutableStateOf<List<AcceptedLoadContact>>(emptyList()) }
+    var acceptedLoadContactsLoading by remember { mutableStateOf(false) }
     var acceptingLoadId by remember { mutableStateOf("") }
     var companyLoadsText by remember { mutableStateOf("برای مشاهده بارهای ثبت‌شده، بروزرسانی را بزنید.") }
     var companyLoadsLoading by remember { mutableStateOf(false) }
@@ -250,8 +254,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     }
 
     // Refresh device sessions before the normal one-hour access-token expiry.
-    LaunchedEffect(userLoggedIn) {
-        if (userLoggedIn) {
+    LaunchedEffect(userLoggedIn, adminLoggedIn) {
+        if (userLoggedIn || adminLoggedIn) {
             while (true) {
                 delay(10 * 60 * 1000L)
                 val saved = DeviceSessionStore.load(context)
@@ -1089,6 +1093,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         val result = withContext(Dispatchers.IO) { fetchMatchedLoadsDetailed(userAccessToken) }
                                         matchedLoadsText = result.first
                                         matchedLoads = result.second
+                                        acceptedLoadContactsLoading = true
+                                        acceptedLoadContacts = withContext(Dispatchers.IO) { fetchAcceptedLoadContacts(userAccessToken) }
+                                        acceptedLoadContactsLoading = false
                                         matchedLoadsLoading = false
                                     }
                                 }, modifier = Modifier.fillMaxWidth()) { Text(if (matchedLoadsLoading) "در حال بروزرسانی..." else "بروزرسانی بارهای قابل دریافت") }
@@ -1107,10 +1114,37 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                     val refreshed = withContext(Dispatchers.IO) { fetchMatchedLoadsDetailed(userAccessToken) }
                                                     matchedLoadsText = accepted + "\n" + refreshed.first
                                                     matchedLoads = refreshed.second
+                                                    acceptedLoadContactsLoading = true
+                                                    acceptedLoadContacts = withContext(Dispatchers.IO) { fetchAcceptedLoadContacts(userAccessToken) }
+                                                    acceptedLoadContactsLoading = false
                                                     acceptingLoadId = ""
                                                 }
                                             }, modifier = Modifier.fillMaxWidth()) {
                                                 Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "گرفتن این بار")
+                                            }
+                                        }
+                                    }
+                                }
+                                HorizontalDivider()
+                                Text("بارهایی که شما گرفته‌اید", style = MaterialTheme.typography.titleMedium)
+                                if (acceptedLoadContactsLoading) {
+                                    CircularProgressIndicator()
+                                } else if (acceptedLoadContacts.isEmpty()) {
+                                    Text("هنوز باری به نام شما ثبت نشده است.", style = MaterialTheme.typography.bodySmall)
+                                } else {
+                                    acceptedLoadContacts.forEach { accepted ->
+                                        Card(Modifier.fillMaxWidth()) {
+                                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                Text("تهران ← ${accepted.destination}", style = MaterialTheme.typography.titleMedium)
+                                                Text("شرکت: ${accepted.companyName}")
+                                                if (accepted.managerName.isNotBlank()) Text("مسئول: ${accepted.managerName}")
+                                                Button(
+                                                    enabled = accepted.mobile.isNotBlank(),
+                                                    onClick = {
+                                                        context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + accepted.mobile)))
+                                                    },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) { Text(if (accepted.mobile.isBlank()) "اطلاعات تماس در دسترس نیست" else "تماس با شرکت") }
                                             }
                                         }
                                     }
@@ -1305,6 +1339,11 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                             userAccessToken = result.accessToken
                                             profilePhotoUrl = result.photoUrl
                                             DeviceSessionStore.save(context, result.refreshToken, role.name)
+                                            if (role == UserRole.DRIVER) {
+                                                acceptedLoadContactsLoading = true
+                                                acceptedLoadContacts = withContext(Dispatchers.IO) { fetchAcceptedLoadContacts(result.accessToken) }
+                                                acceptedLoadContactsLoading = false
+                                            }
                                             if (soundEnabled) playAppTone()
                                         }
                                     }
@@ -1328,6 +1367,11 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                             userAccessToken = result.accessToken
                                             profilePhotoUrl = result.photoUrl
                                             DeviceSessionStore.save(context, result.refreshToken, role.name)
+                                            if (role == UserRole.DRIVER) {
+                                                acceptedLoadContactsLoading = true
+                                                acceptedLoadContacts = withContext(Dispatchers.IO) { fetchAcceptedLoadContacts(result.accessToken) }
+                                                acceptedLoadContactsLoading = false
+                                            }
                                         }
                                     }
                                 }
@@ -2314,6 +2358,62 @@ private fun fetchMatchedLoads(accessToken: String): String {
     }
 }
 
+
+private fun fetchAcceptedLoadContacts(accessToken: String): List<AcceptedLoadContact> {
+    if (accessToken.isBlank()) return emptyList()
+    var connection: HttpURLConnection? = null
+    return try {
+        val payload = accessToken.split(".").getOrNull(1) ?: return emptyList()
+        val decoded = Base64.decode(payload, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+        val userId = JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
+        if (userId.isBlank()) return emptyList()
+        val query = URLEncoder.encode(userId, "UTF-8")
+        connection = (URL("$SUPABASE_URL/rest/v1/loads?select=id,destination&assigned_driver_id=eq.$query&status=eq.driver_selected&order=driver_selected_at.desc&limit=100").openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"; connectTimeout = 15000; readTimeout = 20000
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Accept", "application/json")
+        }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        if (code !in 200..299) return emptyList()
+        val rows = JSONArray(stream?.bufferedReader()?.use { it.readText() }.orEmpty())
+        val result = mutableListOf<AcceptedLoadContact>()
+        for (i in 0 until rows.length()) {
+            val load = rows.getJSONObject(i)
+            val id = load.optString("id")
+            if (id.isBlank()) continue
+            var rpc: HttpURLConnection? = null
+            try {
+                rpc = (URL("$SUPABASE_URL/rest/v1/rpc/get_assigned_load_company_contact").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"; connectTimeout = 10000; readTimeout = 15000; doOutput = true
+                    setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+                    setRequestProperty("Authorization", "Bearer $accessToken")
+                    setRequestProperty("Content-Type", "application/json")
+                    setRequestProperty("Accept", "application/json")
+                }
+                rpc.outputStream.use { it.write(JSONObject().put("p_load_id", id).toString().toByteArray(Charsets.UTF_8)) }
+                if (rpc.responseCode !in 200..299) continue
+                val contacts = JSONArray(rpc.inputStream.bufferedReader().use { it.readText() })
+                if (contacts.length() == 0) continue
+                val contact = contacts.getJSONObject(0)
+                result.add(AcceptedLoadContact(
+                    id, load.optString("destination"), contact.optString("company_name"),
+                    contact.optString("manager_name"), contact.optString("mobile")
+                ))
+            } catch (_: Exception) {
+                // Fail closed: never show a contact when the assignment check fails.
+            } finally {
+                rpc?.disconnect()
+            }
+        }
+        result
+    } catch (_: Exception) {
+        emptyList()
+    } finally {
+        connection?.disconnect()
+    }
+}
 
 private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRecord> {
     if (accessToken.isBlank()) return emptyList()
