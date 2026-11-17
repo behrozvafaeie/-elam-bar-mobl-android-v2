@@ -1,7 +1,7 @@
 name: Android APK
 on:
   push:
-    branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25", "fix/source-343-stabilization", "stable/source-343-baseline", "fix/post-merge-ci-stabilization", "feature/v1.5.1-load-draft-autosave" ]
+    branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25", "fix/source-343-stabilization", "stable/source-343-baseline", "fix/post-merge-ci-stabilization", "feature/v1.5.1-load-draft-autosave", "release/v1.5.1-clean-candidate" ]
     paths:
       - "app/**"
       - "supabase/**"
@@ -70,14 +70,11 @@ jobs:
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 26' app/build.gradle.kts
-          grep -F 'versionName = "1.0.25"' app/build.gradle.kts
+          grep -F 'versionCode = 27' app/build.gradle.kts
+          grep -F 'versionName = "1.5.1"' app/build.gradle.kts
+          ! grep -E 'ELAM_TURN_(URL|USERNAME|PASSWORD)' .github/workflows/android-apk.yml
 
       - name: Build debug APK
-        env:
-          ELAM_TURN_URL: ${{ secrets.ELAM_TURN_URL }}
-          ELAM_TURN_USERNAME: ${{ secrets.ELAM_TURN_USERNAME }}
-          ELAM_TURN_PASSWORD: ${{ secrets.ELAM_TURN_PASSWORD }}
         run: gradle --no-daemon assembleDebug
 
       - name: Verify APK was produced
@@ -88,14 +85,15 @@ jobs:
         shell: bash
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='26' versionName='1.0.25'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='27' versionName='1.5.1'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           sha256sum "$APK"
+          du -h "$APK"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: elam-bar-mobl-debug-apk
+          name: elam-bar-mobl-v1.5.1-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 90
@@ -110,7 +108,7 @@ jobs:
       - name: Download built APK
         uses: actions/download-artifact@v4
         with:
-          name: elam-bar-mobl-debug-apk
+          name: elam-bar-mobl-v1.5.1-debug-apk
           path: artifacts
 
       - name: Install and launch APK on Android emulator
@@ -126,16 +124,13 @@ jobs:
           disable-animations: false
           script: |
             adb wait-for-device
-            echo "Waiting for Android boot completion..."
-            adb shell 'while [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 3; done'
-            echo "Waiting for Android package manager service..."
-            for i in $(seq 1 30); do
-              if adb shell cmd package list packages >/dev/null 2>&1; then break; fi
-              sleep 3
-            done
-            adb shell cmd package list packages >/dev/null
+            sleep 30
+            echo "Android boot status:"
+            adb shell getprop sys.boot_completed
+            echo "Checking Android package manager..."
+            adb shell pm list packages >/dev/null
             echo "Installing APK..."
-            adb install --no-streaming -r artifacts/app-debug.apk
+            adb install -r artifacts/app-debug.apk
             echo "Launching app..."
             adb shell am force-stop ir.elambar.mobl
             adb shell monkey -p ir.elambar.mobl 1
@@ -145,4 +140,7 @@ jobs:
             echo "Checking foreground activity..."
             adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" | head -n 2
             echo "Checking app-specific fatal crashes..."
-            adb logcat -d | grep -E -A 25 -B 5 "FATAL EXCEPTION.*ir.elambar.mobl|Process: ir.elambar.mobl" && exit 1 || true
+            if adb logcat -d | grep -E -A 25 -B 5 "FATAL EXCEPTION.*ir.elambar.mobl|Process: ir.elambar.mobl"; then
+              echo "Fatal crash detected."
+              exit 1
+            fi
