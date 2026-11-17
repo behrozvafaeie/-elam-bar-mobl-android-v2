@@ -1,7 +1,7 @@
 name: Android APK
 on:
   push:
-    branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24" ]
+    branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25" ]
     paths:
       - "app/**"
       - "supabase/**"
@@ -70,8 +70,8 @@ jobs:
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 25' app/build.gradle.kts
-          grep -F 'versionName = "1.0.24"' app/build.gradle.kts
+          grep -F 'versionCode = 26' app/build.gradle.kts
+          grep -F 'versionName = "1.0.25"' app/build.gradle.kts
 
       - name: Build debug APK
         env:
@@ -127,6 +127,12 @@ jobs:
             adb wait-for-device
             echo "Waiting for Android boot completion..."
             adb shell 'while [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 3; done'
+            echo "Waiting for Android package manager service..."
+            for i in $(seq 1 90); do
+              if adb shell cmd package list packages >/dev/null 2>&1; then break; fi
+              sleep 4
+            done
+            adb shell cmd package list packages >/dev/null
             echo "Installing APK..."
             adb install --no-streaming -r artifacts/app-debug.apk
             echo "Launching app..."
