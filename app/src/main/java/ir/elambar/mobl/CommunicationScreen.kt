@@ -111,6 +111,18 @@ internal fun CommunicationScreen(accessToken: String, isSuperAdmin: Boolean = fa
         }
     }
     LaunchedEffect(accessToken) { refreshConversations() }
+    // Keep the inbox current while the conversation list is visible.
+    LaunchedEffect(selected?.id, accessToken, userId) {
+        if (selected != null || userId.isBlank()) return@LaunchedEffect
+        while (true) {
+            delay(10000)
+            val result = withContext(Dispatchers.IO) { repository.conversationsFor(userId, isSuperAdmin) }
+            if (result.first == null) {
+                conversations = result.second
+                status = if (result.second.isEmpty()) "گفتگوی فعالی برای حساب شما ثبت نشده است. گفتگو پس از تخصیص بار ایجاد می‌شود." else ""
+            } else status = result.first.orEmpty()
+        }
+    }
     LaunchedEffect(selected?.id, accessToken) {
         val conversation = selected ?: return@LaunchedEffect
         while (true) {
