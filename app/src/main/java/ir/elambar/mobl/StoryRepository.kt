@@ -63,8 +63,8 @@ internal class StoryRepository(private val token: String) {
         val signed = runCatching { JSONObject(body).optString("signedURL") }.getOrDefault("")
         return when {
             signed.startsWith("http") -> signed
-            signed.startsWith("/") -> "$base$signed"
-            signed.isNotBlank() -> "$base/storage/v1$ signed".replace(" ", "")
+            signed.startsWith("/") -> "$base/storage/v1$signed"
+            signed.isNotBlank() -> "$base/storage/v1/$signed"
             else -> ""
         }
     }
@@ -96,7 +96,7 @@ internal class StoryRepository(private val token: String) {
         val row = JSONObject().put("user_id", userId).put("user_role", role).put("media_path", path).put("caption", caption.trim().take(500))
         val (insertCode, _) = request("POST", "rest/v1/user_stories", row.toString().toByteArray())
         if (insertCode !in 200..299) {
-            request("POST", "storage/v1/object/user-stories", JSONObject().put("prefixes", JSONArray().put(path)).toString().toByteArray())
+            request("DELETE", "storage/v1/object/user-stories", JSONObject().put("prefixes", JSONArray().put(path)).toString().toByteArray())
             return "ثبت استوری در پایگاه داده ناموفق بود (کد $insertCode)."
         }
         return "استوری منتشر شد و پس از ۲۴ ساعت از نمایش عمومی خارج می‌شود."
@@ -124,7 +124,7 @@ internal class StoryRepository(private val token: String) {
 
     fun deleteStory(story: UserStory): String {
         val path = story.mediaPath.split("/").joinToString("/") { java.net.URLEncoder.encode(it, "UTF-8").replace("+", "%20") }
-        request("POST", "storage/v1/object/user-stories", JSONObject().put("prefixes", JSONArray().put(story.mediaPath)).toString().toByteArray())
+        request("DELETE", "storage/v1/object/user-stories", JSONObject().put("prefixes", JSONArray().put(story.mediaPath)).toString().toByteArray())
         val (code, _) = request("DELETE", "rest/v1/user_stories?id=eq.${story.id}")
         return if (code in 200..299) "استوری توسط مدیر ارشد حذف شد." else "حذف استوری مجاز نشد (کد $code)."
     }
