@@ -90,7 +90,7 @@ private enum class UserRole(val label: String) {
     ADMIN("مدیر ارشد")
 }
 
-private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "", val role: String = "")
+private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "", val role: String = "", val refreshToken: String = "")
 private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "")
 private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val priceMode: String, val freightAmount: String, val description: String)
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
@@ -167,7 +167,6 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var adminNewRole by remember { mutableStateOf("admin") }
     var adminManageBusy by remember { mutableStateOf(false) }
     var adminMenuVisibleToOtherAdmins by remember { mutableStateOf(true) }
-    var forceLogoutTarget by remember { mutableStateOf<AdminRecord?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
@@ -231,14 +230,22 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     LaunchedEffect(Unit) {
         val saved = DeviceSessionStore.load(context)
         if (saved != null) {
-            val savedRole = if (saved.second == "COMPANY") UserRole.COMPANY else UserRole.DRIVER
+            val savedRole = when (saved.second) { "COMPANY" -> UserRole.COMPANY; "ADMIN" -> UserRole.ADMIN; else -> UserRole.DRIVER }
             val restored = withContext(Dispatchers.IO) { restoreDeviceSession(saved.first, savedRole) }
             if (restored.success && restored.refreshToken.isNotBlank()) {
-                role = savedRole; userLoggedIn = true; userDisplayName = restored.displayName
-                userStatus = restored.status; userAccessToken = restored.accessToken; profilePhotoUrl = restored.photoUrl
                 DeviceSessionStore.save(context, restored.refreshToken, savedRole.name)
+                if (savedRole == UserRole.ADMIN) {
+                    adminLoggedIn = true
+                    adminRole = restored.status
+                    adminAccessToken = restored.accessToken
+                    adminProfilePhotoUrl = withContext(Dispatchers.IO) { fetchAdminProfilePhoto(restored.accessToken) }
+                    adminMenuVisibleToOtherAdmins = withContext(Dispatchers.IO) { fetchAdminMenuVisibility(restored.accessToken) }
+                } else {
+                    role = savedRole; userLoggedIn = true; userDisplayName = restored.displayName
+                    userStatus = restored.status; userAccessToken = restored.accessToken; profilePhotoUrl = restored.photoUrl
+                }
                 message = "نشست امن قبلی بازیابی شد."
-            } else { DeviceSessionStore.clear(context); message = "نشست قبلی منقضی شده است؛ ورود مجدد نیازمند احراز شماره است." }
+            } else { DeviceSessionStore.clear(context); message = "نشست قبلی معتبر نیست یا حساب حذف/مسدود شده است." }
         }
     }
 
@@ -254,45 +261,33 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     message = "نشست امن پیدا نشد؛ دوباره وارد شوید."
                     break
                 }
-                val savedRole = if (saved.second == "COMPANY") UserRole.COMPANY else UserRole.DRIVER
+                val savedRole = when (saved.second) { "COMPANY" -> UserRole.COMPANY; "ADMIN" -> UserRole.ADMIN; else -> UserRole.DRIVER }
                 val refreshed = withContext(Dispatchers.IO) { restoreDeviceSession(saved.first, savedRole) }
                 if (refreshed.success && refreshed.accessToken.isNotBlank() && refreshed.refreshToken.isNotBlank()) {
-                    userAccessToken = refreshed.accessToken
-                    userStatus = refreshed.status
-                    userDisplayName = refreshed.displayName
-                    profilePhotoUrl = refreshed.photoUrl
                     DeviceSessionStore.save(context, refreshed.refreshToken, savedRole.name)
+                    if (savedRole == UserRole.ADMIN) {
+                        adminAccessToken = refreshed.accessToken
+                        adminRole = refreshed.status
+                    } else {
+                        userAccessToken = refreshed.accessToken
+                        userStatus = refreshed.status
+                        userDisplayName = refreshed.displayName
+                        profilePhotoUrl = refreshed.photoUrl
+                    }
                 } else {
                     DeviceSessionStore.clear(context)
-                    userLoggedIn = false
-                    userAccessToken = ""
-                    message = "نشست منقضی شده یا حساب غیرفعال شده است؛ دوباره وارد شوید."
+                    if (savedRole == UserRole.ADMIN) {
+                        adminLoggedIn = false; adminAccessToken = ""; adminRole = ""
+                    } else {
+                        userLoggedIn = false; userAccessToken = ""
+                    }
+                    message = "نشست معتبر نیست یا حساب حذف/مسدود شده است."
                     break
                 }
             }
         }
     }
 
-
-    if (forceLogoutTarget != null) {
-        val target = forceLogoutTarget!!
-        AlertDialog(
-            onDismissRequest = { forceLogoutTarget = null },
-            title = { Text("خروج اجباری از همه دستگاه‌ها") },
-            text = { Text("آیا می‌خواهید نشست‌های فعال «" + target.title + "» در همه دستگاه‌ها باطل شود؟") },
-            confirmButton = {
-                TextButton(enabled = !adminManageBusy, onClick = {
-                    adminManageBusy = true
-                    scope.launch {
-                        adminActionMessage = withContext(Dispatchers.IO) { forceLogoutMember(adminAccessToken, target.id) }
-                        adminManageBusy = false
-                        forceLogoutTarget = null
-                    }
-                }) { Text("تأیید خروج اجباری") }
-            },
-            dismissButton = { TextButton(onClick = { forceLogoutTarget = null }) { Text("انصراف") } }
-        )
-    }
 
     if (showCommunication && ((userLoggedIn && userStatus == "approved") || (adminLoggedIn && adminRole == "super_admin"))) {
         CommunicationScreen(
@@ -686,11 +681,6 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                             modifier = Modifier.weight(1f)
                                                         ) { Text("ادمین ارشد") }
                                                     }
-                                                    OutlinedButton(
-                                                        enabled = !adminManageBusy,
-                                                        onClick = { forceLogoutTarget = AdminRecord(account.userId, account.email, "مدیر", account.role) },
-                                                        modifier = Modifier.fillMaxWidth()
-                                                    ) { Text("خروج اجباری مدیر از همه دستگاه‌ها") }
                                                 }
                                             }
                                         }
@@ -794,13 +784,6 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                 Text(record.title, style = MaterialTheme.typography.titleSmall)
                                                 Text(record.detail, style = MaterialTheme.typography.bodySmall)
                                                 Text("وضعیت: ${record.status}")
-                                                if (adminRole == "super_admin" && selectedPanel != "مدیریت مدارک") {
-                                                    OutlinedButton(
-                                                        enabled = !adminManageBusy && record.id.isNotBlank(),
-                                                        onClick = { forceLogoutTarget = record },
-                                                        modifier = Modifier.fillMaxWidth()
-                                                    ) { Text("خروج اجباری از همه دستگاه‌ها") }
-                                                }
                                                 if (selectedPanel == "مدیریت مدارک" && record.mediaUrl.isNotBlank()) {
                                                     val lowerUrl = record.mediaUrl.substringBefore("?").lowercase()
                                                     if (lowerUrl.endsWith(".jpg") || lowerUrl.endsWith(".jpeg") || lowerUrl.endsWith(".png") || lowerUrl.endsWith(".webp")) {
@@ -901,19 +884,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             )
                         }
                     }
-                    OutlinedButton(
-                        onClick = {
-                            adminLoggedIn = false
-                            adminProfilePhotoUrl = ""
-                            adminAccessToken = ""
-                            showProfile = false
-                            email = ""
-                            password = ""
-                            message = "از حساب مدیر ارشد خارج شدید."
-                            role = UserRole.ADMIN
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("خروج از حساب") }
+                    Text("نشست مدیر روی این دستگاه محفوظ می‌ماند؛ خروج فقط با حذف حساب توسط مدیر ارشد اصلی یا ابطال امنیتی همان حساب انجام می‌شود.", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                 } else if (userLoggedIn && showProfile) {
                     HorizontalDivider()
                     Card(
@@ -1148,7 +1119,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         }
                         else -> Text("وضعیت حساب: $userStatus", textAlign = TextAlign.Center)
                     }
-                    Text("ورود شما روی این دستگاه محفوظ می‌ماند؛ خروج فقط با دستور مدیر ارشد اصلی یا غیرفعال‌شدن حساب انجام می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Text("ورود شما روی این دستگاه محفوظ می‌ماند؛ خروج فقط با حذف حساب توسط مدیر ارشد اصلی یا ابطال امنیتی حساب انجام می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         FilterChip(selected = role == UserRole.DRIVER, onClick = { role = UserRole.DRIVER; register = true; message = "ثبت‌نام راننده" }, label = { Text("راننده") })
@@ -1293,6 +1264,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                 adminAccessToken = result.accessToken
                                                 adminRole = result.role
                                                 adminLoggedIn = true
+                                                DeviceSessionStore.save(context, result.refreshToken, "ADMIN")
                                                 adminProfilePhotoUrl = withContext(Dispatchers.IO) { fetchAdminProfilePhoto(result.accessToken) }
                                                 adminMenuVisibleToOtherAdmins = withContext(Dispatchers.IO) { fetchAdminMenuVisibility(result.accessToken) }
                                             }
@@ -1567,7 +1539,7 @@ private object DeviceSessionStore {
             cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, packed.copyOfRange(0,12)))
             val token = String(cipher.doFinal(packed.copyOfRange(12,packed.size)), Charsets.UTF_8)
             val role = prefs.getString("role", null) ?: return null
-            if (token.isBlank() || role !in listOf("DRIVER","COMPANY")) null else token to role
+            if (token.isBlank() || role !in listOf("DRIVER","COMPANY","ADMIN")) null else token to role
         } catch (_: Exception) { clear(context); null }
     }
     fun clear(context: Context) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply() }
@@ -1618,35 +1590,67 @@ private fun registerDeviceAccount(role: UserRole, first: String, last: String, m
 }
 
 private fun restoreDeviceSession(refreshToken: String, role: UserRole): UserLoginResult {
-    var auth: HttpURLConnection?=null; var profile: HttpURLConnection?=null
+    var auth: HttpURLConnection? = null
+    var profile: HttpURLConnection? = null
     return try {
-        auth=(URL(SUPABASE_URL + "/auth/v1/token?grant_type=refresh_token").openConnection() as HttpURLConnection).apply {
-            requestMethod="POST"; connectTimeout=15000; readTimeout=20000; doOutput=true
-            setRequestProperty("apikey",SUPABASE_PUBLISHABLE_KEY); setRequestProperty("Content-Type","application/json")
+        auth = (URL(SUPABASE_URL + "/auth/v1/token?grant_type=refresh_token").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"; connectTimeout = 15000; readTimeout = 20000; doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY); setRequestProperty("Content-Type", "application/json")
         }
-        auth.outputStream.use { it.write(JSONObject().put("refresh_token",refreshToken).toString().toByteArray(Charsets.UTF_8)) }
-        val code=auth.responseCode; val stream=if(code in 200..299) auth.inputStream else auth.errorStream
-        val raw=stream?.bufferedReader()?.use{it.readText()}.orEmpty()
-        if(code !in 200..299) return UserLoginResult(false,"نشست منقضی شده است.")
-        val json=JSONObject(raw); val user=json.optJSONObject("user") ?: return UserLoginResult(false,"حساب پیدا نشد.")
-        val access=json.optString("access_token"); val fresh=json.optString("refresh_token"); val id=user.optString("id")
-        if(access.isBlank()||fresh.isBlank()||id.isBlank()) return UserLoginResult(false,"نشست جدید ناقص است.")
-        val table=if(role==UserRole.DRIVER)"drivers" else "companies"
-        val select=if(role==UserRole.DRIVER)"status,first_name,last_name,full_name,profile_photo_path" else "status,first_name,last_name,company_name,manager_name,profile_photo_path"
-        profile=(URL(SUPABASE_URL + "/rest/v1/" + table + "?select=" + select + "&id=eq." + id + "&limit=1").openConnection() as HttpURLConnection).apply{
-            requestMethod="GET";connectTimeout=15000;readTimeout=15000
-            setRequestProperty("apikey",SUPABASE_PUBLISHABLE_KEY);setRequestProperty("Authorization","Bearer " + access)
+        auth.outputStream.use { it.write(JSONObject().put("refresh_token", refreshToken).toString().toByteArray(Charsets.UTF_8)) }
+        val code = auth.responseCode
+        val stream = if (code in 200..299) auth.inputStream else auth.errorStream
+        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code !in 200..299) return UserLoginResult(false, "نشست منقضی شده است.")
+        val json = JSONObject(raw)
+        val user = json.optJSONObject("user") ?: return UserLoginResult(false, "حساب پیدا نشد.")
+        val access = json.optString("access_token")
+        val fresh = json.optString("refresh_token")
+        val id = user.optString("id")
+        if (access.isBlank() || fresh.isBlank() || id.isBlank()) return UserLoginResult(false, "نشست جدید ناقص است.")
+
+        if (role == UserRole.ADMIN) {
+            profile = (URL(SUPABASE_URL + "/rest/v1/admin_users?select=role,is_blocked,access_expires_at&user_id=eq." + id + "&limit=1").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"; connectTimeout = 15000; readTimeout = 15000
+                setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY); setRequestProperty("Authorization", "Bearer " + access)
+            }
+            val pc = profile.responseCode
+            val ps = if (pc in 200..299) profile.inputStream else profile.errorStream
+            if (pc !in 200..299) return UserLoginResult(false, "بررسی دسترسی مدیر ممکن نشد.")
+            val rows = JSONArray(ps?.bufferedReader()?.use { it.readText() }.orEmpty())
+            if (rows.length() == 0) return UserLoginResult(false, "حساب مدیر حذف شده یا دسترسی ندارد.")
+            val p = rows.getJSONObject(0)
+            val adminRole = p.optString("role")
+            val expires = p.optString("access_expires_at")
+            val expired = expires.isNotBlank() && expires != "null" && runCatching { java.time.Instant.parse(expires).isBefore(java.time.Instant.now()) }.getOrDefault(true)
+            if (p.optBoolean("is_blocked", false) || expired || adminRole !in setOf("super_admin", "senior_admin", "admin")) {
+                return UserLoginResult(false, "دسترسی حساب مدیر مسدود، منقضی یا حذف شده است.")
+            }
+            return UserLoginResult(true, "نشست مدیر بازیابی شد.", "مدیر", adminRole, access, fresh, "")
         }
-        val pc=profile.responseCode; val ps=if(pc in 200..299)profile.inputStream else profile.errorStream
-        if(pc !in 200..299)return UserLoginResult(false,"بررسی دسترسی حساب ممکن نشد.")
-        val rows=JSONArray(ps?.bufferedReader()?.use{it.readText()}.orEmpty())
-        if(rows.length()==0)return UserLoginResult(false,"پرونده حساب پیدا نشد.")
-        val p=rows.getJSONObject(0);val status=p.optString("status")
-        if(status !in listOf("pending","approved"))return UserLoginResult(false,"دسترسی حساب فعال نیست.")
-        val name=if(role==UserRole.COMPANY)p.optString("company_name").ifBlank{p.optString("first_name")+" "+p.optString("last_name")} else (p.optString("first_name")+" "+p.optString("last_name")).trim()
-        UserLoginResult(true,"نشست قبلی بازیابی شد.",name,status,access,fresh,profilePhotoPublicUrl(p.optString("profile_photo_path")))
-    } catch (_:Exception) { UserLoginResult(false,"ارتباط با سامانه برقرار نشد.") }
-    finally { auth?.disconnect(); profile?.disconnect() }
+
+        val table = if (role == UserRole.DRIVER) "drivers" else "companies"
+        val select = if (role == UserRole.DRIVER) "status,first_name,last_name,full_name,profile_photo_path" else "status,first_name,last_name,company_name,manager_name,profile_photo_path"
+        profile = (URL(SUPABASE_URL + "/rest/v1/" + table + "?select=" + select + "&id=eq." + id + "&limit=1").openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"; connectTimeout = 15000; readTimeout = 15000
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY); setRequestProperty("Authorization", "Bearer " + access)
+        }
+        val pc = profile.responseCode
+        val ps = if (pc in 200..299) profile.inputStream else profile.errorStream
+        if (pc !in 200..299) return UserLoginResult(false, "بررسی دسترسی حساب ممکن نشد.")
+        val rows = JSONArray(ps?.bufferedReader()?.use { it.readText() }.orEmpty())
+        if (rows.length() == 0) return UserLoginResult(false, "پرونده حساب پیدا نشد.")
+        val p = rows.getJSONObject(0)
+        val status = p.optString("status")
+        if (status !in listOf("pending", "approved")) return UserLoginResult(false, "دسترسی حساب فعال نیست.")
+        val name = if (role == UserRole.COMPANY) p.optString("company_name").ifBlank { p.optString("first_name") + " " + p.optString("last_name") } else (p.optString("first_name") + " " + p.optString("last_name")).trim()
+        UserLoginResult(true, "نشست قبلی بازیابی شد.", name, status, access, fresh, profilePhotoPublicUrl(p.optString("profile_photo_path")))
+    } catch (_: Exception) {
+        UserLoginResult(false, "ارتباط با سامانه برقرار نشد.")
+    } finally {
+        auth?.disconnect()
+        profile?.disconnect()
+    }
 }
 
 private data class AdminAccount(
@@ -1932,7 +1936,7 @@ private fun authenticateAdmin(email: String, password: String): AdminLoginResult
             return AdminLoginResult(false, "سطح دسترسی این حساب معتبر نیست.")
         }
         val roleTitle = when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }
-        AdminLoginResult(true, "ورود با سطح دسترسی $roleTitle انجام شد.", accessToken, adminRole)
+        AdminLoginResult(true, "ورود با سطح دسترسی $roleTitle انجام شد.", accessToken, adminRole, authJson.optString("refresh_token"))
     } catch (_: Exception) {
         AdminLoginResult(false, "ارتباط با سرور برقرار نشد. اینترنت را بررسی و دوباره تلاش کنید.")
     } finally {
