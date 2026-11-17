@@ -1,7 +1,7 @@
 name: Android APK
 on:
   push:
-    branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25", "fix/source-343-stabilization" ]
+    branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25", "fix/source-343-stabilization", "stable/source-343-baseline", "fix/post-merge-ci-stabilization" ]
     paths:
       - "app/**"
       - "supabase/**"
@@ -104,7 +104,7 @@ jobs:
     name: Optional emulator smoke test
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 22
+    timeout-minutes: 12
     continue-on-error: true
     steps:
       - name: Download built APK
@@ -114,7 +114,7 @@ jobs:
           path: artifacts
 
       - name: Install and launch APK on Android emulator
-        timeout-minutes: 16
+        timeout-minutes: 9
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
@@ -122,16 +122,16 @@ jobs:
           arch: x86_64
           profile: pixel_2
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -memory 3072 -cores 2 -no-metrics
-          emulator-boot-timeout: 600
+          emulator-boot-timeout: 420
           disable-animations: false
           script: |
             adb wait-for-device
             echo "Waiting for Android boot completion..."
             adb shell 'while [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 3; done'
             echo "Waiting for Android package manager service..."
-            for i in $(seq 1 90); do
+            for i in $(seq 1 30); do
               if adb shell cmd package list packages >/dev/null 2>&1; then break; fi
-              sleep 4
+              sleep 3
             done
             adb shell cmd package list packages >/dev/null
             echo "Installing APK..."
