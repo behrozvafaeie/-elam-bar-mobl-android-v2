@@ -450,7 +450,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             color = MaterialTheme.colorScheme.primaryContainer
                         ) {
                             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("اعلام بار مبلمان", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                Text("اعلام بار مبل", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
                                 Text("سامانه ارتباط شرکت‌های باربری و رانندگان", color = MaterialTheme.colorScheme.onPrimaryContainer)
                             }
                         }
@@ -626,7 +626,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 TopAppBar(
                     title = {
                         Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                            Text("اعلام بار مبلمان", style = MaterialTheme.typography.titleMedium)
+                            Text("اعلام بار مبل", style = MaterialTheme.typography.titleMedium)
                             Text(tehranClockText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     },
@@ -654,11 +654,11 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.ic_app_logo),
-                        contentDescription = "نشان اعلام بار مبلمان",
+                        contentDescription = "نشان اعلام بار مبل",
                         modifier = Modifier.fillMaxSize().padding(8.dp)
                     )
                 }
-                Text("اعلام بار مبلمان", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
+                Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
                 Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
                 if (showProfile && adminLoggedIn) {
                     HorizontalDivider()
@@ -1062,7 +1062,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     }
                                 }
                             }
-                            Text(userDisplayName.ifBlank { "کاربر اعلام بار مبلمان" }, style = MaterialTheme.typography.headlineSmall)
+                            Text(userDisplayName.ifBlank { "کاربر اعلام بار مبل" }, style = MaterialTheme.typography.headlineSmall)
                             Text("نام کاربری: " + profileUsername.ifBlank { username.ifBlank { "ثبت نشده" } }, style = MaterialTheme.typography.bodyMedium)
                             Text("شماره تماس: " + profileMobile.ifBlank { mobile.ifBlank { "ثبت نشده" } }, style = MaterialTheme.typography.bodyMedium)
                             Text(if (role == UserRole.DRIVER) "پروفایل راننده" else "پروفایل شرکت باربری", style = MaterialTheme.typography.titleMedium)
