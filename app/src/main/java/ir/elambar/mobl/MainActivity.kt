@@ -432,14 +432,27 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.extraLarge,
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("اعلام بار مبلمان", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            Text(if (adminLoggedIn) "پنل " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" } else if (userLoggedIn) "پنل کاربر" else "سامانه اعلام بار", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    if (userLoggedIn || adminLoggedIn) {
+                        ModernAccountHeader(
+                            displayName = if (adminLoggedIn) email else userDisplayName,
+                            role = when {
+                                adminLoggedIn -> ModernAccountRole.SUPER_ADMIN
+                                role == UserRole.COMPANY -> ModernAccountRole.COMPANY
+                                else -> ModernAccountRole.DRIVER
+                            },
+                            approvalStatus = if (adminLoggedIn) "دسترسی مدیر: " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" } else userStatus,
+                            mobile = if (adminLoggedIn) "" else profileMobile
+                        )
+                    } else {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.extraLarge,
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("اعلام بار مبلمان", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                Text("سامانه ارتباط شرکت‌های باربری و رانندگان", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
                         }
                     }
                     if (userLoggedIn || adminLoggedIn) {
