@@ -209,14 +209,6 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var loadActionMessage by remember { mutableStateOf("") }
     var loadPublishing by remember { mutableStateOf(false) }
     val loadDrafts = remember { androidx.compose.runtime.mutableStateListOf<LoadDraft>() }
-    var loadedDraftOwner by remember { mutableStateOf("") }
-    val activeDraftOwner = remember(userAccessToken, adminAccessToken, userLoggedIn, adminLoggedIn, role, adminRole) {
-        when {
-            adminLoggedIn -> loadDraftOwnerKey(adminAccessToken, "admin")
-            userLoggedIn && role == UserRole.COMPANY -> loadDraftOwnerKey(userAccessToken, "company")
-            else -> ""
-        }
-    }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -234,6 +226,14 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var adminLoggedIn by remember { mutableStateOf(false) }
     var adminRole by remember { mutableStateOf("") }
     var adminAccessToken by remember { mutableStateOf("") }
+    var loadedDraftOwner by remember { mutableStateOf("") }
+    val activeDraftOwner = remember(userAccessToken, adminAccessToken, userLoggedIn, adminLoggedIn, role, adminRole) {
+        when {
+            adminLoggedIn -> loadDraftOwnerKey(adminAccessToken, "admin")
+            userLoggedIn && role == UserRole.COMPANY -> loadDraftOwnerKey(userAccessToken, "company")
+            else -> ""
+        }
+    }
     var adminProfilePhotoUrl by remember { mutableStateOf("") }
     var adminPanelData by remember { mutableStateOf("") }
     var adminRecords by remember { mutableStateOf<List<AdminRecord>>(emptyList()) }
