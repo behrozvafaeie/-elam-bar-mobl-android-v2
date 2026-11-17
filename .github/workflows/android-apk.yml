@@ -1,7 +1,7 @@
 name: Android APK
 on:
   push:
-    branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25" ]
+    branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25", "fix/source-343-stabilization" ]
     paths:
       - "app/**"
       - "supabase/**"
@@ -121,8 +121,9 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -memory 4096 -cores 2 -no-metrics
-          emulator-boot-timeout: 480
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -memory 3072 -cores 2 -no-metrics
+          emulator-boot-timeout: 600
+          disable-animations: false
           script: |
             adb wait-for-device
             echo "Waiting for Android boot completion..."
