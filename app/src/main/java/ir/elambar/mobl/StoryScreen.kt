@@ -147,7 +147,7 @@ internal fun StoryScreen(accessToken: String, role: String, isSuperAdmin: Boolea
                         maxLines = 2
                     )
                     Button(
-                        enabled = !busy && draft.isNotBlank() && !story.expiresAt.isBlank() && !story.isMine.let { false },
+                        enabled = !busy && draft.isNotBlank() && runCatching { java.time.Instant.parse(story.expiresAt).isAfter(java.time.Instant.now()) }.getOrDefault(false),
                         onClick = {
                             busy = true
                             scope.launch {
@@ -230,7 +230,8 @@ private fun signedStoryUrl(token: String, path: String): String {
         val result = JSONObject(c.inputStream.bufferedReader().use { it.readText() }).optString("signedURL")
         when {
             result.startsWith("http") -> result
-            result.startsWith("/") -> STORY_SUPABASE_URL + result
+            result.startsWith("/storage/v1/") -> STORY_SUPABASE_URL + result
+            result.startsWith("/") -> STORY_SUPABASE_URL + "/storage/v1" + result
             result.isNotBlank() -> "$STORY_SUPABASE_URL/storage/v1/$result"
             else -> ""
         }
