@@ -6,6 +6,7 @@ on:
       - "integration/v1.5.3-communication-loadrules"
       - "release/base-244-preserved"
       - "integration/full-platform-upgrade"
+      - "design/modern-menu-profile"
   workflow_dispatch:
 
 permissions:
