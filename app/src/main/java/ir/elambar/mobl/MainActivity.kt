@@ -247,6 +247,11 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 } else {
                     role = savedRole; userLoggedIn = true; userDisplayName = restored.displayName
                     userStatus = restored.status; userAccessToken = restored.accessToken; profilePhotoUrl = restored.photoUrl
+                    if (savedRole == UserRole.DRIVER) {
+                        acceptedLoadContactsLoading = true
+                        acceptedLoadContacts = withContext(Dispatchers.IO) { fetchAcceptedLoadContacts(restored.accessToken) }
+                        acceptedLoadContactsLoading = false
+                    }
                 }
                 message = "نشست امن قبلی بازیابی شد."
             } else { DeviceSessionStore.clear(context); message = "نشست قبلی معتبر نیست یا حساب حذف/مسدود شده است." }
@@ -1153,7 +1158,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         }
                         else -> Text("وضعیت حساب: $userStatus", textAlign = TextAlign.Center)
                     }
-                    Text("ورود شما روی این دستگاه محفوظ می‌ماند؛ خروج فقط با حذف حساب توسط مدیر ارشد اصلی یا ابطال امنیتی حساب انجام می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Text("ورود شما روی این دستگاه محفوظ می‌ماند؛ خروج فقط با حذف حساب توسط مدیر ارشد اصلی انجام می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         FilterChip(selected = role == UserRole.DRIVER, onClick = { role = UserRole.DRIVER; register = true; message = "ثبت‌نام راننده" }, label = { Text("راننده") })
