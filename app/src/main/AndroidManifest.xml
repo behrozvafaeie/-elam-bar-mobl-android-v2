@@ -7,7 +7,7 @@
         android:allowBackup="false"
         android:icon="@drawable/ic_app_logo"
         android:roundIcon="@drawable/ic_app_logo"
-        android:label="اعلام بار مبلمان"
+        android:label="اعلام بار مبل"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity android:name=".MainActivity" android:exported="true">
