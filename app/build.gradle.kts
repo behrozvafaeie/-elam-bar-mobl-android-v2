@@ -10,8 +10,8 @@ android {
         applicationId = "ir.elambar.mobl"
         minSdk = 24
         targetSdk = 35
-        versionCode = 25
-        versionName = "1.0.24"
+        versionCode = 26
+        versionName = "1.0.25"
         val turnUrl = (System.getenv("ELAM_TURN_URL") ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
         val turnUsername = (System.getenv("ELAM_TURN_USERNAME") ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
         val turnPassword = (System.getenv("ELAM_TURN_PASSWORD") ?: "").replace("\\", "\\\\").replace("\"", "\\\"")

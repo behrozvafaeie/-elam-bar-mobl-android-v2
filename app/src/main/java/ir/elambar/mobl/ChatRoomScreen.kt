@@ -212,12 +212,12 @@ internal fun ChatRoomScreen(accessToken: String, role: String, onClose: () -> Un
                     if (showContactSearch) {
                         Card(Modifier.fillMaxWidth()) {
                             Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("جستجوی شرکت یا مدیر", style = MaterialTheme.typography.titleSmall)
+                                Text(when (role) { "DRIVER" -> "مخاطبین پنل راننده"; "super_admin", "senior_admin", "admin" -> "مخاطبین پنل مدیر"; else -> "مخاطبین پنل شرکت" }, style = MaterialTheme.typography.titleSmall)
                                 OutlinedTextField(
                                     value = contactQuery,
                                     onValueChange = { contactQuery = it.take(80) },
                                     modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("نام شرکت، نام مخاطب یا شماره همراه") },
+                                    label = { Text(when (role) { "DRIVER" -> "نام مدیر یا شماره همراه"; "super_admin", "senior_admin", "admin" -> "نام راننده، شرکت یا مدیر"; else -> "نام شرکت یا مدیر" }) },
                                     singleLine = true
                                 )
                                 Button(enabled = !busy && contactQuery.trim().length >= 2, modifier = Modifier.fillMaxWidth(), onClick = {
