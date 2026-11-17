@@ -257,8 +257,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
             loadDestination = ""
             loadDescription = ""
         } else {
-            val raw = context.getSharedPreferences("elambar_load_drafts", Context.MODE_PRIVATE)
-                .getString(activeDraftOwner, null)
+            val raw = EncryptedDraftStore.load(context, activeDraftOwner)
             if (!raw.isNullOrBlank()) {
                 val (savedDrafts, form) = decodeLoadDraftState(raw)
                 loadDrafts.clear()
@@ -295,8 +294,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 loadDrafts.toList(), loadDestination, loadCargoType, loadVehicleType,
                 loadLoadingType, loadPriceMode, loadFreightAmount, loadDescription
             )
-            context.getSharedPreferences("elambar_load_drafts", Context.MODE_PRIVATE)
-                .edit().putString(activeDraftOwner, snapshot).apply()
+            EncryptedDraftStore.save(context, activeDraftOwner, snapshot)
         }
     }
     val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
@@ -1732,6 +1730,58 @@ private object DeviceSessionStore {
         } catch (_: Exception) { clear(context); null }
     }
     fun clear(context: Context) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply() }
+}
+
+private object EncryptedDraftStore {
+    private const val PREFS = "elambar_load_drafts"
+    private const val ALIAS = "elambar_load_draft_key"
+
+    private fun key(): SecretKey {
+        val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        (ks.getKey(ALIAS, null) as? SecretKey)?.let { return it }
+        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+        generator.init(
+            KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .build()
+        )
+        return generator.generateKey()
+    }
+
+    fun save(context: Context, owner: String, value: String) {
+        if (owner.isBlank()) return
+        try {
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, key())
+            val packed = cipher.iv + cipher.doFinal(value.toByteArray(Charsets.UTF_8))
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putString(owner, Base64.encodeToString(packed, Base64.NO_WRAP))
+                .apply()
+        } catch (_: Exception) {
+            clear(context, owner)
+        }
+    }
+
+    fun load(context: Context, owner: String): String? {
+        if (owner.isBlank()) return null
+        return try {
+            val encoded = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString(owner, null) ?: return null
+            val packed = Base64.decode(encoded, Base64.NO_WRAP)
+            if (packed.size <= 12) return null
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, packed.copyOfRange(0, 12)))
+            String(cipher.doFinal(packed.copyOfRange(12, packed.size)), Charsets.UTF_8)
+        } catch (_: Exception) {
+            clear(context, owner)
+            null
+        }
+    }
+
+    private fun clear(context: Context, owner: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(owner).apply()
+    }
 }
 
 private fun registerDeviceAccount(role: UserRole, first: String, last: String, mobile: String,
