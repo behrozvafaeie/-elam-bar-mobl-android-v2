@@ -71,8 +71,8 @@ internal fun ChatRoomScreen(accessToken: String, role: String, onClose: () -> Un
         scope.launch {
             val result = withContext(Dispatchers.IO) { repository.listRooms() }
             rooms = result.second
-            if (selectedRoom == null || result.second.none { it.id == selectedRoom?.id }) {
-                selectedRoom = result.second.firstOrNull { it.type == "public" } ?: result.second.firstOrNull()
+            if (selectedRoom != null && result.second.none { it.id == selectedRoom?.id }) {
+                selectedRoom = null
             }
             status = result.first ?: if (result.second.isEmpty()) "اتاق قابل دسترسی پیدا نشد. اگر راننده هستید، فقط با اجازه مدیر ارشد امکان مشاهده اتاق عمومی را دارید." else ""
             busy = false
