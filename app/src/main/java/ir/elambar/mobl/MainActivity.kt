@@ -115,6 +115,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var showProfile by remember { mutableStateOf(false) }
     var showCommunication by remember { mutableStateOf(false) }
     var showChatRooms by remember { mutableStateOf(false) }
+    var showStories by remember { mutableStateOf(false) }
     var selectedDriverDocType by remember { mutableStateOf("کارت هوشمند") }
     var driverDocUploading by remember { mutableStateOf(false) }
     var driverDocMessage by remember { mutableStateOf("") }
@@ -294,6 +295,13 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         )
     }
 
+    if (showStories && ((userLoggedIn && userStatus == "approved") || adminLoggedIn)) {
+        StoryScreen(
+            accessToken = if (adminLoggedIn) adminAccessToken else userAccessToken,
+            role = if (adminLoggedIn) "admin" else role.name.lowercase(),
+            isSuperAdmin = adminLoggedIn && adminRole == "super_admin"
+        ) { showStories = false }
+    }
     if (showCommunication && ((userLoggedIn && userStatus == "approved") || (adminLoggedIn && adminRole == "super_admin"))) {
         CommunicationScreen(
             accessToken = if (adminLoggedIn) adminAccessToken else userAccessToken,
@@ -333,6 +341,14 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             label = { Text("پروفایل من") },
                             selected = showProfile,
                             onClick = { showProfile = true; scope.launch { drawerState.close() } },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    if ((userLoggedIn && userStatus == "approved") || adminLoggedIn) {
+                        NavigationDrawerItem(
+                            label = { Text("استوری‌ها") },
+                            selected = showStories,
+                            onClick = { showStories = true; showCommunication = false; showChatRooms = false; scope.launch { drawerState.close() } },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
