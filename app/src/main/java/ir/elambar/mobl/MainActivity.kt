@@ -94,6 +94,72 @@ private enum class UserRole(val label: String) {
 private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "", val role: String = "", val refreshToken: String = "")
 private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "")
 private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val priceMode: String, val freightAmount: String, val description: String)
+
+private fun loadDraftOwnerKey(token: String, role: String): String {
+    if (token.isBlank()) return ""
+    return runCatching {
+        val payload = token.split(".").getOrNull(1) ?: return ""
+        val decoded = Base64.decode(payload, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+        val userId = JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
+        if (userId.isBlank()) "" else "load_drafts_${role.lowercase()}_${userId}"
+    }.getOrDefault("")
+}
+
+private fun encodeLoadDraftState(
+    drafts: List<LoadDraft>,
+    destination: String,
+    cargoType: String,
+    vehicleType: String,
+    loadingType: String,
+    priceMode: String,
+    freightAmount: String,
+    description: String
+): String {
+    val rows = JSONArray()
+    drafts.forEach { d ->
+        rows.put(JSONObject()
+            .put("destination", d.destination)
+            .put("cargoType", d.cargoType)
+            .put("vehicleType", d.vehicleType)
+            .put("loadingType", d.loadingType)
+            .put("priceMode", d.priceMode)
+            .put("freightAmount", d.freightAmount)
+            .put("description", d.description))
+    }
+    return JSONObject()
+        .put("drafts", rows)
+        .put("destination", destination)
+        .put("cargoType", cargoType)
+        .put("vehicleType", vehicleType)
+        .put("loadingType", loadingType)
+        .put("priceMode", priceMode)
+        .put("freightAmount", freightAmount)
+        .put("description", description)
+        .toString()
+}
+
+private fun decodeLoadDraftState(raw: String): Pair<List<LoadDraft>, JSONObject?> {
+    return runCatching {
+        val root = JSONObject(raw)
+        val rows = root.optJSONArray("drafts") ?: JSONArray()
+        val drafts = (0 until rows.length()).mapNotNull { index ->
+            val row = rows.optJSONObject(index) ?: return@mapNotNull null
+            val destination = row.optString("destination").trim()
+            val cargoType = row.optString("cargoType").trim()
+            if (destination.isBlank() || cargoType.isBlank()) return@mapNotNull null
+            LoadDraft(
+                destination,
+                cargoType,
+                row.optString("vehicleType", "وانت مبلی"),
+                row.optString("loadingType", "روباری"),
+                row.optString("priceMode", "fixed"),
+                row.optString("freightAmount", "0"),
+                row.optString("description")
+            )
+        }
+        drafts to root
+    }.getOrElse { emptyList<LoadDraft>() to null }
+}
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
 private data class MatchedLoad(val id: String, val origin: String, val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String)
 private data class AcceptedLoadContact(val id: String, val destination: String, val companyName: String, val managerName: String, val mobile: String)
@@ -160,6 +226,14 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var adminLoggedIn by remember { mutableStateOf(false) }
     var adminRole by remember { mutableStateOf("") }
     var adminAccessToken by remember { mutableStateOf("") }
+    var loadedDraftOwner by remember { mutableStateOf("") }
+    val activeDraftOwner = remember(userAccessToken, adminAccessToken, userLoggedIn, adminLoggedIn, role, adminRole) {
+        when {
+            adminLoggedIn -> loadDraftOwnerKey(adminAccessToken, "admin")
+            userLoggedIn && role == UserRole.COMPANY -> loadDraftOwnerKey(userAccessToken, "company")
+            else -> ""
+        }
+    }
     var adminProfilePhotoUrl by remember { mutableStateOf("") }
     var adminPanelData by remember { mutableStateOf("") }
     var adminRecords by remember { mutableStateOf<List<AdminRecord>>(emptyList()) }
@@ -175,6 +249,56 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+
+    LaunchedEffect(activeDraftOwner) {
+        loadedDraftOwner = ""
+        if (activeDraftOwner.isBlank()) {
+            loadDrafts.clear()
+            loadDestination = ""
+            loadDescription = ""
+        } else {
+            val raw = context.getSharedPreferences("elambar_load_drafts", Context.MODE_PRIVATE)
+                .getString(activeDraftOwner, null)
+            if (!raw.isNullOrBlank()) {
+                val (savedDrafts, form) = decodeLoadDraftState(raw)
+                loadDrafts.clear()
+                loadDrafts.addAll(savedDrafts)
+                if (form != null) {
+                    loadDestination = form.optString("destination")
+                    loadCargoType = form.optString("cargoType", "مبل")
+                    loadVehicleType = form.optString("vehicleType", "وانت مبلی")
+                    loadLoadingType = form.optString("loadingType", "روباری")
+                    loadPriceMode = form.optString("priceMode", "fixed")
+                    loadFreightAmount = form.optString("freightAmount")
+                    loadDescription = form.optString("description")
+                }
+            } else {
+                loadDrafts.clear()
+                loadDestination = ""
+                loadCargoType = "مبل"
+                loadVehicleType = "وانت مبلی"
+                loadLoadingType = "روباری"
+                loadPriceMode = "fixed"
+                loadFreightAmount = ""
+                loadDescription = ""
+            }
+            loadedDraftOwner = activeDraftOwner
+        }
+    }
+    LaunchedEffect(
+        activeDraftOwner, loadedDraftOwner, loadDestination, loadCargoType, loadVehicleType,
+        loadLoadingType, loadPriceMode, loadFreightAmount, loadDescription, loadDrafts.toList()
+    ) {
+        if (activeDraftOwner.isNotBlank() && loadedDraftOwner == activeDraftOwner) {
+            delay(350)
+            val snapshot = encodeLoadDraftState(
+                loadDrafts.toList(), loadDestination, loadCargoType, loadVehicleType,
+                loadLoadingType, loadPriceMode, loadFreightAmount, loadDescription
+            )
+            context.getSharedPreferences("elambar_load_drafts", Context.MODE_PRIVATE)
+                .edit().putString(activeDraftOwner, snapshot).apply()
+        }
+    }
     val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null && userAccessToken.isNotBlank() && role == UserRole.DRIVER) {
             driverDocUploading = true
