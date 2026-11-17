@@ -1209,8 +1209,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         OutlinedTextField(
                             value = username,
                             onValueChange = { username = it.trim() },
-                            label = { Text("نام کاربری ثبت‌شده") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.None, autoCorrect = false),
+                            label = { Text("نام کاربری یا شماره موبایل") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.None, autoCorrect = false),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -2023,7 +2023,7 @@ private fun authenticateUser(username: String, password: String, role: UserRole)
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Accept", "application/json")
         }
-        val body = JSONObject().put("action", "login").put("username", username.trim().lowercase()).put("password", password).toString()
+        val body = JSONObject().put("action", "login").put("username", username.trim().lowercase()).put("account_type", if (role == UserRole.DRIVER) "driver" else "company").put("password", password).toString()
         authConnection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
         val authCode = authConnection.responseCode
         val authStream = if (authCode in 200..299) authConnection.inputStream else authConnection.errorStream
