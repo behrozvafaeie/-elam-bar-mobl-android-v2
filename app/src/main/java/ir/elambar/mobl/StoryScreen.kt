@@ -180,11 +180,13 @@ internal fun StoryScreen(accessToken: String, role: String, isSuperAdmin: Boolea
     }
 }
 
-private fun storyUserId(token: String): String = try {
-    val part = token.split(".").getOrNull(1) ?: return ""
-    val decoded = Base64.decode(part, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
-    JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
-} catch (_: Exception) { "" }
+private fun storyUserId(token: String): String {
+    return try {
+        val part = token.split(".").getOrNull(1) ?: return ""
+        val decoded = Base64.decode(part, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+        JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
+    } catch (_: Exception) { "" }
+}
 
 private fun fetchStories(token: String, userId: String): List<StoryCardData> {
     if (token.isBlank()) return emptyList()
