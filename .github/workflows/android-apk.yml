@@ -124,39 +124,18 @@ jobs:
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -memory 4096 -cores 2 -no-metrics
           emulator-boot-timeout: 480
           script: |
-            set -e
             adb wait-for-device
             echo "Waiting for Android boot completion..."
-            booted=0
-            for attempt in $(seq 1 90); do
-              state=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
-              if [ "$state" = "1" ]; then booted=1; break; fi
-              sleep 3
-            done
-            test "$booted" = "1"
-            echo "Installing APK without streaming (more reliable on software emulators)..."
-            installed=0
-            for attempt in 1 2 3; do
-              if adb install --no-streaming -r artifacts/app-debug.apk; then installed=1; break; fi
-              echo "Install attempt $attempt failed; restarting adb before retry..."
-              adb kill-server || true
-              sleep 3
-              adb start-server
-              adb wait-for-device
-              sleep 8
-            done
-            test "$installed" = "1"
+            adb shell 'while [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 3; done'
+            echo "Installing APK..."
+            adb install --no-streaming -r artifacts/app-debug.apk
             echo "Launching app..."
             adb shell am force-stop ir.elambar.mobl
             adb shell monkey -p ir.elambar.mobl 1
             sleep 12
             echo "Checking app process..."
-            APP_PID=$(adb shell pidof ir.elambar.mobl | tr -d '\r')
-            test -n "$APP_PID"
+            adb shell pidof ir.elambar.mobl | grep -E '[0-9]+'
             echo "Checking foreground activity..."
             adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" | head -n 2
             echo "Checking app-specific fatal crashes..."
-            if adb logcat -d --pid="$APP_PID" | grep -q "FATAL EXCEPTION"; then
-              adb logcat -d --pid="$APP_PID" | grep -A 30 -B 5 "FATAL EXCEPTION"
-              exit 1
-            fi
+            adb logcat -d | grep -E -A 25 -B 5 "FATAL EXCEPTION.*ir.elambar.mobl|Process: ir.elambar.mobl" && exit 1 || true
