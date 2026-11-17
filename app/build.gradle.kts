@@ -14,9 +14,9 @@ android {
         versionName = "1.5.1.1"
         // Do not embed long-lived TURN credentials in an APK. A future call release
         // must obtain short-lived TURN credentials from an authenticated server endpoint.
-        buildConfigField("String", "TURN_URL", "\" \"".trim())
-        buildConfigField("String", "TURN_USERNAME", "\" \"".trim())
-        buildConfigField("String", "TURN_PASSWORD", "\" \"".trim())
+        buildConfigField("String", "TURN_URL", "\"\"")
+        buildConfigField("String", "TURN_USERNAME", "\"\"")
+        buildConfigField("String", "TURN_PASSWORD", "\"\"")
     }
     // Compress JNI libraries and extract them at install time. This avoids shipping
     // four large, uncompressed native-library sets in the installable APK and uses
