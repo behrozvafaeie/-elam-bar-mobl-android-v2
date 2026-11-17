@@ -151,6 +151,16 @@ internal fun ChatRoomScreen(accessToken: String, role: String, onClose: () -> Un
     }
 
     LaunchedEffect(accessToken) { refreshRooms() }
+    // Refresh the room list while the inbox is open so newly created private rooms appear.
+    LaunchedEffect(selectedRoom?.id, accessToken) {
+        if (selectedRoom != null) return@LaunchedEffect
+        while (true) {
+            delay(10000)
+            val result = withContext(Dispatchers.IO) { repository.listRooms() }
+            rooms = result.second
+            status = result.first ?: if (result.second.isEmpty()) "اتاق قابل دسترسی پیدا نشد." else ""
+        }
+    }
     LaunchedEffect(selectedRoom?.id) {
         val room = selectedRoom ?: return@LaunchedEffect
         messages = emptyList()
