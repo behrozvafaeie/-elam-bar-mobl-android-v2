@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
@@ -255,5 +256,175 @@ internal fun SmsWalletScreen(accessToken: String, onBack: () -> Unit) {
             }
         }
         Text("شارژ پس از تأیید مدیر ثبت می‌شود. تصویر رسید فقط در فضای خصوصی حساب شما نگهداری می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+
+private data class SmsPendingTopup(
+    val id: String,
+    val userId: String,
+    val amount: Long,
+    val tracking: String,
+    val receiptPath: String
+)
+
+private fun createSmsReceiptSignedUrl(token: String, objectPath: String): String {
+    val encodedPath = objectPath.split("/").joinToString("/") {
+        java.net.URLEncoder.encode(it, "UTF-8").replace("+", "%20")
+    }
+    val connection = URL("$SMS_WALLET_URL/storage/v1/object/sign/sms-topup-receipts/$encodedPath").openConnection() as HttpURLConnection
+    return try {
+        connection.requestMethod = "POST"
+        connection.connectTimeout = 15000
+        connection.readTimeout = 20000
+        connection.doOutput = true
+        connection.setRequestProperty("apikey", SMS_WALLET_KEY)
+        connection.setRequestProperty("Authorization", "Bearer $token")
+        connection.setRequestProperty("Content-Type", "application/json")
+        connection.outputStream.use { it.write(JSONObject().put("expiresIn", 600).toString().toByteArray(Charsets.UTF_8)) }
+        val stream = if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream
+        val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (connection.responseCode !in 200..299) throw IllegalStateException("دریافت لینک امن رسید ناموفق بود.")
+        val signed = JSONObject(body).optString("signedURL").ifBlank { JSONObject(body).optString("signedUrl") }
+        if (signed.isBlank()) throw IllegalStateException("لینک امن رسید دریافت نشد.")
+        if (signed.startsWith("https://")) signed else "$SMS_WALLET_URL${if (signed.startsWith("/")) signed else "/$signed"}"
+    } finally {
+        connection.disconnect()
+    }
+}
+
+@Composable
+internal fun SmsAdminTopupsScreen(accessToken: String, onBack: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    val uriHandler = LocalUriHandler.current
+    var requests by remember { mutableStateOf<List<SmsPendingTopup>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var busyId by remember { mutableStateOf("") }
+    var rejectId by remember { mutableStateOf("") }
+    var rejectReason by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf("") }
+
+    fun refresh() {
+        scope.launch {
+            loading = true
+            try {
+                val rows = withContext(Dispatchers.IO) {
+                    JSONArray(smsWalletRpc(accessToken, "sms_list_pending_topups", JSONObject()))
+                }
+                requests = (0 until rows.length()).mapNotNull { index ->
+                    rows.optJSONObject(index)?.let { row ->
+                        SmsPendingTopup(
+                            row.optString("request_id"),
+                            row.optString("user_id"),
+                            row.optLong("amount_toman"),
+                            row.optString("bank_tracking_number"),
+                            row.optString("receipt_storage_path")
+                        )
+                    }
+                }
+                message = if (requests.isEmpty()) "درخواست معوقی وجود ندارد." else ""
+            } catch (e: Exception) {
+                message = e.message ?: "دریافت صف شارژ ناموفق بود."
+            } finally {
+                loading = false
+            }
+        }
+    }
+
+    LaunchedEffect(accessToken) { refresh() }
+
+    Column(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("بررسی شارژ پیامک", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+            TextButton(onClick = onBack) { Text("برگشت") }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(enabled = !loading, onClick = { refresh() }) { Text("بروزرسانی صف") }
+        }
+        if (loading) CircularProgressIndicator()
+        if (message.isNotBlank()) Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+        requests.forEach { item ->
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("%,d تومان".format(item.amount), style = MaterialTheme.typography.titleMedium)
+                    Text("شناسه حساب: " + item.userId, style = MaterialTheme.typography.bodySmall)
+                    Text("شماره پیگیری: " + item.tracking)
+                    OutlinedButton(
+                        enabled = busyId != item.id,
+                        onClick = {
+                            busyId = item.id
+                            scope.launch {
+                                try {
+                                    val signed = withContext(Dispatchers.IO) { createSmsReceiptSignedUrl(accessToken, item.receiptPath) }
+                                    uriHandler.openUri(signed)
+                                } catch (e: Exception) {
+                                    message = e.message ?: "بازکردن رسید ممکن نشد."
+                                } finally { busyId = "" }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("مشاهده رسید خصوصی") }
+                    Button(
+                        enabled = busyId.isBlank(),
+                        onClick = {
+                            busyId = item.id
+                            scope.launch {
+                                try {
+                                    withContext(Dispatchers.IO) {
+                                        smsWalletRpc(accessToken, "sms_review_manual_topup_request", JSONObject()
+                                            .put("p_request_id", item.id)
+                                            .put("p_decision", "approve")
+                                            .put("p_rejection_reason", JSONObject.NULL))
+                                    }
+                                    message = "شارژ با موفقیت تأیید و به کیف پول اضافه شد."
+                                    refresh()
+                                } catch (e: Exception) {
+                                    message = e.message ?: "تأیید شارژ انجام نشد."
+                                } finally { busyId = "" }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (busyId == item.id) "در حال بررسی..." else "تأیید و شارژ کیف پول") }
+                    TextButton(onClick = {
+                        rejectId = if (rejectId == item.id) "" else item.id
+                        rejectReason = ""
+                    }) { Text(if (rejectId == item.id) "بستن بخش رد درخواست" else "رد درخواست") }
+                    if (rejectId == item.id) {
+                        OutlinedTextField(
+                            value = rejectReason,
+                            onValueChange = { rejectReason = it.take(300) },
+                            label = { Text("دلیل رد (حداقل ۵ نویسه)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedButton(
+                            enabled = busyId.isBlank() && rejectReason.trim().length >= 5,
+                            onClick = {
+                                busyId = item.id
+                                scope.launch {
+                                    try {
+                                        withContext(Dispatchers.IO) {
+                                            smsWalletRpc(accessToken, "sms_review_manual_topup_request", JSONObject()
+                                                .put("p_request_id", item.id)
+                                                .put("p_decision", "reject")
+                                                .put("p_rejection_reason", rejectReason.trim()))
+                                        }
+                                        message = "درخواست شارژ با ثبت دلیل رد شد."
+                                        rejectId = ""
+                                        rejectReason = ""
+                                        refresh()
+                                    } catch (e: Exception) {
+                                        message = e.message ?: "رد درخواست انجام نشد."
+                                    } finally { busyId = "" }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("ثبت رد درخواست") }
+                    }
+                }
+            }
+        }
     }
 }
