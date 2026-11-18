@@ -93,7 +93,22 @@ private enum class UserRole(val label: String) {
 
 private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "", val role: String = "", val refreshToken: String = "")
 private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "")
-private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val priceMode: String, val freightAmount: String, val description: String)
+private data class CargoItemDraft(val cargoType: String, val quantity: String, val unit: String)
+private fun defaultCargoUnit(type: String): String = when (type) {
+    "مبل", "سرویس خواب" -> "دست"
+    "اثاث منزل" -> "واحد"
+    else -> "عدد"
+}
+private data class LoadDraft(
+    val destination: String,
+    val cargoType: String,
+    val vehicleType: String,
+    val loadingType: String,
+    val priceMode: String,
+    val freightAmount: String,
+    val description: String,
+    val cargoItems: List<CargoItemDraft> = listOf(CargoItemDraft(cargoType, "1", defaultCargoUnit(cargoType)))
+)
 
 private fun loadDraftOwnerKey(token: String, role: String): String {
     if (token.isBlank()) return ""
@@ -124,7 +139,12 @@ private fun encodeLoadDraftState(
             .put("loadingType", d.loadingType)
             .put("priceMode", d.priceMode)
             .put("freightAmount", d.freightAmount)
-            .put("description", d.description))
+            .put("description", d.description)
+            .put("cargoItems", JSONArray().also { items ->
+                d.cargoItems.forEach { item ->
+                    items.put(JSONObject().put("cargoType", item.cargoType).put("quantity", item.quantity).put("unit", item.unit))
+                }
+            }))
     }
     return JSONObject()
         .put("drafts", rows)
@@ -147,6 +167,15 @@ private fun decodeLoadDraftState(raw: String): Pair<List<LoadDraft>, JSONObject?
             val destination = row.optString("destination").trim()
             val cargoType = row.optString("cargoType").trim()
             if (destination.isBlank() || cargoType.isBlank()) return@mapNotNull null
+            val cargoRows = row.optJSONArray("cargoItems")
+            val cargoItems = if (cargoRows != null && cargoRows.length() > 0) {
+                (0 until cargoRows.length()).mapNotNull { itemIndex ->
+                    val item = cargoRows.optJSONObject(itemIndex) ?: return@mapNotNull null
+                    val type = item.optString("cargoType").trim()
+                    if (type !in listOf("مبل", "سرویس خواب", "اثاث منزل", "تی‌وی کنسول")) return@mapNotNull null
+                    CargoItemDraft(type, item.optString("quantity", "1"), item.optString("unit", defaultCargoUnit(type)))
+                }
+            } else listOf(CargoItemDraft(cargoType, "1", defaultCargoUnit(cargoType)))
             LoadDraft(
                 destination,
                 cargoType,
@@ -154,7 +183,8 @@ private fun decodeLoadDraftState(raw: String): Pair<List<LoadDraft>, JSONObject?
                 row.optString("loadingType", "روباری"),
                 row.optString("priceMode", "fixed"),
                 row.optString("freightAmount", "0"),
-                row.optString("description")
+                row.optString("description"),
+                cargoItems
             )
         }
         drafts to root
@@ -209,6 +239,14 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var loadActionMessage by remember { mutableStateOf("") }
     var loadPublishing by remember { mutableStateOf(false) }
     val loadDrafts = remember { androidx.compose.runtime.mutableStateListOf<LoadDraft>() }
+    val selectedLoadCargoTypes = remember { androidx.compose.runtime.mutableStateListOf("مبل") }
+    val loadCargoQuantities = remember { androidx.compose.runtime.mutableStateMapOf<String, String>().apply {
+        put("مبل", "1"); put("سرویس خواب", "1"); put("اثاث منزل", "1"); put("تی‌وی کنسول", "1")
+    } }
+    var expandedLoadSections by remember { mutableStateOf(setOf("اطلاعات بار")) }
+    fun toggleLoadSection(section: String) {
+        expandedLoadSections = if (section in expandedLoadSections) expandedLoadSections - section else expandedLoadSections + section
+    }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -2275,6 +2313,11 @@ private fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>, publi
             items.put(JSONObject()
                 .put("destination", d.destination)
                 .put("cargo_type", d.cargoType)
+                .put("cargo_items", JSONArray().also { cargoRows ->
+                    d.cargoItems.forEach { cargo ->
+                        cargoRows.put(JSONObject().put("cargo_type", cargo.cargoType).put("quantity", cargo.quantity).put("unit", cargo.unit))
+                    }
+                })
                 .put("vehicle_type", d.vehicleType)
                 .put("loading_type", d.loadingType)
                 .put("price_mode", d.priceMode)
