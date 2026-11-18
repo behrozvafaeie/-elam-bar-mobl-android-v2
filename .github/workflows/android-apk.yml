@@ -1,7 +1,7 @@
 name: Android APK
 on:
   push:
-    branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25", "fix/source-343-stabilization", "stable/source-343-baseline", "fix/post-merge-ci-stabilization", "feature/v1.5.1-load-draft-autosave", "release/v1.5.1-clean-candidate", "fix/v1.5.1-apk-install-compat", "integration/v1.6.0-consolidated" ]
+    branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25", "fix/source-343-stabilization", "stable/source-343-baseline", "fix/post-merge-ci-stabilization", "feature/v1.5.1-load-draft-autosave", "release/v1.5.1-clean-candidate", "fix/v1.5.1-apk-install-compat", "integration/v1.6.0-consolidated", "work/continue-from-successful-357" ]
     paths:
       - "app/**"
       - "supabase/**"
