@@ -203,7 +203,7 @@ internal fun SmsWalletScreen(accessToken: String, onBack: () -> Unit) {
         }
         if (receiptPath.isNotBlank()) Text("رسید خصوصی آماده ارسال است.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
         Button(
-            enabled = !busy && !loading && amount.toLongOrNull() in 100000L..5000000L && tracking.trim().length >= 4 && receiptPath.isNotBlank(),
+            enabled = !busy && !loading && (amount.toLongOrNull()?.let { it in 100000L..5000000L } == true) && tracking.trim().length >= 4 && receiptPath.isNotBlank(),
             onClick = {
                 busy = true
                 message = "در حال ثبت درخواست شارژ..."
