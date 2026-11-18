@@ -1134,6 +1134,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                                 adminPanelLoading = false
                                                             }
                                                         }) { Text("تأیید حساب") }
+                                                    }
                                                     if (record.status != "rejected" && record.status != "blocked") {
                                                         OutlinedButton(onClick = {
                                                             adminPanelLoading = true
@@ -1143,7 +1144,6 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                                 adminPanelLoading = false
                                                             }
                                                         }) { Text("رد درخواست") }
-                                                    }
                                                     }
                                                     if (record.status != "blocked") {
                                                         OutlinedButton(onClick = {
