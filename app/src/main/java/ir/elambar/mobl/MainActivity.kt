@@ -326,6 +326,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     }
     var soundEnabled by remember { mutableStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getBoolean("sound", true)) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    var driverMenuExpanded by remember { mutableStateOf(false) }
     var selectedPanel by remember { mutableStateOf<String?>(null) }
     var showSettings by remember { mutableStateOf(false) }
     var clockNowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -589,8 +590,35 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         }
                     },
                     navigationIcon = {
-                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Filled.Menu, contentDescription = "باز کردن منو")
+                        Box {
+                            IconButton(onClick = {
+                                if (userLoggedIn && role == UserRole.DRIVER) driverMenuExpanded = true
+                                else scope.launch { drawerState.open() }
+                            }) {
+                                Icon(Icons.Filled.Menu, contentDescription = "باز کردن منو")
+                            }
+                            if (userLoggedIn && role == UserRole.DRIVER) {
+                                DropdownMenu(
+                                    expanded = driverMenuExpanded,
+                                    onDismissRequest = { driverMenuExpanded = false }
+                                ) {
+                                    DropdownMenuItem(text = { Text("پروفایل من") }, onClick = {
+                                        driverMenuExpanded = false; showProfile = true; showSettings = false
+                                    })
+                                    DropdownMenuItem(text = { Text("پیام‌های بار") }, enabled = userStatus == "approved", onClick = {
+                                        driverMenuExpanded = false; showCommunication = true; showChatRooms = false; showStories = false
+                                    })
+                                    DropdownMenuItem(text = { Text("اتاق عمومی و گفتگوها") }, enabled = userStatus == "approved", onClick = {
+                                        driverMenuExpanded = false; showChatRooms = true; showCommunication = false; showStories = false
+                                    })
+                                    DropdownMenuItem(text = { Text("استوری‌ها") }, onClick = {
+                                        driverMenuExpanded = false; showStories = true; showChatRooms = false; showCommunication = false
+                                    })
+                                    DropdownMenuItem(text = { Text("تنظیمات برنامه") }, onClick = {
+                                        driverMenuExpanded = false; showSettings = true; showProfile = false; selectedPanel = null
+                                    })
+                                }
+                            }
                         }
                     },
                     actions = {
