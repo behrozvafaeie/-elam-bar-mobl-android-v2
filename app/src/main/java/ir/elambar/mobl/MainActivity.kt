@@ -328,6 +328,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var soundEnabled by remember { mutableStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getBoolean("sound", true)) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var driverMenuExpanded by remember { mutableStateOf(false) }
+    var adminMenuExpanded by remember { mutableStateOf(false) }
     var selectedPanel by remember { mutableStateOf<String?>(null) }
     var showSettings by remember { mutableStateOf(false) }
     var clockNowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -624,10 +625,78 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     navigationIcon = {
                         Box {
                             IconButton(onClick = {
-                                if (userLoggedIn && role == UserRole.DRIVER) driverMenuExpanded = true
-                                else scope.launch { drawerState.open() }
+                                when {
+                                    adminLoggedIn -> adminMenuExpanded = true
+                                    userLoggedIn && role == UserRole.DRIVER -> driverMenuExpanded = true
+                                    else -> scope.launch { drawerState.open() }
+                                }
                             }) {
                                 Icon(Icons.Filled.Menu, contentDescription = "باز کردن منو")
+                            }
+                            if (adminLoggedIn) {
+                                DropdownMenu(
+                                    expanded = adminMenuExpanded,
+                                    onDismissRequest = { adminMenuExpanded = false },
+                                    modifier = Modifier.heightIn(max = 560.dp)
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("پنل مدیر ارشد", style = MaterialTheme.typography.titleSmall) },
+                                        enabled = false,
+                                        onClick = {}
+                                    )
+                                    if (adminRole == "super_admin" || adminMenuVisibleToOtherAdmins) {
+                                        adminPanels.filter {
+                                            adminRole == "super_admin" || (it != "مدیریت مدیران" && it != "تنظیمات کل برنامه")
+                                        }.forEach { panelTitle ->
+                                            DropdownMenuItem(
+                                                text = { Text(panelTitle) },
+                                                onClick = {
+                                                    adminMenuExpanded = false
+                                                    selectedPanel = panelTitle
+                                                    adminPanelData = ""
+                                                    adminRecords = emptyList()
+                                                    adminActionMessage = ""
+                                                    if (panelTitle == "مدیریت شارژ پیامک") {
+                                                        adminPanelLoading = false
+                                                    } else {
+                                                        adminPanelLoading = true
+                                                        scope.launch {
+                                                            adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, panelTitle) }
+                                                            if (panelTitle == "مدیریت رانندگان" || panelTitle == "مدیریت شرکت‌ها" || panelTitle == "مدیریت مدارک") {
+                                                                adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, panelTitle) }
+                                                            }
+                                                            if (panelTitle == "مدیریت مدیران") {
+                                                                managedAdmins = withContext(Dispatchers.IO) { fetchAdminUsers(adminAccessToken) }
+                                                                adminSearchResults = emptyList()
+                                                                adminSearchQuery = ""
+                                                            }
+                                                            adminPanelLoading = false
+                                                        }
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    } else {
+                                        DropdownMenuItem(
+                                            text = { Text("دسترسی منوی مدیریتی توسط مدیر ارشد محدود شده است.") },
+                                            enabled = false,
+                                            onClick = {}
+                                        )
+                                    }
+                                    HorizontalDivider()
+                                    DropdownMenuItem(text = { Text("پروفایل من") }, onClick = {
+                                        adminMenuExpanded = false; showProfile = true; showSettings = false
+                                    })
+                                    DropdownMenuItem(text = { Text("اعلان‌های من") }, onClick = {
+                                        adminMenuExpanded = false; showNotifications = true; showCommunication = false; showChatRooms = false; showStories = false; showSettings = false; showProfile = false
+                                    })
+                                    DropdownMenuItem(text = { Text("اتاق عمومی و گفتگوها") }, onClick = {
+                                        adminMenuExpanded = false; showChatRooms = true; showCommunication = false; showStories = false
+                                    })
+                                    DropdownMenuItem(text = { Text("تنظیمات برنامه") }, onClick = {
+                                        adminMenuExpanded = false; showSettings = true; showProfile = false; selectedPanel = null
+                                    })
+                                }
                             }
                             if (userLoggedIn && role == UserRole.DRIVER) {
                                 DropdownMenu(
@@ -760,21 +829,42 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     if (selectedPanel == "مدیریت شارژ پیامک") {
                         SmsAdminTopupsScreen(accessToken = adminAccessToken, onBack = { selectedPanel = null })
                     } else if (selectedPanel == null) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = {
-                                selectedPanel = "مدیریت بارها"
-                                adminPanelLoading = true
-                                scope.launch {
-                                    adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, "مدیریت بارها") }
-                                    adminPanelLoading = false
+                        Text("دسترسی سریع به همه بخش‌های مدیریتی", style = MaterialTheme.typography.titleMedium)
+                        val visibleAdminPanels = adminPanels.filter {
+                            adminRole == "super_admin" || (adminMenuVisibleToOtherAdmins && it != "مدیریت مدیران" && it != "تنظیمات کل برنامه")
+                        }
+                        visibleAdminPanels.forEach { panelTitle ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = {
+                                    selectedPanel = panelTitle
+                                    adminPanelData = ""
+                                    adminRecords = emptyList()
+                                    adminActionMessage = ""
+                                    if (panelTitle == "مدیریت شارژ پیامک") {
+                                        adminPanelLoading = false
+                                    } else {
+                                        adminPanelLoading = true
+                                        scope.launch {
+                                            adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, panelTitle) }
+                                            if (panelTitle == "مدیریت رانندگان" || panelTitle == "مدیریت شرکت‌ها" || panelTitle == "مدیریت مدارک") {
+                                                adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, panelTitle) }
+                                            }
+                                            if (panelTitle == "مدیریت مدیران") managedAdmins = withContext(Dispatchers.IO) { fetchAdminUsers(adminAccessToken) }
+                                            adminPanelLoading = false
+                                        }
+                                    }
+                                },
+                                colors = CardDefaults.cardColors(containerColor = if (panelTitle == "مدیریت بارها") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(panelTitle, style = MaterialTheme.typography.titleMedium)
+                                    Text("باز کردن ←", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                                 }
-                            },
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                        ) {
-                            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text("اعلام بار و مدیریت بارها", style = MaterialTheme.typography.titleLarge)
-                                Text("ثبت بار جدید و مدیریت بارهای منتشرشده", style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     } else {
