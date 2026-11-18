@@ -898,65 +898,133 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     Text("تغییر این گزینه برای همه مدیران دیگر اعمال می‌شود و در گزارش مدیریتی ثبت خواهد شد.", style = MaterialTheme.typography.bodySmall)
                                 }
                                 if (selectedPanel == "مدیریت بارها") {
-                                    Text("اعلام بار به نام مدیریت سامانه", style = MaterialTheme.typography.titleMedium)
-                                    Text("ثبت این بار با مجوز مدیر ارشد و بدون انتساب به شرکت انجام می‌شود.", style = MaterialTheme.typography.bodySmall)
-                                    OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("مقصد از تهران") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                                    Text("نوع بار")
-                                    listOf("مبل", "اثاث منزل", "سرویس خواب", "سایر موارد").forEach { cargo ->
-                                        FilterChip(selected = loadCargoType == cargo, onClick = { loadCargoType = cargo }, label = { Text(cargo) })
-                                    }
-                                    Text("نوع خودرو")
-                                    listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون دربستی کار","خاور مبلی پتو دار").forEach { v ->
-                                        FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
-                                    }
-                                    Text("نوع بارگیری")
-                                    listOf("دربست","روباری","نیم بار").forEach { v ->
-                                        FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
-                                    }
-                                    Text("نحوه تعیین کرایه")
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
-                                        FilterChip(selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
-                                    }
-                                    if (loadPriceMode == "fixed") OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("مبلغ کرایه (تومان)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                                    OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
-                                    OutlinedButton(onClick = {
-                                        if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || (loadPriceMode == "fixed" && (loadFreightAmount.isBlank() || loadFreightAmount.toLongOrNull() == null || loadFreightAmount.toLong() <= 0))) {
-                                            adminActionMessage = "مقصد، نوع بار و کرایه را کامل کنید."
-                                        } else {
-                                            loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", loadDescription.trim()))
-                                            loadDestination = ""
-                                            loadDescription = ""
-                                            adminActionMessage = "بار به فهرست انتشار مدیریت اضافه شد."
-                                        }
-                                    }, modifier = Modifier.fillMaxWidth()) { Text("افزودن بار به فهرست") }
-                                    if (loadDrafts.isNotEmpty()) {
-                                        Text("بارهای آماده انتشار: ${loadDrafts.size}", style = MaterialTheme.typography.titleSmall)
-                                        loadDrafts.forEachIndexed { index, draft ->
-                                            Card(Modifier.fillMaxWidth()) {
-                                                Column(Modifier.padding(12.dp)) {
-                                                    Text("${index + 1}. تهران ← ${draft.destination}")
-                                                    Text("${draft.cargoType} | ${draft.vehicleType} | ${draft.loadingType}")
-                                                    Text(if (draft.priceMode == "negotiable") "کرایه: توافقی" else "کرایه: ${draft.freightAmount} تومان")
-                                                    TextButton(onClick = { loadDrafts.removeAt(index) }) { Text("حذف از فهرست") }
+                                    Text("اعلام بار به نام مدیریت سامانه | فرم چندبخشی", style = MaterialTheme.typography.titleMedium)
+                                    Card(Modifier.fillMaxWidth()) {
+                                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            TextButton(onClick = { toggleLoadSection("اطلاعات بار") }) { Text("۱. اطلاعات بار  ${if ("اطلاعات بار" in expandedLoadSections) "−" else "+"}") }
+                                            if ("اطلاعات بار" in expandedLoadSections) {
+                                                Text("مبدأ: تهران (ثابت و غیرقابل تغییر)")
+                                                Text("نوع خودروی موردنیاز")
+                                                listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون دربستی کار","خاور مبلی پتو دار").forEach { v ->
+                                                    FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
                                                 }
                                             }
-                                        }
-                                        Button(enabled = !loadPublishing, onClick = {
-                                            loadPublishing = true
-                                            adminActionMessage = "در حال ثبت بارهای مدیریت..."
-                                            scope.launch {
-                                                val result = withContext(Dispatchers.IO) { publishLoadBatch(adminAccessToken, loadDrafts.toList(), "admin_system") }
-                                                loadPublishing = false
-                                                adminActionMessage = result
-                                                if (result.startsWith("ثبت شد")) {
-                                                    loadDrafts.clear()
-                                                    adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, "مدیریت بارها") }
+                                            HorizontalDivider()
+                                            TextButton(onClick = { toggleLoadSection("نوع و تعداد بار") }) { Text("۲. نوع و تعداد بار  ${if ("نوع و تعداد بار" in expandedLoadSections) "−" else "+"}") }
+                                            if ("نوع و تعداد بار" in expandedLoadSections) {
+                                                Text("چند نوع بار را هم‌زمان انتخاب کنید")
+                                                listOf("مبل", "سرویس خواب", "اثاث منزل", "تی‌وی کنسول").forEach { cargo ->
+                                                    FilterChip(
+                                                        selected = cargo in selectedLoadCargoTypes,
+                                                        onClick = {
+                                                            if (cargo in selectedLoadCargoTypes) selectedLoadCargoTypes.remove(cargo)
+                                                            else selectedLoadCargoTypes.add(cargo)
+                                                        },
+                                                        label = { Text(cargo) }
+                                                    )
+                                                    if (cargo in selectedLoadCargoTypes) {
+                                                        OutlinedTextField(
+                                                            value = loadCargoQuantities[cargo] ?: "1",
+                                                            onValueChange = { loadCargoQuantities[cargo] = it.filter { ch -> ch.isDigit() || ch == '.' }.take(8) },
+                                                            label = { Text("تعداد $cargo (${defaultCargoUnit(cargo)})") },
+                                                            singleLine = true,
+                                                            modifier = Modifier.fillMaxWidth()
+                                                        )
+                                                    }
                                                 }
                                             }
-                                        }, modifier = Modifier.fillMaxWidth()) { Text(if (loadPublishing) "در حال ثبت..." else "انتشار بارهای مدیریت سامانه") }
+                                            HorizontalDivider()
+                                            TextButton(onClick = { toggleLoadSection("مقصدها و کرایه") }) { Text("۳. مقصدها و کرایه هر مقصد  ${if ("مقصدها و کرایه" in expandedLoadSections) "−" else "+"}") }
+                                            if ("مقصدها و کرایه" in expandedLoadSections) {
+                                                OutlinedTextField(loadDestination, { loadDestination = it.take(100) }, label = { Text("شهر مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                                Text("کرایه همین مقصد")
+                                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
+                                                    FilterChip(selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
+                                                }
+                                                if (loadPriceMode == "fixed") OutlinedTextField(
+                                                    loadFreightAmount,
+                                                    { loadFreightAmount = it.filter(Char::isDigit).take(18) },
+                                                    label = { Text("کرایه به تومان") },
+                                                    singleLine = true,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                                OutlinedButton(onClick = {
+                                                    val cargoItems = selectedLoadCargoTypes.map { type ->
+                                                        CargoItemDraft(type, loadCargoQuantities[type] ?: "1", defaultCargoUnit(type))
+                                                    }
+                                                    val validCargo = cargoItems.isNotEmpty() && cargoItems.all { it.quantity.toBigDecimalOrNull()?.let { n -> n > java.math.BigDecimal.ZERO } == true }
+                                                    if (loadDestination.trim().length < 2 || !validCargo ||
+                                                        (loadPriceMode == "fixed" && (loadFreightAmount.isBlank() || loadFreightAmount.toLongOrNull() == null || loadFreightAmount.toLong() <= 0))) {
+                                                        adminActionMessage = "مقصد، نوع و تعداد بار و کرایه این مقصد را کامل کنید."
+                                                    } else {
+                                                        val summary = cargoItems.joinToString("، ") { it.cargoType }
+                                                        loadDrafts.add(LoadDraft(loadDestination.trim(), summary, loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", loadDescription.trim(), cargoItems))
+                                                        loadDestination = ""
+                                                        loadFreightAmount = ""
+                                                        adminActionMessage = "مقصد به فهرست اعلام بار اضافه شد."
+                                                    }
+                                                }, modifier = Modifier.fillMaxWidth()) { Text("افزودن این مقصد به فهرست") }
+                                            }
+                                            HorizontalDivider()
+                                            TextButton(onClick = { toggleLoadSection("نوع سرویس") }) { Text("۴. نوع سرویس  ${if ("نوع سرویس" in expandedLoadSections) "−" else "+"}") }
+                                            if ("نوع سرویس" in expandedLoadSections) {
+                                                listOf("دربست","روباری","نیم بار").forEach { v ->
+                                                    FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
+                                                }
+                                            }
+                                            HorizontalDivider()
+                                            TextButton(onClick = { toggleLoadSection("توضیحات و ثبت نهایی") }) { Text("۵. توضیحات و ثبت نهایی  ${if ("توضیحات و ثبت نهایی" in expandedLoadSections) "−" else "+"}") }
+                                            if ("توضیحات و ثبت نهایی" in expandedLoadSections) {
+                                                OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
+                                                Text("مقصدهای آماده ثبت: ${loadDrafts.size}", style = MaterialTheme.typography.titleSmall)
+                                                loadDrafts.forEachIndexed { index, draft ->
+                                                    Card(Modifier.fillMaxWidth()) {
+                                                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                            Text("${index + 1}. تهران ← ${draft.destination}")
+                                                            draft.cargoItems.forEach { cargo -> Text("• ${cargo.cargoType}: ${cargo.quantity} ${cargo.unit}") }
+                                                            Text("${draft.vehicleType} | ${draft.loadingType}")
+                                                            Text(if (draft.priceMode == "negotiable") "کرایه: توافقی" else "کرایه: ${draft.freightAmount} تومان")
+                                                            Row {
+                                                                TextButton(onClick = {
+                                                                    loadDestination = draft.destination
+                                                                    loadCargoType = draft.cargoType
+                                                                    selectedLoadCargoTypes.clear()
+                                                                    selectedLoadCargoTypes.addAll(draft.cargoItems.map { it.cargoType })
+                                                                    draft.cargoItems.forEach { loadCargoQuantities[it.cargoType] = it.quantity }
+                                                                    loadVehicleType = draft.vehicleType
+                                                                    loadLoadingType = draft.loadingType
+                                                                    loadPriceMode = draft.priceMode
+                                                                    loadFreightAmount = draft.freightAmount
+                                                                    loadDescription = draft.description
+                                                                    loadDrafts.removeAt(index)
+                                                                    expandedLoadSections = setOf("اطلاعات بار","نوع و تعداد بار","مقصدها و کرایه","نوع سرویس","توضیحات و ثبت نهایی")
+                                                                }) { Text("ویرایش") }
+                                                                TextButton(onClick = { loadDrafts.removeAt(index) }) { Text("حذف") }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                Button(enabled = loadDrafts.isNotEmpty() && !loadPublishing, onClick = {
+                                                    loadPublishing = true
+                                                    adminActionMessage = "در حال ثبت مقصدها..."
+                                                    scope.launch {
+                                                        val result = withContext(Dispatchers.IO) { publishLoadBatch(adminAccessToken, loadDrafts.toList(), "admin_system") }
+                                                        loadPublishing = false
+                                                        adminActionMessage = result
+                                                        if (result.startsWith("ثبت شد")) {
+                                                            loadDrafts.clear()
+                                                            loadDestination = ""
+                                                            loadDescription = ""
+                                                            adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, "مدیریت بارها") }
+                                                        }
+                                                    }
+                                                }, modifier = Modifier.fillMaxWidth()) { Text(if (loadPublishing) "در حال ثبت..." else "انتشار بارهای مدیریت سامانه") }
+                                            }
+                                        }
                                     }
                                     if (adminActionMessage.isNotBlank()) Text(adminActionMessage, color = MaterialTheme.colorScheme.secondary)
+
                                     HorizontalDivider()
                                 }
                                 if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها" || selectedPanel == "مدیریت مدارک") {
@@ -1192,61 +1260,133 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         "approved" -> {
                             Text("حساب شما تأیید شده است.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
                             if (role == UserRole.COMPANY) {
-                                Text("اعلام بار | ثبت گروهی از مبدأ تهران", style = MaterialTheme.typography.titleMedium)
-                                OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                                Text("نوع بار")
-                                    listOf("مبل", "اثاث منزل", "سرویس خواب", "سایر موارد").forEach { cargo ->
-                                        FilterChip(selected = loadCargoType == cargo, onClick = { loadCargoType = cargo }, label = { Text(cargo) })
-                                    }
-                                Text("نوع خودرو")
-                                listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون دربستی کار","خاور مبلی پتو دار").forEach { v ->
-                                    FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
-                                }
-                                Text("نوع بارگیری")
-                                listOf("دربست","روباری","نیم بار").forEach { v ->
-                                    FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
-                                }
-                                Text("نحوه تعیین کرایه")
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
-                                        FilterChip(selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
-                                    }
-                                    if (loadPriceMode == "fixed") OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("مبلغ کرایه (تومان)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                                OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
-                                OutlinedButton(onClick = {
-                                    if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || (loadPriceMode == "fixed" && (loadFreightAmount.isBlank() || loadFreightAmount.toLongOrNull() == null || loadFreightAmount.toLong() <= 0))) {
-                                        loadActionMessage = "مقصد، نوع بار و کرایه را کامل کنید."
-                                    } else {
-                                        loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", loadDescription.trim()))
-                                        loadDestination = ""
-                                        loadDescription = ""
-                                        loadActionMessage = "بار به فهرست گروهی اضافه شد."
-                                    }
-                                }, modifier = Modifier.fillMaxWidth()) { Text("افزودن بار به فهرست") }
-                                if (loadDrafts.isNotEmpty()) {
-                                    Text("بارهای آماده انتشار: ${loadDrafts.size}", style = MaterialTheme.typography.titleSmall)
-                                    loadDrafts.forEachIndexed { index, draft ->
-                                        Card(Modifier.fillMaxWidth()) {
-                                            Column(Modifier.padding(horizontal = 9.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                                Text("${index + 1}. تهران ← ${draft.destination}")
-                                                Text("${draft.cargoType} | ${draft.vehicleType} | ${draft.loadingType}")
-                                                Text(if (draft.priceMode == "negotiable") "کرایه: توافقی" else "کرایه: ${draft.freightAmount} تومان")
-                                                TextButton(onClick = { loadDrafts.removeAt(index) }) { Text("حذف از فهرست") }
+                                    Text("اعلام بار شرکت | فرم چندبخشی", style = MaterialTheme.typography.titleMedium)
+                                    Card(Modifier.fillMaxWidth()) {
+                                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            TextButton(onClick = { toggleLoadSection("اطلاعات بار") }) { Text("۱. اطلاعات بار  ${if ("اطلاعات بار" in expandedLoadSections) "−" else "+"}") }
+                                            if ("اطلاعات بار" in expandedLoadSections) {
+                                                Text("مبدأ: تهران (ثابت و غیرقابل تغییر)")
+                                                Text("نوع خودروی موردنیاز")
+                                                listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون دربستی کار","خاور مبلی پتو دار").forEach { v ->
+                                                    FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
+                                                }
+                                            }
+                                            HorizontalDivider()
+                                            TextButton(onClick = { toggleLoadSection("نوع و تعداد بار") }) { Text("۲. نوع و تعداد بار  ${if ("نوع و تعداد بار" in expandedLoadSections) "−" else "+"}") }
+                                            if ("نوع و تعداد بار" in expandedLoadSections) {
+                                                Text("چند نوع بار را هم‌زمان انتخاب کنید")
+                                                listOf("مبل", "سرویس خواب", "اثاث منزل", "تی‌وی کنسول").forEach { cargo ->
+                                                    FilterChip(
+                                                        selected = cargo in selectedLoadCargoTypes,
+                                                        onClick = {
+                                                            if (cargo in selectedLoadCargoTypes) selectedLoadCargoTypes.remove(cargo)
+                                                            else selectedLoadCargoTypes.add(cargo)
+                                                        },
+                                                        label = { Text(cargo) }
+                                                    )
+                                                    if (cargo in selectedLoadCargoTypes) {
+                                                        OutlinedTextField(
+                                                            value = loadCargoQuantities[cargo] ?: "1",
+                                                            onValueChange = { loadCargoQuantities[cargo] = it.filter { ch -> ch.isDigit() || ch == '.' }.take(8) },
+                                                            label = { Text("تعداد $cargo (${defaultCargoUnit(cargo)})") },
+                                                            singleLine = true,
+                                                            modifier = Modifier.fillMaxWidth()
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            HorizontalDivider()
+                                            TextButton(onClick = { toggleLoadSection("مقصدها و کرایه") }) { Text("۳. مقصدها و کرایه هر مقصد  ${if ("مقصدها و کرایه" in expandedLoadSections) "−" else "+"}") }
+                                            if ("مقصدها و کرایه" in expandedLoadSections) {
+                                                OutlinedTextField(loadDestination, { loadDestination = it.take(100) }, label = { Text("شهر مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                                Text("کرایه همین مقصد")
+                                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
+                                                    FilterChip(selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
+                                                }
+                                                if (loadPriceMode == "fixed") OutlinedTextField(
+                                                    loadFreightAmount,
+                                                    { loadFreightAmount = it.filter(Char::isDigit).take(18) },
+                                                    label = { Text("کرایه به تومان") },
+                                                    singleLine = true,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                                OutlinedButton(onClick = {
+                                                    val cargoItems = selectedLoadCargoTypes.map { type ->
+                                                        CargoItemDraft(type, loadCargoQuantities[type] ?: "1", defaultCargoUnit(type))
+                                                    }
+                                                    val validCargo = cargoItems.isNotEmpty() && cargoItems.all { it.quantity.toBigDecimalOrNull()?.let { n -> n > java.math.BigDecimal.ZERO } == true }
+                                                    if (loadDestination.trim().length < 2 || !validCargo ||
+                                                        (loadPriceMode == "fixed" && (loadFreightAmount.isBlank() || loadFreightAmount.toLongOrNull() == null || loadFreightAmount.toLong() <= 0))) {
+                                                        loadActionMessage = "مقصد، نوع و تعداد بار و کرایه این مقصد را کامل کنید."
+                                                    } else {
+                                                        val summary = cargoItems.joinToString("، ") { it.cargoType }
+                                                        loadDrafts.add(LoadDraft(loadDestination.trim(), summary, loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", loadDescription.trim(), cargoItems))
+                                                        loadDestination = ""
+                                                        loadFreightAmount = ""
+                                                        loadActionMessage = "مقصد به فهرست اعلام بار اضافه شد."
+                                                    }
+                                                }, modifier = Modifier.fillMaxWidth()) { Text("افزودن این مقصد به فهرست") }
+                                            }
+                                            HorizontalDivider()
+                                            TextButton(onClick = { toggleLoadSection("نوع سرویس") }) { Text("۴. نوع سرویس  ${if ("نوع سرویس" in expandedLoadSections) "−" else "+"}") }
+                                            if ("نوع سرویس" in expandedLoadSections) {
+                                                listOf("دربست","روباری","نیم بار").forEach { v ->
+                                                    FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
+                                                }
+                                            }
+                                            HorizontalDivider()
+                                            TextButton(onClick = { toggleLoadSection("توضیحات و ثبت نهایی") }) { Text("۵. توضیحات و ثبت نهایی  ${if ("توضیحات و ثبت نهایی" in expandedLoadSections) "−" else "+"}") }
+                                            if ("توضیحات و ثبت نهایی" in expandedLoadSections) {
+                                                OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
+                                                Text("مقصدهای آماده ثبت: ${loadDrafts.size}", style = MaterialTheme.typography.titleSmall)
+                                                loadDrafts.forEachIndexed { index, draft ->
+                                                    Card(Modifier.fillMaxWidth()) {
+                                                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                            Text("${index + 1}. تهران ← ${draft.destination}")
+                                                            draft.cargoItems.forEach { cargo -> Text("• ${cargo.cargoType}: ${cargo.quantity} ${cargo.unit}") }
+                                                            Text("${draft.vehicleType} | ${draft.loadingType}")
+                                                            Text(if (draft.priceMode == "negotiable") "کرایه: توافقی" else "کرایه: ${draft.freightAmount} تومان")
+                                                            Row {
+                                                                TextButton(onClick = {
+                                                                    loadDestination = draft.destination
+                                                                    loadCargoType = draft.cargoType
+                                                                    selectedLoadCargoTypes.clear()
+                                                                    selectedLoadCargoTypes.addAll(draft.cargoItems.map { it.cargoType })
+                                                                    draft.cargoItems.forEach { loadCargoQuantities[it.cargoType] = it.quantity }
+                                                                    loadVehicleType = draft.vehicleType
+                                                                    loadLoadingType = draft.loadingType
+                                                                    loadPriceMode = draft.priceMode
+                                                                    loadFreightAmount = draft.freightAmount
+                                                                    loadDescription = draft.description
+                                                                    loadDrafts.removeAt(index)
+                                                                    expandedLoadSections = setOf("اطلاعات بار","نوع و تعداد بار","مقصدها و کرایه","نوع سرویس","توضیحات و ثبت نهایی")
+                                                                }) { Text("ویرایش") }
+                                                                TextButton(onClick = { loadDrafts.removeAt(index) }) { Text("حذف") }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                Button(enabled = loadDrafts.isNotEmpty() && !loadPublishing, onClick = {
+                                                    loadPublishing = true
+                                                    loadActionMessage = "در حال ثبت مقصدها..."
+                                                    scope.launch {
+                                                        val result = withContext(Dispatchers.IO) { publishLoadBatch(userAccessToken, loadDrafts.toList()) }
+                                                        loadPublishing = false
+                                                        loadActionMessage = result
+                                                        if (result.startsWith("ثبت شد")) {
+                                                            loadDrafts.clear()
+                                                            loadDestination = ""
+                                                            loadDescription = ""
+                                                            Unit
+                                                        }
+                                                    }
+                                                }, modifier = Modifier.fillMaxWidth()) { Text(if (loadPublishing) "در حال ثبت..." else "انتشار همه مقصدها") }
                                             }
                                         }
                                     }
-                                    Button(enabled = !loadPublishing, onClick = {
-                                        loadPublishing = true
-                                        loadActionMessage = "در حال ثبت بارها..."
-                                        scope.launch {
-                                            val result = withContext(Dispatchers.IO) { publishLoadBatch(userAccessToken, loadDrafts.toList()) }
-                                            loadPublishing = false
-                                            loadActionMessage = result
-                                            if (result.startsWith("ثبت شد")) loadDrafts.clear()
-                                        }
-                                    }, modifier = Modifier.fillMaxWidth()) { Text(if (loadPublishing) "در حال ثبت..." else "انتشار همه بارهای فهرست") }
-                                }
-                                if (loadActionMessage.isNotBlank()) Text(loadActionMessage, color = MaterialTheme.colorScheme.secondary)
+                                    if (loadActionMessage.isNotBlank()) Text(loadActionMessage, color = MaterialTheme.colorScheme.secondary)
+
                                 HorizontalDivider()
                                 Text("بارهای ثبت‌شده شرکت", style = MaterialTheme.typography.titleMedium)
                                 CompanyLoadManagement(accessToken = userAccessToken)
