@@ -1,7 +1,7 @@
 name: Android APK
 on:
   push:
-    branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25", "fix/source-343-stabilization", "stable/source-343-baseline", "fix/post-merge-ci-stabilization", "feature/v1.5.1-load-draft-autosave", "release/v1.5.1-clean-candidate", "fix/v1.5.1-apk-install-compat" ]
+    branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25", "fix/source-343-stabilization", "stable/source-343-baseline", "fix/post-merge-ci-stabilization", "feature/v1.5.1-load-draft-autosave", "release/v1.5.1-clean-candidate", "fix/v1.5.1-apk-install-compat", "feature/v1.5.1.1-advanced-load-panel" ]
     paths:
       - "app/**"
       - "supabase/**"
@@ -70,7 +70,7 @@ jobs:
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 28' app/build.gradle.kts
+          grep -F 'versionCode = 29' app/build.gradle.kts
           grep -F 'versionName = "1.5.1.1"' app/build.gradle.kts
           ! grep -E 'ELAM_TURN_(URL|USERNAME|PASSWORD)' .github/workflows/android-apk.yml
 
