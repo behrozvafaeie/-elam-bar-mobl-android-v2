@@ -963,6 +963,13 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                     singleLine = true,
                                                     modifier = Modifier.fillMaxWidth()
                                                 )
+                                            HorizontalDivider()
+                                            TextButton(onClick = { toggleLoadSection("نوع سرویس") }) { Text("۴. نوع سرویس  ${if ("نوع سرویس" in expandedLoadSections) "−" else "+"}") }
+                                            if ("نوع سرویس" in expandedLoadSections) {
+                                                listOf("دربست","روباری","نیم بار").forEach { v ->
+                                                    FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
+                                                }
+                                            }
                                                 OutlinedButton(onClick = {
                                                     val cargoItems = selectedLoadCargoTypes.map { type ->
                                                         CargoItemDraft(type, loadCargoQuantities[type] ?: "1", defaultCargoUnit(type))
@@ -981,16 +988,19 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                 }, modifier = Modifier.fillMaxWidth()) { Text("افزودن این مقصد به فهرست") }
                                             }
                                             HorizontalDivider()
-                                            TextButton(onClick = { toggleLoadSection("نوع سرویس") }) { Text("۴. نوع سرویس  ${if ("نوع سرویس" in expandedLoadSections) "−" else "+"}") }
-                                            if ("نوع سرویس" in expandedLoadSections) {
-                                                listOf("دربست","روباری","نیم بار").forEach { v ->
-                                                    FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
-                                                }
-                                            }
-                                            HorizontalDivider()
                                             TextButton(onClick = { toggleLoadSection("توضیحات و ثبت نهایی") }) { Text("۵. توضیحات و ثبت نهایی  ${if ("توضیحات و ثبت نهایی" in expandedLoadSections) "−" else "+"}") }
                                             if ("توضیحات و ثبت نهایی" in expandedLoadSections) {
-                                                OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
+                                                OutlinedTextField(
+                                                    value = loadDescription,
+                                                    onValueChange = { value ->
+                                                        loadDescription = value.take(3000)
+                                                        for (draftIndex in loadDrafts.indices) {
+                                                            loadDrafts[draftIndex] = loadDrafts[draftIndex].copy(description = loadDescription)
+                                                        }
+                                                    },
+                                                    label = { Text("توضیحات (اختیاری؛ برای همه مقصدهای این گروه)") },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
                                                 Text("مقصدهای آماده ثبت: ${loadDrafts.size}", style = MaterialTheme.typography.titleSmall)
                                                 loadDrafts.forEachIndexed { index, draft ->
                                                     Card(Modifier.fillMaxWidth()) {
@@ -1325,6 +1335,13 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                     singleLine = true,
                                                     modifier = Modifier.fillMaxWidth()
                                                 )
+                                            HorizontalDivider()
+                                            TextButton(onClick = { toggleLoadSection("نوع سرویس") }) { Text("۴. نوع سرویس  ${if ("نوع سرویس" in expandedLoadSections) "−" else "+"}") }
+                                            if ("نوع سرویس" in expandedLoadSections) {
+                                                listOf("دربست","روباری","نیم بار").forEach { v ->
+                                                    FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
+                                                }
+                                            }
                                                 OutlinedButton(onClick = {
                                                     val cargoItems = selectedLoadCargoTypes.map { type ->
                                                         CargoItemDraft(type, loadCargoQuantities[type] ?: "1", defaultCargoUnit(type))
@@ -1343,16 +1360,19 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                 }, modifier = Modifier.fillMaxWidth()) { Text("افزودن این مقصد به فهرست") }
                                             }
                                             HorizontalDivider()
-                                            TextButton(onClick = { toggleLoadSection("نوع سرویس") }) { Text("۴. نوع سرویس  ${if ("نوع سرویس" in expandedLoadSections) "−" else "+"}") }
-                                            if ("نوع سرویس" in expandedLoadSections) {
-                                                listOf("دربست","روباری","نیم بار").forEach { v ->
-                                                    FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
-                                                }
-                                            }
-                                            HorizontalDivider()
                                             TextButton(onClick = { toggleLoadSection("توضیحات و ثبت نهایی") }) { Text("۵. توضیحات و ثبت نهایی  ${if ("توضیحات و ثبت نهایی" in expandedLoadSections) "−" else "+"}") }
                                             if ("توضیحات و ثبت نهایی" in expandedLoadSections) {
-                                                OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
+                                                OutlinedTextField(
+                                                    value = loadDescription,
+                                                    onValueChange = { value ->
+                                                        loadDescription = value.take(3000)
+                                                        for (draftIndex in loadDrafts.indices) {
+                                                            loadDrafts[draftIndex] = loadDrafts[draftIndex].copy(description = loadDescription)
+                                                        }
+                                                    },
+                                                    label = { Text("توضیحات (اختیاری؛ برای همه مقصدهای این گروه)") },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
                                                 Text("مقصدهای آماده ثبت: ${loadDrafts.size}", style = MaterialTheme.typography.titleSmall)
                                                 loadDrafts.forEachIndexed { index, draft ->
                                                     Card(Modifier.fillMaxWidth()) {
