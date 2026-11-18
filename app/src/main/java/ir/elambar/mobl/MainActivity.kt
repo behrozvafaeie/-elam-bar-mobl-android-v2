@@ -183,6 +183,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var profilePhotoMessage by remember { mutableStateOf("") }
     var showProfile by remember { mutableStateOf(false) }
     var showCommunication by remember { mutableStateOf(false) }
+    var showNotifications by remember { mutableStateOf(false) }
     var showChatRooms by remember { mutableStateOf(false) }
     var showStories by remember { mutableStateOf(false) }
     var selectedDriverDocType by remember { mutableStateOf("کارت هوشمند") }
@@ -472,6 +473,22 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
+                    if (userLoggedIn || adminLoggedIn) {
+                        NavigationDrawerItem(
+                            label = { Text("اعلان‌های من") },
+                            selected = showNotifications,
+                            onClick = {
+                                showNotifications = true
+                                showCommunication = false
+                                showChatRooms = false
+                                showStories = false
+                                showProfile = false
+                                showSettings = false
+                                scope.launch { drawerState.close() }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     if ((userLoggedIn && userStatus == "approved") || (adminLoggedIn && adminRole == "super_admin")) {
                         NavigationDrawerItem(
                             label = { Text("پیام‌های بار") },
@@ -620,6 +637,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     DropdownMenuItem(text = { Text("پروفایل من") }, onClick = {
                                         driverMenuExpanded = false; showProfile = true; showSettings = false
                                     })
+                                    DropdownMenuItem(text = { Text("اعلان‌های من") }, onClick = {
+                                        driverMenuExpanded = false; showNotifications = true; showCommunication = false; showChatRooms = false; showStories = false; showSettings = false; showProfile = false
+                                    })
                                     DropdownMenuItem(text = { Text("پیام‌های بار") }, enabled = userStatus == "approved", onClick = {
                                         driverMenuExpanded = false; showCommunication = true; showChatRooms = false; showStories = false
                                     })
@@ -661,7 +681,12 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 }
                 Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
                 Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
-                if (showSettings) {
+                if (showNotifications) {
+                    NotificationInboxScreen(
+                        accessToken = if (adminLoggedIn) adminAccessToken else userAccessToken,
+                        onBack = { showNotifications = false }
+                    )
+                } else if (showSettings) {
                     HorizontalDivider()
                     Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge) {
                         Column(
