@@ -1424,10 +1424,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 matchedLoads.forEach { load ->
                                     Card(Modifier.fillMaxWidth()) {
                                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                            Text("تهران ← ${load.destination}", style = MaterialTheme.typography.titleMedium)
-                                            Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
-                                            Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
-                                            if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
+                                            Text("مقصد: ${load.destination}", style = MaterialTheme.typography.titleMedium)
+                                            Text("خودروی موردنیاز: ${load.vehicleType}")
                                             Button(enabled = acceptingLoadId.isBlank(), onClick = {
                                                 acceptingLoadId = load.id
                                                 scope.launch {
