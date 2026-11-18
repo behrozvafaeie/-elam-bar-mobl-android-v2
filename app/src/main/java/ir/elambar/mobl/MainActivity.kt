@@ -555,6 +555,17 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     } else {
                         Text(if (userLoggedIn) "بخش‌های حساب شما از این منو در دسترس خواهند بود." else "برای ورود به بخش‌های برنامه، ابتدا وارد حساب شوید.", style = MaterialTheme.typography.bodySmall)
                     }
+                    if (userLoggedIn && userStatus == "approved") {
+                        NavigationDrawerItem(
+                            label = { Text("کیف پول پیامک") },
+                            selected = selectedPanel == "کیف پول پیامک",
+                            onClick = {
+                                selectedPanel = "کیف پول پیامک"
+                                scope.launch { drawerState.close() }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     HorizontalDivider()
                     NavigationDrawerItem(
                         label = { Text("تنظیمات برنامه") },
@@ -1152,6 +1163,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         onClick = { showProfile = false },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("بازگشت به پنل اصلی") }
+                } else if (userLoggedIn && selectedPanel == "کیف پول پیامک") {
+                    SmsWalletScreen(accessToken = userAccessToken, onBack = { selectedPanel = null })
                 } else if (userLoggedIn) {
                     HorizontalDivider()
                     Text(if (role == UserRole.DRIVER) "پنل راننده" else "پنل شرکت باربری", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
