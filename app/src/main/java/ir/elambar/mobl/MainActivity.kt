@@ -2718,22 +2718,40 @@ private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<Ma
         val primary = driver.optString("primary_destination").trim()
         if (primary.isNotBlank()) destinations.add(primary.lowercase())
         if (vehicle.isBlank() || destinations.isEmpty()) return "ابتدا نوع خودرو و مقصدهای خود را در پروفایل کامل کنید." to emptyList()
-        val loadsUrl = "$SUPABASE_URL/rest/v1/loads?select=id,origin,destination,cargo_type,vehicle_type,freight_amount,description,loading_type&status=eq.published&assigned_driver_id=is.null&order=created_at.desc&limit=300"
-        loadsConnection = (URL(loadsUrl).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"; connectTimeout = 15000; readTimeout = 20000
-            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
-            setRequestProperty("Authorization", "Bearer $accessToken")
-            setRequestProperty("Accept", "application/json")
+        // Read newest published loads in pages until 300 matching loads are collected.
+        // Filtering only the first 300 rows could hide valid matches when other vehicles
+        // or destinations dominate the newest announcements.
+        val matchingRows = mutableListOf<JSONObject>()
+        var offset = 0
+        while (matchingRows.size < 300 && offset < 6000) {
+            val loadsUrl = "$SUPABASE_URL/rest/v1/loads?select=id,origin,destination,cargo_type,vehicle_type,freight_amount,description,loading_type&status=eq.published&assigned_driver_id=is.null&order=created_at.desc,id.desc&limit=300&offset=$offset"
+            loadsConnection?.disconnect()
+            loadsConnection = (URL(loadsUrl).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"; connectTimeout = 15000; readTimeout = 20000
+                setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+                setRequestProperty("Authorization", "Bearer $accessToken")
+                setRequestProperty("Accept", "application/json")
+            }
+            val code = loadsConnection.responseCode
+            val stream = if (code in 200..299) loadsConnection.inputStream else loadsConnection.errorStream
+            val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            if (code !in 200..299) return "دریافت بارها ناموفق بود (کد $code)." to emptyList()
+            val rows = JSONArray(raw)
+            if (rows.length() == 0) break
+            for (index in 0 until rows.length()) {
+                val item = rows.getJSONObject(index)
+                if (item.optString("vehicle_type").trim().equals(vehicle, ignoreCase = true) &&
+                    destinations.contains(item.optString("destination").trim().lowercase()) &&
+                    item.optString("id").isNotBlank()
+                ) {
+                    matchingRows.add(item)
+                    if (matchingRows.size == 300) break
+                }
+            }
+            if (rows.length() < 300) break
+            offset += rows.length()
         }
-        val code = loadsConnection.responseCode
-        val stream = if (code in 200..299) loadsConnection.inputStream else loadsConnection.errorStream
-        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-        if (code !in 200..299) return "دریافت بارها ناموفق بود (کد $code)." to emptyList()
-        val rows = JSONArray(raw)
-        val matching = (0 until rows.length()).map { rows.getJSONObject(it) }.filter { item ->
-            item.optString("vehicle_type").trim().equals(vehicle, ignoreCase = true) &&
-                destinations.contains(item.optString("destination").trim().lowercase())
-        }.map { item ->
+        val matching = matchingRows.map { item ->
             MatchedLoad(
                 id = item.optString("id"),
                 origin = item.optString("origin", "تهران"),
@@ -2744,7 +2762,7 @@ private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<Ma
                 freightAmount = item.optString("freight_amount", "0"),
                 description = item.optString("description").takeUnless { it == "null" }.orEmpty()
             )
-        }.filter { it.id.isNotBlank() }
+        }
         (if (matching.isEmpty()) "در حال حاضر بار منتشرشده متناسب با خودرو و مقصدهای شما وجود ندارد." else "بارهای متناسب پیدا شد: ${matching.size} مورد. برای گرفتن بار، دکمه هر کارت را بزنید.") to matching
     } catch (_: Exception) {
         "ارتباط با سامانه برقرار نشد. اینترنت را بررسی کنید." to emptyList()
