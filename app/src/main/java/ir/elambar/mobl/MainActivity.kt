@@ -192,7 +192,17 @@ private fun decodeLoadDraftState(raw: String): Pair<List<LoadDraft>, JSONObject?
 }
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
 private data class MatchedLoad(val id: String, val origin: String, val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String)
-private data class AcceptedLoadContact(val id: String, val destination: String, val companyName: String, val managerName: String, val mobile: String)
+private data class AcceptedLoadContact(
+    val id: String,
+    val destination: String,
+    val companyName: String,
+    val managerName: String,
+    val mobile: String,
+    val cargoItemsSummary: String = "",
+    val vehicleType: String = "",
+    val loadingType: String = "",
+    val freightAmount: String = "0"
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1455,6 +1465,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         Card(Modifier.fillMaxWidth()) {
                                             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                                 Text("تهران ← ${accepted.destination}", style = MaterialTheme.typography.titleMedium)
+                                                if (accepted.cargoItemsSummary.isNotBlank()) Text("اقلام بار: ${accepted.cargoItemsSummary}")
+                                                if (accepted.vehicleType.isNotBlank()) Text("خودرو: ${accepted.vehicleType} | نوع سرویس: ${accepted.loadingType}")
+                                                Text(if (accepted.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${accepted.freightAmount} تومان")
                                                 Text("شرکت: ${accepted.companyName}")
                                                 if (accepted.managerName.isNotBlank()) Text("مسئول: ${accepted.managerName}")
                                                 Button(
@@ -2744,7 +2757,7 @@ private fun fetchAcceptedLoadContacts(accessToken: String): List<AcceptedLoadCon
         val userId = JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
         if (userId.isBlank()) return emptyList()
         val query = URLEncoder.encode(userId, "UTF-8")
-        connection = (URL("$SUPABASE_URL/rest/v1/loads?select=id,destination&assigned_driver_id=eq.$query&status=eq.driver_selected&order=driver_selected_at.desc&limit=100").openConnection() as HttpURLConnection).apply {
+        connection = (URL("$SUPABASE_URL/rest/v1/loads?select=id,destination,cargo_type,vehicle_type,loading_type,freight_amount,load_cargo_items(cargo_type,quantity,unit)&assigned_driver_id=eq.$query&status=eq.driver_selected&order=driver_selected_at.desc&limit=100").openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"; connectTimeout = 15000; readTimeout = 20000
             setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
             setRequestProperty("Authorization", "Bearer $accessToken")
@@ -2773,9 +2786,21 @@ private fun fetchAcceptedLoadContacts(accessToken: String): List<AcceptedLoadCon
                 val contacts = JSONArray(rpc.inputStream.bufferedReader().use { it.readText() })
                 if (contacts.length() == 0) continue
                 val contact = contacts.getJSONObject(0)
+                val cargoRows = load.optJSONArray("load_cargo_items") ?: JSONArray()
+                val cargoSummary = (0 until cargoRows.length()).mapNotNull { cargoIndex ->
+                    val cargo = cargoRows.optJSONObject(cargoIndex) ?: return@mapNotNull null
+                    cargo.optString("cargo_type") + ": " + cargo.optString("quantity") + " " + cargo.optString("unit")
+                }.joinToString("، ")
                 result.add(AcceptedLoadContact(
-                    id, load.optString("destination"), contact.optString("company_name"),
-                    contact.optString("manager_name"), contact.optString("mobile")
+                    id = id,
+                    destination = load.optString("destination"),
+                    companyName = contact.optString("company_name"),
+                    managerName = contact.optString("manager_name"),
+                    mobile = contact.optString("mobile"),
+                    cargoItemsSummary = cargoSummary.ifBlank { load.optString("cargo_type") },
+                    vehicleType = load.optString("vehicle_type"),
+                    loadingType = load.optString("loading_type"),
+                    freightAmount = load.optString("freight_amount", "0")
                 ))
             } catch (_: Exception) {
                 // Fail closed: never show a contact when the assignment check fails.
