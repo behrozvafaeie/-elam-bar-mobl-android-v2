@@ -40,6 +40,7 @@ private data class AppNotification(
     val type: String,
     val title: String,
     val body: String,
+    val loadId: String,
     val createdAt: String,
     val readAt: String?
 )
@@ -48,7 +49,7 @@ private class NotificationInboxRepository(private val token: String) {
     fun list(): Pair<String?, List<AppNotification>> {
         val (code, body) = request(
             "GET",
-            "notifications?select=id,notification_type,title,body,created_at,read_at&order=created_at.desc&limit=100"
+            "notifications?select=id,notification_type,title,body,data,created_at,read_at&order=created_at.desc&limit=100"
         )
         if (code !in 200..299) return "دریافت اعلان‌ها ناموفق بود؛ اتصال و مجوز حساب را بررسی کنید." to emptyList()
         return runCatching {
@@ -60,6 +61,7 @@ private class NotificationInboxRepository(private val token: String) {
                     row.optString("notification_type"),
                     row.optString("title"),
                     row.optString("body"),
+                    row.optJSONObject("data")?.optString("load_id").orEmpty(),
                     row.optString("created_at"),
                     row.optString("read_at").takeIf { it.isNotBlank() && it != "null" }
                 )
@@ -139,7 +141,7 @@ internal fun NotificationInboxScreen(accessToken: String, onBack: () -> Unit) {
                     Text(item.title, style = MaterialTheme.typography.titleMedium)
                     Text(item.body)
                     if (item.type == "matching_load_available") {
-                        Text("شناسه بار: " + runCatching { JSONObject(itemDataPlaceholder(item.id)).optString("load_id") }.getOrDefault(item.id),
+                        Text("شناسه بار: " + item.loadId,
                             style = MaterialTheme.typography.labelSmall)
                     }
                     Text(if (item.readAt == null) "خوانده‌نشده" else "خوانده‌شده", style = MaterialTheme.typography.labelSmall,
@@ -161,4 +163,3 @@ internal fun NotificationInboxScreen(accessToken: String, onBack: () -> Unit) {
     }
 }
 
-private fun itemDataPlaceholder(id: String): String = JSONObject().put("load_id", id).toString()
