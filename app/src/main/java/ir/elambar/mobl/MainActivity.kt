@@ -192,6 +192,7 @@ private fun decodeLoadDraftState(raw: String): Pair<List<LoadDraft>, JSONObject?
 }
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
 private data class MatchedLoad(val id: String, val origin: String, val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String)
+private data class ApprovedCompanyContact(val id: String, val companyName: String, val managerName: String, val firstName: String, val lastName: String, val city: String, val photoPath: String = "")
 private data class AcceptedLoadContact(
     val id: String,
     val destination: String,
@@ -239,6 +240,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var driverSearchVehicle by remember { mutableStateOf("وانت مبلی") }
     var driverSearchResults by remember { mutableStateOf("برای پیدا کردن راننده، مقصد را وارد کنید.") }
     var driverSearchLoading by remember { mutableStateOf(false) }
+    var approvedCompanies by remember { mutableStateOf<List<ApprovedCompanyContact>>(emptyList()) }
+    var approvedCompaniesMessage by remember { mutableStateOf("برای مشاهده شرکت‌های تأییدشده، بروزرسانی را بزنید.") }
+    var approvedCompaniesLoading by remember { mutableStateOf(false) }
     var loadDestination by remember { mutableStateOf("") }
     var loadCargoType by remember { mutableStateOf("مبل") }
     var loadVehicleType by remember { mutableStateOf("وانت مبلی") }
@@ -1417,6 +1421,45 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 }
                                 Text(driverSearchResults, textAlign = TextAlign.Start)
                             } else {
+                                Text("شرکت‌های باربری تأییدشده", style = MaterialTheme.typography.titleMedium)
+                                Text("فهرست شرکت‌ها جدا از رانندگان است؛ شماره و نشانی خصوصی نمایش داده نمی‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                OutlinedButton(
+                                    enabled = !approvedCompaniesLoading,
+                                    onClick = {
+                                        approvedCompaniesLoading = true
+                                        scope.launch {
+                                            val result = withContext(Dispatchers.IO) { fetchApprovedCompanies(userAccessToken) }
+                                            approvedCompanies = result.second
+                                            approvedCompaniesMessage = result.first
+                                            approvedCompaniesLoading = false
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text(if (approvedCompaniesLoading) "در حال دریافت فهرست..." else "بروزرسانی فهرست شرکت‌ها") }
+                                Text(approvedCompaniesMessage, style = MaterialTheme.typography.bodySmall)
+                                approvedCompanies.forEach { company ->
+                                    Card(Modifier.fillMaxWidth()) {
+                                        Row(
+                                            Modifier.fillMaxWidth().padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            if (company.photoPath.startsWith("https://")) {
+                                                AsyncImage(model = company.photoPath, contentDescription = "تصویر شرکت", modifier = Modifier.size(52.dp).clip(CircleShape))
+                                            } else {
+                                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(52.dp)) {
+                                                    Box(contentAlignment = Alignment.Center) { Text("شرکت") }
+                                                }
+                                            }
+                                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                Text(company.companyName.ifBlank { "شرکت باربری" }, style = MaterialTheme.typography.titleSmall)
+                                                Text("مدیر: " + company.managerName.ifBlank { (company.firstName + " " + company.lastName).trim().ifBlank { "ثبت نشده" } })
+                                                Text("شهر فعالیت: " + company.city, style = MaterialTheme.typography.bodySmall)
+                                            }
+                                        }
+                                    }
+                                }
+                                HorizontalDivider()
                                 Text("بارهای متناسب با نوع خودرو و مقصدهای ثبت‌شده شما", style = MaterialTheme.typography.titleMedium)
                                 OutlinedButton(enabled = !matchedLoadsLoading, onClick = {
                                     matchedLoadsLoading = true
@@ -2540,6 +2583,52 @@ private fun fetchCompanyDrivers(accessToken: String, vehicle: String, destinatio
         }
     } catch (_: Exception) { "ارتباط با سامانه برقرار نشد." }
     finally { connection?.disconnect() }
+}
+
+
+private fun fetchApprovedCompanies(accessToken: String): Pair<String, List<ApprovedCompanyContact>> {
+    if (accessToken.isBlank()) return "نشست ورود معتبر نیست." to emptyList()
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL(SUPABASE_URL + "/rest/v1/rpc/search_approved_companies").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 20000
+            doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer " + accessToken)
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        connection.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code !in 200..299) {
+            val detail = runCatching { JSONObject(raw).optString("message") }.getOrDefault("")
+            return (detail.ifBlank { "دریافت فهرست شرکت‌ها ناموفق بود (کد $code)." }) to emptyList()
+        }
+        val rows = JSONArray(raw)
+        val companies = (0 until rows.length()).mapNotNull { index ->
+            val item = rows.optJSONObject(index) ?: return@mapNotNull null
+            val id = item.optString("company_id")
+            if (id.isBlank()) return@mapNotNull null
+            ApprovedCompanyContact(
+                id = id,
+                companyName = item.optString("company_name"),
+                managerName = item.optString("manager_name"),
+                firstName = item.optString("first_name"),
+                lastName = item.optString("last_name"),
+                city = item.optString("activity_city"),
+                photoPath = item.optString("profile_photo_path")
+            )
+        }
+        (if (companies.isEmpty()) "شرکت تأییدشده‌ای برای نمایش وجود ندارد." else "تعداد شرکت‌های تأییدشده: ${companies.size}") to companies
+    } catch (_: Exception) {
+        "ارتباط با سامانه برقرار نشد. اینترنت را بررسی کنید." to emptyList()
+    } finally {
+        connection?.disconnect()
+    }
 }
 
 
