@@ -2468,7 +2468,7 @@ private fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>, publi
             .put("p_items", items)
             .put("p_publisher_type", publisherType)
             .put("p_company_id", JSONObject.NULL)
-        connection = (URL("$SUPABASE_URL/rest/v1/rpc/publish_tehran_load_batch_v2").openConnection() as HttpURLConnection).apply {
+        connection = (URL("$SUPABASE_URL/rest/v1/rpc/publish_tehran_load_advanced_v1").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = 15000
             readTimeout = 30000
