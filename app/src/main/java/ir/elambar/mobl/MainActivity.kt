@@ -334,7 +334,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var clockUsesServerTime by remember { mutableStateOf(false) }
     val adminPanels = listOf(
         "مدیریت رانندگان", "مدیریت شرکت‌ها", "مدیریت بارها", "مدیریت مدیران",
-        "مدیریت مدارک", "گفتگوها", "شکایات", "گزارش‌ها", "تنظیمات کل برنامه"
+        "مدیریت مدارک", "گفتگوها", "شکایات", "گزارش‌ها", "مدیریت شارژ پیامک", "تنظیمات کل برنامه"
     )
     LaunchedEffect(Unit) {
         while (true) {
@@ -534,17 +534,21 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     adminActionMessage = ""
                                     scope.launch {
                                         drawerState.close()
-                                        adminPanelLoading = true
-                                        adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, title) }
-                                        if (title == "مدیریت رانندگان" || title == "مدیریت شرکت‌ها" || title == "مدیریت مدارک") {
-                                            adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, title) }
+                                        if (title == "مدیریت شارژ پیامک") {
+                                            adminPanelLoading = false
+                                        } else {
+                                            adminPanelLoading = true
+                                            adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, title) }
+                                            if (title == "مدیریت رانندگان" || title == "مدیریت شرکت‌ها" || title == "مدیریت مدارک") {
+                                                adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, title) }
+                                            }
+                                            if (title == "مدیریت مدیران") {
+                                                managedAdmins = withContext(Dispatchers.IO) { fetchAdminUsers(adminAccessToken) }
+                                                adminSearchResults = emptyList()
+                                                adminSearchQuery = ""
+                                            }
+                                            adminPanelLoading = false
                                         }
-                                        if (title == "مدیریت مدیران") {
-                                            managedAdmins = withContext(Dispatchers.IO) { fetchAdminUsers(adminAccessToken) }
-                                            adminSearchResults = emptyList()
-                                            adminSearchQuery = ""
-                                        }
-                                        adminPanelLoading = false
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth()
@@ -728,7 +732,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     HorizontalDivider()
                     Text("پنل مدیریت", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
                     Text("خوش آمدید؛ سطح دسترسی: " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }, textAlign = TextAlign.Center)
-                    if (selectedPanel == null) {
+                    if (selectedPanel == "مدیریت شارژ پیامک") {
+                        SmsAdminTopupsScreen(accessToken = adminAccessToken, onBack = { selectedPanel = null })
+                    } else if (selectedPanel == null) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
