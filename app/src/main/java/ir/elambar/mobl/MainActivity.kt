@@ -1124,7 +1124,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                         }
                                                     }
                                                 } else {
-                                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                                     if (record.status != "approved") {
                                                         Button(onClick = {
                                                             adminPanelLoading = true
@@ -1133,7 +1133,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                                 adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, selectedPanel ?: "") }
                                                                 adminPanelLoading = false
                                                             }
-                                                        }) { Text("تأیید حساب") }
+                                                        }, modifier = Modifier.fillMaxWidth()) { Text("تأیید حساب") }
                                                     }
                                                     if (record.status != "rejected" && record.status != "blocked") {
                                                         OutlinedButton(onClick = {
@@ -1143,7 +1143,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                                 adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, selectedPanel ?: "") }
                                                                 adminPanelLoading = false
                                                             }
-                                                        }) { Text("رد درخواست") }
+                                                        }, modifier = Modifier.fillMaxWidth()) { Text("رد درخواست") }
                                                     }
                                                     if (record.status != "blocked") {
                                                         OutlinedButton(onClick = {
@@ -1153,7 +1153,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                                 adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, selectedPanel ?: "") }
                                                                 adminPanelLoading = false
                                                             }
-                                                        }) { Text("مسدودسازی") }
+                                                        }, modifier = Modifier.fillMaxWidth()) { Text("مسدودسازی") }
                                                     }
                                                     if (record.status == "blocked") {
                                                         Button(onClick = {
@@ -1163,7 +1163,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                                 adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, selectedPanel ?: "") }
                                                                 adminPanelLoading = false
                                                             }
-                                                        }) { Text("رفع مسدودی") }
+                                                        }, modifier = Modifier.fillMaxWidth()) { Text("رفع مسدودی") }
                                                     }
                                                 }
                                                 }
@@ -2916,6 +2916,10 @@ private fun updateMemberStatus(accessToken: String, panel: String, id: String, s
         "rejected" -> "درخواست حساب رد شد."
         else -> "حساب با ثبت دلیل مسدود شد."
     }
-    val detail = runCatching { JSONObject(body).optString("message").ifBlank { JSONObject(body).optString("hint") } }.getOrDefault("")
-    return "تغییر وضعیت انجام نشد (کد $code)." + if (detail.isNotBlank()) " $detail" else " مجوز مدیر و وضعیت حساب را بررسی کنید."
+    val detail = runCatching {
+        val error = JSONObject(body)
+        listOf("message", "details", "hint", "code").map { error.optString(it).trim() }
+            .filter { it.isNotBlank() && it != "null" }.distinct().joinToString(" | ")
+    }.getOrDefault(body.trim().take(500))
+    return "تغییر وضعیت انجام نشد (کد $code)." + if (detail.isNotBlank()) " $detail" else " پاسخ سرور خالی بود؛ مجوز مدیر و دلیل مسدودسازی را بررسی کنید."
 }
