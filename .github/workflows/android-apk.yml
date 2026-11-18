@@ -8,6 +8,8 @@ on:
       - "*.gradle.kts"
       - "settings.gradle.kts"
       - ".github/workflows/android-apk.yml"
+  pull_request:
+    branches: [ "fix/v1.5.1-apk-install-compat" ]
   workflow_dispatch:
 
 permissions:
