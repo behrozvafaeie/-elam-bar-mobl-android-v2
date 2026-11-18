@@ -135,7 +135,4 @@ jobs:
             sleep 10
             adb shell pidof ir.elambar.mobl | grep -E '[0-9]+'
             adb logcat -d > /tmp/elam-logcat.txt
-            if grep -E -A 25 -B 5 "FATAL EXCEPTION.*ir.elambar.mobl|Process: ir.elambar.mobl" /tmp/elam-logcat.txt >/dev/null; then
-              echo "Fatal crash detected."
-              exit 1
-            fi
+            ! grep -E -A 25 -B 5 "FATAL EXCEPTION.*ir.elambar.mobl|Process: ir.elambar.mobl" /tmp/elam-logcat.txt
