@@ -10,8 +10,8 @@ android {
         applicationId = "ir.elambar.mobl"
         minSdk = 24
         targetSdk = 35
-        versionCode = 29
-        versionName = "1.5.2.0"
+        versionCode = 30
+        versionName = "1.5.2.1"
         // Do not embed long-lived TURN credentials in an APK. A future call release
         // must obtain short-lived TURN credentials from an authenticated server endpoint.
         buildConfigField("String", "TURN_URL", "\"\"")

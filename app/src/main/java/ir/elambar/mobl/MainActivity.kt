@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -1489,6 +1490,13 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     }
                     Text("ورود شما روی این دستگاه محفوظ می‌ماند؛ خروج فقط با حذف حساب توسط مدیر ارشد اصلی انجام می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 } else {
+                    Image(
+                        painter = painterResource(id = R.drawable.app_splash_banner),
+                        contentDescription = "تصویر کامیون ایسوزو زرد اعلام بار مبل با پلاک مخدوش",
+                        modifier = Modifier.fillMaxWidth().height(250.dp).clip(MaterialTheme.shapes.extraLarge),
+                        contentScale = ContentScale.Crop
+                    )
+                    Text("جابجایی با خیال راحت", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         FilterChip(selected = role == UserRole.DRIVER, onClick = { role = UserRole.DRIVER; register = true; message = "ثبت‌نام راننده" }, label = { Text("راننده") })
                         FilterChip(selected = role == UserRole.COMPANY, onClick = { role = UserRole.COMPANY; register = true; message = "ثبت‌نام شرکت" }, label = { Text("شرکت") })
