@@ -144,7 +144,7 @@ private class CompanyLoadRepository(private val token: String) {
         if (token.isBlank()) return "نشست معتبر نیست."
         if (item.status != "published" || item.assignedDriverId != null) return "این بار پس از انتخاب راننده قابل ویرایش نیست."
         if (draft.destination.trim().length !in 2..100 || draft.cargoType.trim().length !in 2..160) return "مقصد یا نوع بار باید کامل و در محدوده مجاز باشد."
-        val allowedVehicles = setOf("کامیون مبلی", "کامیون ۶ متری", "وانت", "وانت مبلی", "کامیونت مبلی", "کامیون بزرگ", "خاور مبلی پتو دار", "کامیون دربستی کار", "سایر خودروهای مبلی")
+        val allowedVehicles = setOf("کامیونت مبلی", "کامیونت روباری کار", "کامیون ۶ متری", "وانت")
         if (draft.vehicleType !in allowedVehicles) return "نوع خودرو را از فهرست معتبر سامانه انتخاب کنید."
         if (draft.loadingType !in setOf("روباری", "دربست", "نیم بار")) return "نوع بارگیری معتبر نیست."
         val normalizedAmount = normalizeCompanyDigits(draft.freightAmount.trim())
@@ -270,7 +270,7 @@ internal fun CompanyLoadManagement(accessToken: String) {
                             singleLine = true
                         )
                         DropdownMenu(expanded = vehicleMenu, onDismissRequest = { vehicleMenu = false }) {
-                            listOf("وانت مبلی", "کامیونت مبلی", "کامیون ۶متری", "کامیون مبلی", "کامیون دربستی کار", "خاور مبلی پتو‌دار", "کامیون بزرگ", "وانت", "سایر خودروهای مبلی").forEach { option ->
+                            listOf("کامیونت مبلی", "کامیونت روباری کار", "کامیون ۶ متری", "وانت").forEach { option ->
                                 DropdownMenuItem(text = { Text(option) }, onClick = {
                                     draft = draft.copy(vehicleType = option)
                                     vehicleMenu = false
