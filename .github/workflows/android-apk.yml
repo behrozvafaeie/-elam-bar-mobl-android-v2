@@ -70,8 +70,8 @@ jobs:
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 27' app/build.gradle.kts
-          grep -F 'versionName = "1.5.1"' app/build.gradle.kts
+          grep -F 'versionCode = 28' app/build.gradle.kts
+          grep -F 'versionName = "1.5.2"' app/build.gradle.kts
           ! grep -E 'ELAM_TURN_(URL|USERNAME|PASSWORD)' .github/workflows/android-apk.yml
 
       - name: Build debug APK
