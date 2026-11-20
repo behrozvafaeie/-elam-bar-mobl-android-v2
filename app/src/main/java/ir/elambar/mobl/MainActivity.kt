@@ -272,6 +272,17 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     HorizontalDivider()
                     Text("پنل مدیر ارشد", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
                     Text("خوش آمدید؛ ورود شما با نقش مدیر ارشد اصلی تأیید شده است.", textAlign = TextAlign.Center)
+                    OutlinedButton(
+                        onClick = {
+                            adminLoggedIn = false
+                            adminAccessToken = ""
+                            email = ""
+                            password = ""
+                            message = "از حساب مدیر ارشد خارج شدید."
+                            role = UserRole.ADMIN
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("خروج از حساب") }
                     if (selectedPanel == null) {
                         panels.forEach { (title, subtitle) ->
                             Card(
@@ -408,20 +419,22 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             )
                         }
                     }
-                    OutlinedButton(
-                        onClick = {
-                            adminLoggedIn = false
-                            email = ""
-                            password = ""
-                            message = "از حساب مدیر ارشد خارج شدید."
-                            role = UserRole.ADMIN
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("خروج از حساب") }
                 } else if (userLoggedIn) {
                     HorizontalDivider()
                     Text(if (role == UserRole.DRIVER) "پنل راننده" else "پنل شرکت باربری", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
                     Text("خوش آمدید، $userDisplayName", textAlign = TextAlign.Center)
+                    OutlinedButton(
+                        onClick = {
+                            userLoggedIn = false
+                            userAccessToken = ""
+                            DeviceSessionStore.clear(context)
+                            username = ""
+                            password = ""
+                            loadDrafts.clear()
+                            message = "از حساب خارج شدید."
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("خروج از حساب") }
                     if (profilePhotoUrl.isNotBlank()) {
                         AsyncImage(model = profilePhotoUrl, contentDescription = "عکس پروفایل", modifier = Modifier.size(104.dp).clip(CircleShape))
                     } else {
@@ -449,6 +462,15 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         "approved" -> {
                             Text("حساب شما تأیید شده است.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
                             if (role == UserRole.COMPANY) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                                ) {
+                                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text("اتاق اعلام بار", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                                        Text("ثبت و مشاهده بارها در بخشی مستقل از گفتگوها", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
@@ -543,7 +565,16 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 }
                                 Text(driverSearchResults, textAlign = TextAlign.Start)
                             } else {
-                                Text("بارهای متناسب با نوع خودرو و مقصدهای ثبت‌شده شما", style = MaterialTheme.typography.titleMedium)
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                                ) {
+                                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text("اتاق اعلام بار", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                                        Text("بارهای متناسب با نوع خودرو و مقصدهای ثبت‌شده شما", style = MaterialTheme.typography.bodyMedium)
+                                        Text("این بخش مستقل از اتاق گفتگو است.", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
                                 OutlinedButton(enabled = !matchedLoadsLoading, onClick = {
                                     matchedLoadsLoading = true
                                     scope.launch {
@@ -556,7 +587,6 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         }
                         else -> Text("وضعیت حساب: $userStatus", textAlign = TextAlign.Center)
                     }
-                    OutlinedButton(onClick = { userLoggedIn = false; userAccessToken = ""; DeviceSessionStore.clear(context); username = ""; password = ""; loadDrafts.clear(); message = "از حساب خارج شدید." }, modifier = Modifier.fillMaxWidth()) { Text("خروج از حساب") }
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         FilterChip(selected = role == UserRole.DRIVER, onClick = { role = UserRole.DRIVER; register = true; message = "ثبت‌نام راننده" }, label = { Text("راننده") })
