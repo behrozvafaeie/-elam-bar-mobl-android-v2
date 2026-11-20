@@ -569,6 +569,33 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     Text("زمان سامانه", style = MaterialTheme.typography.labelMedium)
                     Text(tehranClockText, style = MaterialTheme.typography.bodyMedium)
                     Text(if (clockUsesServerTime) "همگام با زمان سرور" else "زمان دستگاه؛ سرور در دسترس نیست", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (userLoggedIn || adminLoggedIn) {
+                        TextButton(
+                            onClick = {
+                                DeviceSessionStore.clear(context)
+                                userLoggedIn = false
+                                userAccessToken = ""
+                                userStatus = ""
+                                userDisplayName = ""
+                                profilePhotoUrl = ""
+                                adminLoggedIn = false
+                                adminAccessToken = ""
+                                adminRole = ""
+                                adminProfilePhotoUrl = ""
+                                showProfile = false
+                                showCommunication = false
+                                showChatRooms = false
+                                showStories = false
+                                selectedPanel = null
+                                adminRecords = emptyList()
+                                adminPanelData = ""
+                                adminActionMessage = ""
+                                message = "با موفقیت از حساب خارج شدید."
+                                scope.launch { drawerState.close() }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("خروج از حساب") }
+                    }
                     TextButton(onClick = { scope.launch { drawerState.close() } }, modifier = Modifier.fillMaxWidth()) { Text("بستن منو") }
                 }
             }
