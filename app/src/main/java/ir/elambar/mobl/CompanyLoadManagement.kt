@@ -171,7 +171,7 @@ private class CompanyLoadRepository(private val token: String) {
         val uid = companyJwtUserId(token)
         val path = "loads?id=eq." + enc(item.id) + "&publisher_user_id=eq." + enc(uid) + "&status=eq.published&assigned_driver_id=is.null"
         val (code, response) = request("PATCH", path, JSONObject().put("status", "cancelled"))
-        if (code !in 200..299) return "حذف بار از طرف سرور رد شد (کد " + code + ")."
+        if (code !in 200..299) return "لغو بار از طرف سرور رد شد (کد " + code + ")."
         return if (runCatching { JSONArray(response).length() }.getOrDefault(0) > 0) "بار با موفقیت لغو شد؛ سابقه آن حفظ شد."
         else "باری برای حذف پیدا نشد؛ ممکن است بار قبلاً تغییر وضعیت داده باشد."
     }
@@ -315,7 +315,7 @@ internal fun CompanyLoadManagement(accessToken: String) {
                     }
                 }) { Text("تأیید لغو بار") }
             },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("انصراف") } }
+            dismissButton = { TextButton(onClick = { cancelling = null }) { Text("انصراف") } }
         )
     }
 }
