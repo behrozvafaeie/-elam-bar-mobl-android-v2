@@ -148,12 +148,13 @@ private class AdminLoadRepository(private val token: String) {
         return if (runCatching { JSONArray(response).length() }.getOrDefault(0) > 0) "تغییرات بار ذخیره شد." else "بار برای ویرایش پیدا نشد یا وضعیت آن تغییر کرده است."
     }
 
-    fun delete(item: AdminLoadItem): String {
-        if (item.status != "published" || item.assignedDriverId != null) return "فقط بار آزاد و منتشرشده قابل حذف است؛ بار دارای راننده باید لغو شود."
-        val (code, response) = request("DELETE", "loads?id=eq." + enc(item.id) + "&status=eq.published&assigned_driver_id=is.null")
-        if (code !in 200..299) return "حذف بار از طرف سرور رد شد (کد $code)."
-        return if (runCatching { JSONArray(response).length() }.getOrDefault(0) > 0) "بار حذف شد."
-        else "بار پیدا نشد یا مجوز حذف وجود ندارد."
+    fun cancel(item: AdminLoadItem): String {
+        if (item.status != "published" || item.assignedDriverId != null) return "فقط بار آزاد و منتشرشده قابل لغو است."
+        val body = JSONObject().put("status", "cancelled")
+        val (code, response) = request("PATCH", "loads?id=eq." + enc(item.id) + "&status=eq.published&assigned_driver_id=is.null", body)
+        if (code !in 200..299) return "لغو بار از طرف سرور رد شد (کد $code)."
+        return if (runCatching { JSONArray(response).length() }.getOrDefault(0) > 0) "بار لغو شد و سابقه آن حفظ شد."
+        else "بار پیدا نشد یا وضعیت آن تغییر کرده است."
     }
 
     fun changeStatus(item: AdminLoadItem, nextStatus: String): String {
@@ -226,7 +227,7 @@ internal fun AdminLoadManagement(accessToken: String) {
                             draft = AdminLoadDraft(item.destination, item.cargoType, item.vehicleType, item.loadingType, if (item.freightAmount == 0L) "" else item.freightAmount.toString(), item.description)
                         }) { Text("ویرایش") }
                         Spacer(Modifier.width(4.dp))
-                        TextButton(enabled = !busy && item.status == "published" && item.assignedDriverId == null, onClick = { deleting = item }) { Text("حذف") }
+                        TextButton(enabled = !busy && item.status == "published" && item.assignedDriverId == null, onClick = { deleting = item }) { Text("لغو بار") }
                         Spacer(Modifier.width(4.dp))
                         TextButton(enabled = !busy && item.status != "cancelled" && item.status != "settled", onClick = {
                             statusItem = item
@@ -273,20 +274,20 @@ internal fun AdminLoadManagement(accessToken: String) {
     deleting?.let { item ->
         AlertDialog(
             onDismissRequest = { deleting = null },
-            title = { Text("حذف بار") },
-            text = { Text("بار مقصد «" + item.destination + "» به‌طور کامل حذف شود؟ فقط بار منتشرشده و بدون راننده قابل حذف است. برای حفظ سابقه، بارهای دارای راننده فقط قابل لغو هستند.") },
+            title = { Text("لغو بار") },
+            text = { Text("بار مقصد «" + item.destination + "» لغو شود؟ بار از سالن عمومی خارج می‌شود و سابقه آن در سامانه باقی می‌ماند.") },
             confirmButton = {
                 Button(enabled = !busy, onClick = {
                     busy = true
                     scope.launch {
-                        message = withContext(Dispatchers.IO) { repository.delete(item) }
+                        message = withContext(Dispatchers.IO) { repository.cancel(item) }
                         deleting = null
                         val result = withContext(Dispatchers.IO) { repository.list() }
                         items = result.second
                         if (result.first != null) message += " " + result.first
                         busy = false
                     }
-                }) { Text("حذف قطعی بار") }
+                }) { Text("تأیید لغو بار") }
             },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("انصراف") } }
         )
