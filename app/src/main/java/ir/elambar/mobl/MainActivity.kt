@@ -360,6 +360,18 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         "مدیریت رانندگان", "مدیریت شرکت‌ها", "مدیریت بارها", "مدیریت مدیران",
         "مدیریت مدارک", "گفتگوها", "شکایات", "گزارش‌ها", "تنظیمات کل برنامه"
     )
+    LaunchedEffect(userLoggedIn, role, userStatus, userAccessToken) {
+        if (userLoggedIn && role == UserRole.DRIVER && userStatus == "approved" && userAccessToken.isNotBlank()) {
+            publicHallLoading = true
+            val result = withContext(Dispatchers.IO) { fetchPublicHallLoads(userAccessToken) }
+            publicHallMessage = result.first
+            publicHallLoads = result.second
+            publicHallLoading = false
+        } else if (!userLoggedIn || role != UserRole.DRIVER) {
+            publicHallLoads = emptyList()
+            publicHallMessage = "برای مشاهده سالن عمومی وارد حساب راننده شوید."
+        }
+    }
     LaunchedEffect(Unit) {
         while (true) {
             val serverMillis = withContext(Dispatchers.IO) { fetchSupabaseServerTimeMillis() }
