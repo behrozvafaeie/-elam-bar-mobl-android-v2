@@ -95,6 +95,25 @@ private data class AdminLoginResult(val success: Boolean, val message: String, v
 private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "")
 private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val priceMode: String, val freightAmount: String, val description: String)
 
+@Composable
+private fun LoadCargoTypeDropdown(selected: String, onSelected: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val options = listOf("مبل", "سرویس خواب", "اثاث منزل", "کمد", "نهارخوری", "مبل استیل", "سایر مصنوعات چوبی")
+    Box(Modifier.fillMaxWidth()) {
+        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("نوع بار: $selected  ▾")
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(text = { Text(option) }, onClick = {
+                    onSelected(option)
+                    expanded = false
+                })
+            }
+        }
+    }
+}
+
 private fun loadDraftOwnerKey(token: String, role: String): String {
     if (token.isBlank()) return ""
     return runCatching {
@@ -206,6 +225,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var loadFreightAmount by remember { mutableStateOf("") }
     var loadPriceMode by remember { mutableStateOf("fixed") }
     var loadDescription by remember { mutableStateOf("") }
+    var loadQuantity by remember { mutableStateOf("1") }
+    var loadDetailsExpanded by remember { mutableStateOf(false) }
     var loadActionMessage by remember { mutableStateOf("") }
     var loadPublishing by remember { mutableStateOf(false) }
     var companyLoadPanelExpanded by remember { mutableStateOf(false) }
@@ -898,10 +919,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     Text("اعلام بار به نام مدیریت سامانه", style = MaterialTheme.typography.titleMedium)
                                     Text("ثبت این بار با مجوز مدیر ارشد و بدون انتساب به شرکت انجام می‌شود.", style = MaterialTheme.typography.bodySmall)
                                     OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("مقصد از تهران") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                                    Text("نوع بار")
-                                    listOf("مبل", "اثاث منزل", "سرویس خواب", "سایر موارد").forEach { cargo ->
-                                        FilterChip(selected = loadCargoType == cargo, onClick = { loadCargoType = cargo }, label = { Text(cargo) })
-                                    }
+                                    LoadCargoTypeDropdown(selected = loadCargoType, onSelected = { loadCargoType = it })
                                     Text("نوع خودرو")
                                     listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون دربستی کار","خاور مبلی پتو دار").forEach { v ->
                                         FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
@@ -916,14 +934,27 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         FilterChip(selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
                                     }
                                     if (loadPriceMode == "fixed") OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("مبلغ کرایه (تومان)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                                    OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
+                                    OutlinedButton(onClick = { loadDetailsExpanded = !loadDetailsExpanded }, modifier = Modifier.fillMaxWidth()) {
+                                    Text(if (loadDetailsExpanded) "بستن تعداد و توضیحات ▲" else "باز کردن تعداد و توضیحات ▼")
+                                }
+                                if (loadDetailsExpanded) {
+                                    OutlinedTextField(loadQuantity, { loadQuantity = it.filter(Char::isDigit).take(5) }, label = { Text("تعداد اقلام") }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                                    OutlinedButton(onClick = { loadDetailsExpanded = !loadDetailsExpanded }, modifier = Modifier.fillMaxWidth()) {
+                                        Text(if (loadDetailsExpanded) "بستن تعداد و توضیحات ▲" else "باز کردن تعداد و توضیحات ▼")
+                                    }
+                                    if (loadDetailsExpanded) {
+                                        OutlinedTextField(loadQuantity, { loadQuantity = it.filter(Char::isDigit).take(5) }, label = { Text("تعداد اقلام") }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                                        OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
+                                    }
+                                }
                                     OutlinedButton(onClick = {
                                         if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || (loadPriceMode == "fixed" && (loadFreightAmount.isBlank() || loadFreightAmount.toLongOrNull() == null || loadFreightAmount.toLong() <= 0))) {
                                             adminActionMessage = "مقصد، نوع بار و کرایه را کامل کنید."
                                         } else {
-                                            loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", loadDescription.trim()))
+                                            loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", (if (loadQuantity.isNotBlank()) "تعداد: ${loadQuantity.trim()}\n" else "") + loadDescription.trim()))
                                             loadDestination = ""
                                             loadDescription = ""
+                                            loadQuantity = "1"
                                             adminActionMessage = "بار به فهرست انتشار مدیریت اضافه شد."
                                         }
                                     }, modifier = Modifier.fillMaxWidth()) { Text("افزودن بار به فهرست") }
@@ -1219,9 +1250,10 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || (loadPriceMode == "fixed" && (loadFreightAmount.isBlank() || loadFreightAmount.toLongOrNull() == null || loadFreightAmount.toLong() <= 0))) {
                                         loadActionMessage = "مقصد، نوع بار و کرایه را کامل کنید."
                                     } else {
-                                        loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", loadDescription.trim()))
+                                        loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", (if (loadQuantity.isNotBlank()) "تعداد: ${loadQuantity.trim()}\n" else "") + loadDescription.trim()))
                                         loadDestination = ""
                                         loadDescription = ""
+                                        loadQuantity = "1"
                                         loadActionMessage = "بار به فهرست گروهی اضافه شد."
                                     }
                                 }, modifier = Modifier.fillMaxWidth()) { Text("افزودن بار به فهرست") }
