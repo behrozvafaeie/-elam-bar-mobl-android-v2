@@ -30,7 +30,7 @@
 مشخصات بسته:
 - Application ID: `ir.elambar.mobl`
 - نسخه این ساخت: `1.0.9` (versionCode: `10`)
-- حداقل Android: نسخه 7.0 (API 24)
+- حداقل Android: نسخه 8.0 (API 26)
 
 ## امنیت
 
