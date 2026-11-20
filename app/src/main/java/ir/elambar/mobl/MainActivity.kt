@@ -209,6 +209,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var matchedLoadsText by remember { mutableStateOf("برای دریافت بارهای متناسب، دکمه بروزرسانی را بزنید.") }
     var matchedLoads by remember { mutableStateOf<List<MatchedLoad>>(emptyList()) }
     var matchedLoadsLoading by remember { mutableStateOf(false) }
+    var publicHallLoads by remember { mutableStateOf<List<MatchedLoad>>(emptyList()) }
+    var publicHallMessage by remember { mutableStateOf("برای مشاهده بارهای عمومی، دکمه بروزرسانی را بزنید.") }
+    var publicHallLoading by remember { mutableStateOf(false) }
     var acceptedLoadContacts by remember { mutableStateOf<List<AcceptedLoadContact>>(emptyList()) }
     var acceptedLoadContactsLoading by remember { mutableStateOf(false) }
     var acceptingLoadId by remember { mutableStateOf("") }
@@ -1296,7 +1299,45 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 }
                                 Text(driverSearchResults, textAlign = TextAlign.Start)
                             } else {
-                                Text("بارهای متناسب با نوع خودرو و مقصدهای ثبت‌شده شما", style = MaterialTheme.typography.titleMedium)
+                                Text("سالن عمومی بار | قابل مشاهده برای همه رانندگان تأییدشده", style = MaterialTheme.typography.titleLarge)
+                                Text("همه بارهای منتشرشده در این سالن نمایش داده می‌شوند؛ حتی اگر خودرو یا مقصد با مشخصات شما یکسان نباشد.", style = MaterialTheme.typography.bodySmall)
+                                OutlinedButton(enabled = !publicHallLoading, onClick = {
+                                    publicHallLoading = true
+                                    scope.launch {
+                                        val result = withContext(Dispatchers.IO) { fetchPublicHallLoads(userAccessToken) }
+                                        publicHallMessage = result.first
+                                        publicHallLoads = result.second
+                                        publicHallLoading = false
+                                    }
+                                }, modifier = Modifier.fillMaxWidth()) {
+                                    Text(if (publicHallLoading) "در حال دریافت سالن عمومی..." else "بروزرسانی سالن عمومی بار")
+                                }
+                                Text(publicHallMessage, style = MaterialTheme.typography.bodySmall)
+                                publicHallLoads.forEach { load ->
+                                    Card(Modifier.fillMaxWidth()) {
+                                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                            Text("تهران ← ${load.destination}", style = MaterialTheme.typography.titleMedium)
+                                            Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
+                                            Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
+                                            if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
+                                            Button(enabled = acceptingLoadId.isBlank(), onClick = {
+                                                acceptingLoadId = load.id
+                                                scope.launch {
+                                                    val accepted = withContext(Dispatchers.IO) { acceptDriverLoad(userAccessToken, load.id) }
+                                                    publicHallMessage = accepted
+                                                    val refreshed = withContext(Dispatchers.IO) { fetchPublicHallLoads(userAccessToken) }
+                                                    publicHallLoads = refreshed.second
+                                                    if (refreshed.first.isNotBlank()) publicHallMessage += "\\n" + refreshed.first
+                                                    acceptingLoadId = ""
+                                                }
+                                            }, modifier = Modifier.fillMaxWidth()) {
+                                                Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "درخواست دریافت این بار")
+                                            }
+                                        }
+                                    }
+                                }
+                                HorizontalDivider()
+                                Text("بارهای متناسب با خودرو و مقصدهای شما", style = MaterialTheme.typography.titleMedium)
                                 OutlinedButton(enabled = !matchedLoadsLoading, onClick = {
                                     matchedLoadsLoading = true
                                     scope.launch {
@@ -2515,6 +2556,44 @@ private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<Ma
     } finally {
         profileConnection?.disconnect()
         loadsConnection?.disconnect()
+    }
+}
+
+private fun fetchPublicHallLoads(accessToken: String): Pair<String, List<MatchedLoad>> {
+    if (accessToken.isBlank()) return "برای مشاهده سالن عمومی وارد حساب راننده شوید." to emptyList()
+    var connection: HttpURLConnection? = null
+    return try {
+        val url = "$SUPABASE_URL/rest/v1/loads?select=id,origin,destination,cargo_type,vehicle_type,freight_amount,description,loading_type&status=eq.published&assigned_driver_id=is.null&order=created_at.desc&limit=200"
+        connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15000
+            readTimeout = 20000
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Accept", "application/json")
+        }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code !in 200..299) return "دریافت سالن عمومی ناموفق بود (کد $code)." to emptyList()
+        val rows = JSONArray(raw)
+        val loads = (0 until rows.length()).map { rows.getJSONObject(it) }.map { item ->
+            MatchedLoad(
+                id = item.optString("id"),
+                origin = item.optString("origin", "تهران"),
+                destination = item.optString("destination"),
+                cargoType = item.optString("cargo_type"),
+                vehicleType = item.optString("vehicle_type"),
+                loadingType = item.optString("loading_type"),
+                freightAmount = item.optString("freight_amount", "0"),
+                description = item.optString("description").takeUnless { it == "null" }.orEmpty()
+            )
+        }.filter { it.id.isNotBlank() }
+        (if (loads.isEmpty()) "در حال حاضر بار منتشرشده‌ای در سالن عمومی وجود ندارد." else "${loads.size} بار منتشرشده در سالن عمومی موجود است.") to loads
+    } catch (_: Exception) {
+        "ارتباط با سالن عمومی برقرار نشد؛ اینترنت را بررسی کنید." to emptyList()
+    } finally {
+        connection?.disconnect()
     }
 }
 
