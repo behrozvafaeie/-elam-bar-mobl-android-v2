@@ -122,7 +122,7 @@ private class AdminLoadRepository(private val token: String) {
     fun update(item: AdminLoadItem, draft: AdminLoadDraft): String {
         if (item.status != "published" || item.assignedDriverId != null) return "ویرایش جزئیات فقط پیش از انتخاب راننده مجاز است."
         if (draft.destination.trim().length !in 2..100 || draft.cargoType.trim().length !in 2..160) return "مقصد یا نوع بار معتبر نیست."
-        val vehicles = setOf("وانت مبلی", "کامیونت مبلی", "کامیون ۶ متری", "کامیون ۶متری", "کامیون دربستی کار", "خاور مبلی پتو دار", "کامیون مبلی", "وانت", "کامیون بزرگ", "سایر خودروهای مبلی")
+        val vehicles = setOf("کامیونت مبلی", "کامیونت روباری کار", "کامیون ۶ متری", "وانت")
         if (draft.vehicleType !in vehicles) return "نوع خودرو معتبر نیست."
         if (draft.loadingType !in setOf("روباری", "دربست", "نیم بار")) return "نوع بارگیری معتبر نیست."
         val digits = buildString {
