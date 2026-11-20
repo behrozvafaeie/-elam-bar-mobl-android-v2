@@ -1224,10 +1224,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 if (companyLoadPanelExpanded) {
                                 Text("اعلام بار | ثبت گروهی از مبدأ تهران", style = MaterialTheme.typography.titleMedium)
                                 OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                                Text("نوع بار")
-                                    listOf("مبل", "اثاث منزل", "سرویس خواب", "سایر موارد").forEach { cargo ->
-                                        FilterChip(selected = loadCargoType == cargo, onClick = { loadCargoType = cargo }, label = { Text(cargo) })
-                                    }
+                                LoadCargoTypeDropdown(selected = loadCargoType, onSelected = { loadCargoType = it })
                                 Text("نوع خودرو")
                                 listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون دربستی کار","خاور مبلی پتو دار").forEach { v ->
                                     FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
@@ -1242,7 +1239,13 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         FilterChip(selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
                                     }
                                     if (loadPriceMode == "fixed") OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("مبلغ کرایه (تومان)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                                OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
+                                OutlinedButton(onClick = { loadDetailsExpanded = !loadDetailsExpanded }, modifier = Modifier.fillMaxWidth()) {
+                                    Text(if (loadDetailsExpanded) "بستن تعداد و توضیحات ▲" else "باز کردن تعداد و توضیحات ▼")
+                                }
+                                if (loadDetailsExpanded) {
+                                    OutlinedTextField(loadQuantity, { loadQuantity = it.filter(Char::isDigit).take(5) }, label = { Text("تعداد اقلام") }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                                    OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
+                                }
                                 OutlinedButton(onClick = {
                                     if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || (loadPriceMode == "fixed" && (loadFreightAmount.isBlank() || loadFreightAmount.toLongOrNull() == null || loadFreightAmount.toLong() <= 0))) {
                                         loadActionMessage = "مقصد، نوع بار و کرایه را کامل کنید."
