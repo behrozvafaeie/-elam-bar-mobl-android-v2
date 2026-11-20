@@ -335,7 +335,7 @@ internal fun CompanyLoadManagement(accessToken: String) {
                     }
                 }) { Text("تأیید لغو بار") }
             },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("انصراف") } }
+            dismissButton = { TextButton(onClick = { cancelling = null }) { Text("انصراف") } }
         )
     }
 }
