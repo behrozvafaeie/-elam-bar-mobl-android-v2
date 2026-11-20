@@ -76,7 +76,7 @@ private class AdminLoadRepository(private val token: String) {
                 setRequestProperty("apikey", ADMIN_LOADS_KEY)
                 setRequestProperty("Authorization", "Bearer $token")
                 setRequestProperty("Accept", "application/json")
-                if (method == "PATCH") setRequestProperty("Prefer", "return=representation")
+                if (method == "PATCH" || method == "DELETE") setRequestProperty("Prefer", "return=representation")
                 if (body != null) {
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json")
@@ -148,6 +148,14 @@ private class AdminLoadRepository(private val token: String) {
         return if (runCatching { JSONArray(response).length() }.getOrDefault(0) > 0) "تغییرات بار ذخیره شد." else "بار برای ویرایش پیدا نشد یا وضعیت آن تغییر کرده است."
     }
 
+    fun delete(item: AdminLoadItem): String {
+        if (item.status != "published" || item.assignedDriverId != null) return "فقط بار آزاد و منتشرشده قابل حذف است؛ بار دارای راننده باید لغو شود."
+        val (code, response) = request("DELETE", "loads?id=eq." + enc(item.id) + "&status=eq.published&assigned_driver_id=is.null")
+        if (code !in 200..299) return "حذف بار از طرف سرور رد شد (کد $code)."
+        return if (runCatching { JSONArray(response).length() }.getOrDefault(0) > 0) "بار حذف شد."
+        else "بار پیدا نشد یا مجوز حذف وجود ندارد."
+    }
+
     fun changeStatus(item: AdminLoadItem, nextStatus: String): String {
         val allowed = setOf("published", "driver_selected", "in_transit", "delivered", "settled", "cancelled")
         if (nextStatus !in allowed) return "وضعیت انتخاب‌شده معتبر نیست."
@@ -180,6 +188,7 @@ internal fun AdminLoadManagement(accessToken: String) {
     var editing by remember { mutableStateOf<AdminLoadItem?>(null) }
     var draft by remember { mutableStateOf(AdminLoadDraft("", "", "", "روباری", "", "")) }
     var statusItem by remember { mutableStateOf<AdminLoadItem?>(null) }
+    var deleting by remember { mutableStateOf<AdminLoadItem?>(null) }
     var selectedStatus by remember { mutableStateOf("") }
     var statusMenu by remember { mutableStateOf(false) }
 
@@ -216,6 +225,8 @@ internal fun AdminLoadManagement(accessToken: String) {
                             editing = item
                             draft = AdminLoadDraft(item.destination, item.cargoType, item.vehicleType, item.loadingType, if (item.freightAmount == 0L) "" else item.freightAmount.toString(), item.description)
                         }) { Text("ویرایش") }
+                        Spacer(Modifier.width(4.dp))
+                        TextButton(enabled = !busy && item.status == "published" && item.assignedDriverId == null, onClick = { deleting = item }) { Text("حذف") }
                         Spacer(Modifier.width(4.dp))
                         TextButton(enabled = !busy && item.status != "cancelled" && item.status != "settled", onClick = {
                             statusItem = item
@@ -256,6 +267,28 @@ internal fun AdminLoadManagement(accessToken: String) {
                 }) { Text("ذخیره تغییرات") }
             },
             dismissButton = { TextButton(onClick = { editing = null }) { Text("انصراف") } }
+        )
+    }
+
+    deleting?.let { item ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text("حذف بار") },
+            text = { Text("بار مقصد «" + item.destination + "» به‌طور کامل حذف شود؟ فقط بار منتشرشده و بدون راننده قابل حذف است. برای حفظ سابقه، بارهای دارای راننده فقط قابل لغو هستند.") },
+            confirmButton = {
+                Button(enabled = !busy, onClick = {
+                    busy = true
+                    scope.launch {
+                        message = withContext(Dispatchers.IO) { repository.delete(item) }
+                        deleting = null
+                        val result = withContext(Dispatchers.IO) { repository.list() }
+                        items = result.second
+                        if (result.first != null) message += " " + result.first
+                        busy = false
+                    }
+                }) { Text("حذف قطعی بار") }
+            },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text("انصراف") } }
         )
     }
 
