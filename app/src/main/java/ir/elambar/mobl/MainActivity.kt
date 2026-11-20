@@ -935,18 +935,12 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     }
                                     if (loadPriceMode == "fixed") OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("مبلغ کرایه (تومان)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                     OutlinedButton(onClick = { loadDetailsExpanded = !loadDetailsExpanded }, modifier = Modifier.fillMaxWidth()) {
-                                    Text(if (loadDetailsExpanded) "بستن تعداد و توضیحات ▲" else "باز کردن تعداد و توضیحات ▼")
-                                }
-                                if (loadDetailsExpanded) {
-                                    OutlinedTextField(loadQuantity, { loadQuantity = it.filter(Char::isDigit).take(5) }, label = { Text("تعداد اقلام") }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                                    OutlinedButton(onClick = { loadDetailsExpanded = !loadDetailsExpanded }, modifier = Modifier.fillMaxWidth()) {
                                         Text(if (loadDetailsExpanded) "بستن تعداد و توضیحات ▲" else "باز کردن تعداد و توضیحات ▼")
                                     }
                                     if (loadDetailsExpanded) {
                                         OutlinedTextField(loadQuantity, { loadQuantity = it.filter(Char::isDigit).take(5) }, label = { Text("تعداد اقلام") }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                                         OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
                                     }
-                                }
                                     OutlinedButton(onClick = {
                                         if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || (loadPriceMode == "fixed" && (loadFreightAmount.isBlank() || loadFreightAmount.toLongOrNull() == null || loadFreightAmount.toLong() <= 0))) {
                                             adminActionMessage = "مقصد، نوع بار و کرایه را کامل کنید."
