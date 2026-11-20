@@ -208,6 +208,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var loadDescription by remember { mutableStateOf("") }
     var loadActionMessage by remember { mutableStateOf("") }
     var loadPublishing by remember { mutableStateOf(false) }
+    var companyLoadPanelExpanded by remember { mutableStateOf(false) }
+    var adminLoadPanelExpanded by remember { mutableStateOf(false) }
     val loadDrafts = remember { androidx.compose.runtime.mutableStateListOf<LoadDraft>() }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -889,6 +891,10 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 if (selectedPanel == "مدیریت بارها") {
                                     AdminLoadManagement(accessToken = adminAccessToken)
                                     HorizontalDivider()
+                                    OutlinedButton(onClick = { adminLoadPanelExpanded = !adminLoadPanelExpanded }, modifier = Modifier.fillMaxWidth()) {
+                                        Text(if (adminLoadPanelExpanded) "بستن فرم اعلام بار مدیریت ▲" else "باز کردن فرم اعلام بار مدیریت ▼")
+                                    }
+                                    if (adminLoadPanelExpanded) {
                                     Text("اعلام بار به نام مدیریت سامانه", style = MaterialTheme.typography.titleMedium)
                                     Text("ثبت این بار با مجوز مدیر ارشد و بدون انتساب به شرکت انجام می‌شود.", style = MaterialTheme.typography.bodySmall)
                                     OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("مقصد از تهران") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -948,6 +954,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         }, modifier = Modifier.fillMaxWidth()) { Text(if (loadPublishing) "در حال ثبت..." else "انتشار بارهای مدیریت سامانه") }
                                     }
                                     if (adminActionMessage.isNotBlank()) Text(adminActionMessage, color = MaterialTheme.colorScheme.secondary)
+                                    }
                                     HorizontalDivider()
                                 }
                                 if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها" || selectedPanel == "مدیریت مدارک") {
@@ -1183,6 +1190,10 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         "approved" -> {
                             Text("حساب شما تأیید شده است.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
                             if (role == UserRole.COMPANY) {
+                                OutlinedButton(onClick = { companyLoadPanelExpanded = !companyLoadPanelExpanded }, modifier = Modifier.fillMaxWidth()) {
+                                    Text(if (companyLoadPanelExpanded) "بستن فرم اعلام بار ▲" else "باز کردن فرم اعلام بار ▼")
+                                }
+                                if (companyLoadPanelExpanded) {
                                 Text("اعلام بار | ثبت گروهی از مبدأ تهران", style = MaterialTheme.typography.titleMedium)
                                 OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                 Text("نوع بار")
@@ -1238,6 +1249,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     }, modifier = Modifier.fillMaxWidth()) { Text(if (loadPublishing) "در حال ثبت..." else "انتشار همه بارهای فهرست") }
                                 }
                                 if (loadActionMessage.isNotBlank()) Text(loadActionMessage, color = MaterialTheme.colorScheme.secondary)
+                                }
                                 HorizontalDivider()
                                 Text("بارهای ثبت‌شده شرکت", style = MaterialTheme.typography.titleMedium)
                                 CompanyLoadManagement(accessToken = userAccessToken)
