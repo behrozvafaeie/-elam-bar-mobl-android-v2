@@ -301,7 +301,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 loadDrafts.clear()
                 loadDestination = ""
                 loadCargoType = "مبل"
-                loadVehicleType = "وانت مبلی"
+                loadVehicleType = "وانت"
                 loadLoadingType = "روباری"
                 loadPriceMode = "fixed"
                 loadFreightAmount = ""
