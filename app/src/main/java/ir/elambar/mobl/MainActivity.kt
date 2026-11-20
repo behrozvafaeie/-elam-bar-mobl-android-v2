@@ -887,6 +887,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     Text("تغییر این گزینه برای همه مدیران دیگر اعمال می‌شود و در گزارش مدیریتی ثبت خواهد شد.", style = MaterialTheme.typography.bodySmall)
                                 }
                                 if (selectedPanel == "مدیریت بارها") {
+                                    AdminLoadManagement(accessToken = adminAccessToken)
+                                    HorizontalDivider()
                                     Text("اعلام بار به نام مدیریت سامانه", style = MaterialTheme.typography.titleMedium)
                                     Text("ثبت این بار با مجوز مدیر ارشد و بدون انتساب به شرکت انجام می‌شود.", style = MaterialTheme.typography.bodySmall)
                                     OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("مقصد از تهران") }, singleLine = true, modifier = Modifier.fillMaxWidth())
