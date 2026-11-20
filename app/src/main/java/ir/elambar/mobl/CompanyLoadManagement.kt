@@ -165,14 +165,14 @@ private class CompanyLoadRepository(private val token: String) {
         else "باری برای ویرایش پیدا نشد؛ مالکیت یا وضعیت بار را بررسی کنید."
     }
 
-    fun delete(item: CompanyLoadItem): String {
+    fun cancel(item: CompanyLoadItem): String {
         if (token.isBlank()) return "نشست معتبر نیست."
         if (item.status != "published" || item.assignedDriverId != null) return "این بار پس از انتخاب راننده قابل حذف نیست."
         val uid = companyJwtUserId(token)
         val path = "loads?id=eq." + enc(item.id) + "&publisher_user_id=eq." + enc(uid) + "&status=eq.published&assigned_driver_id=is.null"
-        val (code, response) = request("DELETE", path)
+        val (code, response) = request("PATCH", path, JSONObject().put("status", "cancelled"))
         if (code !in 200..299) return "حذف بار از طرف سرور رد شد (کد " + code + ")."
-        return if (runCatching { JSONArray(response).length() }.getOrDefault(0) > 0) "بار حذف شد."
+        return if (runCatching { JSONArray(response).length() }.getOrDefault(0) > 0) "بار با موفقیت لغو شد؛ سابقه آن حفظ شد."
         else "باری برای حذف پیدا نشد؛ ممکن است بار قبلاً تغییر وضعیت داده باشد."
     }
 }
@@ -185,7 +185,7 @@ internal fun CompanyLoadManagement(accessToken: String) {
     var status by remember { mutableStateOf("در حال دریافت بارهای شرکت...") }
     var loading by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<CompanyLoadItem?>(null) }
-    var deleting by remember { mutableStateOf<CompanyLoadItem?>(null) }
+    var cancelling by remember { mutableStateOf<CompanyLoadItem?>(null) }
     var draft by remember { mutableStateOf(CompanyLoadDraft("", "", "", "روباری", "", "")) }
     var vehicleMenu by remember { mutableStateOf(false) }
     var loadingMenu by remember { mutableStateOf(false) }
@@ -222,7 +222,7 @@ internal fun CompanyLoadManagement(accessToken: String) {
                             draft = CompanyLoadDraft(item.destination, item.cargoType, item.vehicleType, item.loadingType, if (item.freightAmount == 0L) "" else item.freightAmount.toString(), item.description)
                         }) { Text("ویرایش") }
                         Spacer(Modifier.width(8.dp))
-                        TextButton(enabled = canManage, onClick = { deleting = item }) { Text("حذف") }
+                        TextButton(enabled = canManage, onClick = { cancelling = item }) { Text("لغو بار") }
                     }
                     if (!canManage) Text("پس از انتخاب راننده یا تغییر وضعیت، ویرایش و حذف شرکت غیرفعال است.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                 }
@@ -297,23 +297,23 @@ internal fun CompanyLoadManagement(accessToken: String) {
             dismissButton = { TextButton(onClick = { editing = null }) { Text("انصراف") } }
         )
     }
-    deleting?.let { item ->
+    cancelling?.let { item ->
         AlertDialog(
-            onDismissRequest = { deleting = null },
-            title = { Text("حذف بار") },
-            text = { Text("بار مقصد «" + item.destination + "» حذف شود؟ این عملیات فقط برای بار منتشرشده و بدون راننده مجاز است.") },
+            onDismissRequest = { cancelling = null },
+            title = { Text("لغو اعلام بار") },
+            text = { Text("اعلام بار مقصد «" + item.destination + "» لغو شود؟ سابقه بار برای پیگیری و گزارش‌ها حفظ خواهد شد. این عملیات فقط برای بار منتشرشده و بدون راننده مجاز است.") },
             confirmButton = {
                 Button(enabled = !loading, onClick = {
                     loading = true
                     scope.launch {
-                        status = withContext(Dispatchers.IO) { repository.delete(item) }
-                        deleting = null
+                        status = withContext(Dispatchers.IO) { repository.cancel(item) }
+                        cancelling = null
                         val result = withContext(Dispatchers.IO) { repository.list() }
                         items = result.second
                         if (result.first != null) status += " " + result.first
                         loading = false
                     }
-                }) { Text("حذف بار") }
+                }) { Text("تأیید لغو بار") }
             },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("انصراف") } }
         )
