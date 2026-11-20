@@ -182,7 +182,8 @@ private fun authenticateUser(username: String, password: String, role: AccountRo
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Accept", "application/json")
         }
-        val request = JSONObject().put("action", "login").put("username", username.trim().lowercase()).put("password", password)
+        val accountType = if (role == AccountRole.DRIVER) "driver" else "company"
+        val request = JSONObject().put("action", "login").put("username", username.trim().lowercase()).put("password", password).put("account_type", accountType)
         auth.outputStream.use { it.write(request.toString().toByteArray(Charsets.UTF_8)) }
         val code = auth.responseCode
         val raw = (if (code in 200..299) auth.inputStream else auth.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
@@ -198,7 +199,7 @@ private fun authenticateUser(username: String, password: String, role: AccountRo
         if (userId.isBlank() || token.isBlank()) return LoginOutcome(false, "اطلاعات نشست ناقص است.")
 
         val table = if (role == AccountRole.DRIVER) "drivers" else "companies"
-        val fields = if (role == AccountRole.DRIVER) "status,first_name,last_name,full_name" else "status,first_name,last_name,company_name,manager_name"
+        val fields = if (role == AccountRole.DRIVER) "status,first_name,full_name" else "status,first_name,last_name,company_name,manager_name"
         profile = (URL("$SUPABASE_URL/rest/v1/$table?select=$fields&id=eq.$userId&limit=1").openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"; connectTimeout = 15000; readTimeout = 15000
             setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
@@ -218,7 +219,7 @@ private fun authenticateUser(username: String, password: String, role: AccountRo
         val name = if (role == AccountRole.COMPANY) {
             row.optString("company_name").ifBlank { row.optString("manager_name").ifBlank { "شرکت باربری" } }
         } else {
-            (row.optString("first_name") + " " + row.optString("last_name")).trim().ifBlank { row.optString("full_name").ifBlank { "راننده" } }
+            row.optString("full_name").ifBlank { row.optString("first_name").ifBlank { "راننده" } }
         }
         LoginOutcome(true, if (status == "pending") "ورود انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ورود با موفقیت انجام شد.", name, token, status)
     } catch (_: Exception) {
