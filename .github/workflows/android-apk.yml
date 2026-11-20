@@ -110,7 +110,7 @@ jobs:
       - name: Download built APK
         uses: actions/download-artifact@v4
         with:
-          name: elam-bar-mobl-v1.5.1.1-debug-apk
+          name: elam-bar-mobl-v1.5.1.2-debug-apk
           path: artifacts
 
       - name: Install and launch APK on Android emulator
