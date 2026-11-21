@@ -254,6 +254,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var loadPublishing by remember { mutableStateOf(false) }
     var companyLoadPanelExpanded by remember { mutableStateOf(false) }
     var companyHallExpanded by remember { mutableStateOf(false) }
+    var showPublicHall by remember { mutableStateOf(false) }
     var adminLoadPanelExpanded by remember { mutableStateOf(false) }
     val loadDrafts = remember { androidx.compose.runtime.mutableStateListOf<LoadDraft>() }
     var email by remember { mutableStateOf("") }
@@ -384,7 +385,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         "مدیریت مدارک", "گفتگوها", "شکایات", "گزارش‌ها", "تنظیمات کل برنامه"
     )
     BackHandler(
-        enabled = showStories || showChatRooms || showCommunication || showProfile || showSettings || selectedPanel != null || companyLoadPanelExpanded || companyHallExpanded || drawerState.isOpen
+        enabled = showStories || showChatRooms || showCommunication || showProfile || showSettings || showPublicHall || selectedPanel != null || companyLoadPanelExpanded || companyHallExpanded || drawerState.isOpen
     ) {
         when {
             showStories -> showStories = false
@@ -392,6 +393,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
             showCommunication -> showCommunication = false
             showProfile -> showProfile = false
             showSettings -> showSettings = false
+            showPublicHall -> showPublicHall = false
             selectedPanel != null -> selectedPanel = null
             companyLoadPanelExpanded -> companyLoadPanelExpanded = false
             companyHallExpanded -> companyHallExpanded = false
@@ -546,6 +548,14 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
+                    if (userLoggedIn && role == UserRole.DRIVER && userStatus == "approved") {
+                        NavigationDrawerItem(
+                            label = { Text("سالن عمومی بار") },
+                            selected = showPublicHall,
+                            onClick = { showPublicHall = true; showProfile = false; showSettings = false; selectedPanel = null; scope.launch { drawerState.close() } },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     if ((userLoggedIn && userStatus == "approved") || (adminLoggedIn && adminRole == "super_admin")) {
                         NavigationDrawerItem(
                             label = { Text("پیام‌های بار") },
@@ -697,11 +707,12 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         }
                     },
                     navigationIcon = {
-                        if (showProfile || showSettings || selectedPanel != null || companyLoadPanelExpanded || companyHallExpanded) {
+                        if (showProfile || showSettings || showPublicHall || selectedPanel != null || companyLoadPanelExpanded || companyHallExpanded) {
                             IconButton(onClick = {
                                 when {
                                     showProfile -> showProfile = false
                                     showSettings -> showSettings = false
+                                    showPublicHall -> showPublicHall = false
                                     selectedPanel != null -> selectedPanel = null
                                     companyLoadPanelExpanded -> companyLoadPanelExpanded = false
                                     companyHallExpanded -> companyHallExpanded = false
@@ -740,7 +751,34 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 }
                 Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
                 Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
-                if (showSettings) {
+                if (showPublicHall && userLoggedIn && role == UserRole.DRIVER && userStatus == "approved") {
+                    PublicLoadHallScreen(
+                        loads = publicHallLoads,
+                        message = publicHallMessage,
+                        loading = publicHallLoading,
+                        acceptingLoadId = acceptingLoadId,
+                        onRefresh = {
+                            publicHallLoading = true
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) { fetchPublicHallLoads(userAccessToken) }
+                                publicHallMessage = result.first
+                                publicHallLoads = result.second
+                                publicHallLoading = false
+                            }
+                        },
+                        onAccept = { loadId ->
+                            acceptingLoadId = loadId
+                            scope.launch {
+                                val accepted = withContext(Dispatchers.IO) { acceptDriverLoad(userAccessToken, loadId) }
+                                publicHallMessage = accepted
+                                val refreshed = withContext(Dispatchers.IO) { fetchPublicHallLoads(userAccessToken) }
+                                publicHallLoads = refreshed.second
+                                if (refreshed.first.isNotBlank()) publicHallMessage += "\\n" + refreshed.first
+                                acceptingLoadId = ""
+                            }
+                        }
+                    )
+                } else if (showSettings) {
                     HorizontalDivider()
                     Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge) {
                         Column(
@@ -1800,6 +1838,39 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
 
 }
 
+
+@Composable
+private fun PublicLoadHallScreen(
+    loads: List<MatchedLoad>,
+    message: String,
+    loading: Boolean,
+    acceptingLoadId: String,
+    onRefresh: () -> Unit,
+    onAccept: (String) -> Unit
+) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("سالن عمومی اعلام بار", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+        Text("همه بارهای منتشرشده شرکت‌ها در این سالن قرار می‌گیرند؛ این بخش مخصوص رانندگان تأییدشده است.", style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick = onRefresh, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
+            Text(if (loading) "در حال بروزرسانی سالن..." else "بروزرسانی سالن عمومی")
+        }
+        if (message.isNotBlank()) Text(message, style = MaterialTheme.typography.bodySmall)
+        if (loads.isEmpty() && !loading) Text("در حال حاضر بار منتشرشده‌ای برای نمایش وجود ندارد.")
+        loads.forEach { load ->
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("تهران ← undefined", style = MaterialTheme.typography.titleMedium)
+                    Text("undefined | undefined | undefined")
+                    Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: undefined تومان")
+                    if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
+                    Button(enabled = acceptingLoadId.isBlank(), onClick = { onAccept(load.id) }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "درخواست دریافت این بار")
+                    }
+                }
+            }
+        }
+    }
+}
 
 private fun fetchSupabaseServerTimeMillis(): Long? {
     var connection: HttpURLConnection? = null
