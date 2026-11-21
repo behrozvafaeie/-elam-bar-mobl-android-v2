@@ -875,7 +875,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     } else {
                         OutlinedTextField(value = editProfileFirstName, onValueChange = { editProfileFirstName = it.take(80) }, label = { Text("نام") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = editProfileLastName, onValueChange = { editProfileLastName = it.take(100) }, label = { Text("نام خانوادگی") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = editProfileMobile, onValueChange = { editProfileMobile = it.take(15) }, label = { Text("شماره موبایل") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = editProfileMobile, onValueChange = {}, readOnly = true, label = { Text("شماره موبایل (تغییر با تأیید پیامکی)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth())
                         if (role == UserRole.COMPANY) {
                             OutlinedTextField(value = editProfileCompanyName, onValueChange = { editProfileCompanyName = it.take(160) }, label = { Text("نام شرکت") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                             OutlinedTextField(value = editProfileActivityCity, onValueChange = { editProfileActivityCity = it.take(100) }, label = { Text("شهر محل فعالیت") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -2660,11 +2660,17 @@ private fun authenticateAdmin(email: String, password: String): AdminLoginResult
 private fun fetchEditableUserProfile(token: String, role: UserRole): JSONObject? {
     var connection: HttpURLConnection? = null
     return try {
+        val userId = runCatching {
+            val payload = token.split(".").getOrNull(1) ?: return null
+            val decoded = Base64.decode(payload, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+            JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
+        }.getOrDefault("")
+        if (userId.isBlank()) return null
         val table = if (role == UserRole.DRIVER) "drivers" else "companies"
         val columns = if (role == UserRole.DRIVER)
             "first_name,last_name,mobile,vehicle_type,license_plate,primary_destination,destinations"
         else "first_name,last_name,mobile,company_name,activity_city,office_address"
-        val url = "$SUPABASE_URL/rest/v1/$table?select=$columns&limit=1"
+        val url = "$SUPABASE_URL/rest/v1/$table?select=$columns&id=eq.$userId&limit=1"
         connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 15000
