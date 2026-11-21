@@ -1366,7 +1366,10 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                             val result = withContext(Dispatchers.IO) { publishLoadBatch(userAccessToken, loadDrafts.toList()) }
                                             loadPublishing = false
                                             loadActionMessage = result
-                                            if (result.startsWith("ثبت شد")) loadDrafts.clear()
+                                            if (result.startsWith("ثبت شد")) {
+                                                loadDrafts.clear()
+                                                companyLoadPanelExpanded = false
+                                            }
                                         }
                                     }, modifier = Modifier.fillMaxWidth()) { Text(if (loadPublishing) "در حال ثبت..." else "انتشار همه بارهای فهرست") }
                                 }
