@@ -91,6 +91,63 @@ Deno.serve(async(req:Request)=>{
    if(profileError){await rollback();return out({error:"ساخت پرونده انجام نشد. اطلاعات واردشده را بررسی و دوباره تلاش کنید."},400,origin);}
    return out({user:createdUser,session,needsEmailConfirmation:!!suppliedEmail&&!session},200,origin);
   }
+  if(action==="update_profile"){
+   const bearer=req.headers.get("authorization")??"";
+   const token=bearer.replace(/^Bearer\\s+/i,"").trim();
+   if(!token)return out({error:"نشست ورود معتبر نیست؛ دوباره وارد شوید."},401,origin);
+   const {data:verified,error:verifyError}=await auth.auth.getUser(token);
+   const currentUser=verified.user;
+   if(verifyError||!currentUser?.id)return out({error:"نشست ورود منقضی شده است؛ دوباره وارد شوید."},401,origin);
+   const accountType=String(currentUser.app_metadata?.account_type??"");
+   if(!["driver","company"].includes(accountType))return out({error:"نوع حساب معتبر نیست."},403,origin);
+   const firstName=String(b.first_name??"").trim();
+   const lastName=String(b.last_name??"").trim();
+   const mobileRaw=String(b.mobile??"").trim();
+   const digits=(v:string)=>v.replace(/[^۰-۹٠-٩0-9]/g,"").replace(/[۰-۹]/g,(c)=>String("۰۱۲۳۴۵۶۷۸۹".indexOf(c))).replace(/[٠-٩]/g,(c)=>String("٠١٢٣٤٥٦٧٨٩".indexOf(c)));
+   const mobileDigits=digits(mobileRaw);
+   const mobile=mobileDigits.startsWith("0098")?"0"+mobileDigits.slice(4):mobileDigits.startsWith("98")?"0"+mobileDigits.slice(2):mobileDigits.startsWith("9")&&mobileDigits.length===10?"0"+mobileDigits:mobileDigits;
+   if(!firstName||firstName.length>80||!lastName||lastName.length>100)return out({error:"نام و نام خانوادگی را کامل وارد کنید."},400,origin);
+   if(!/^09[0-9]{9}$/.test(mobile))return out({error:"شماره موبایل باید ۱۱ رقم و با 09 شروع شود."},400,origin);
+   const password=b.new_password===undefined?"":String(b.new_password);
+   if(password && (password.length<8||password.length>72))return out({error:"رمز جدید باید حداقل ۸ نویسه باشد."},400,origin);
+   const table=accountType==="driver"?"drivers":"companies";
+   const profile:any={first_name:firstName,last_name:lastName,mobile};
+   if(accountType==="driver"){
+    const vehicles=["وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون بزرگ","خاور مبلی پتو دار","کامیون دربستی کار","سایر خودروهای مبلی"];
+    const vehicleType=String(b.vehicle_type??"").trim();
+    const plate=String(b.license_plate??"").trim();
+    const primaryDestination=String(b.primary_destination??"").trim();
+    const destinations=Array.isArray(b.destinations)?b.destinations.map((x:unknown)=>String(x).trim()).filter(Boolean).slice(0,30):[];
+    if(vehicleType && !vehicles.includes(vehicleType))return out({error:"نوع خودرو معتبر نیست."},400,origin);
+    if(plate.length>30)return out({error:"شماره پلاک بیش از حد طولانی است."},400,origin);
+    if(primaryDestination.length>100||destinations.some((x:string)=>x.length>100))return out({error:"نام مقصد بیش از حد طولانی است."},400,origin);
+    if(vehicleType)profile.vehicle_type=vehicleType;
+    if(plate)profile.license_plate=plate;
+    if(primaryDestination)profile.primary_destination=primaryDestination;
+    if(destinations.length)profile.destinations=Array.from(new Set([primaryDestination,...destinations].filter(Boolean))).slice(0,30);
+    profile.full_name=firstName+" "+lastName;
+   }else{
+    const companyName=String(b.company_name??"").trim();
+    const activityCity=String(b.activity_city??"").trim();
+    const officeAddress=String(b.office_address??"").trim();
+    if(companyName.length<2||companyName.length>160)return out({error:"نام شرکت باید حداقل ۲ نویسه باشد."},400,origin);
+    if(activityCity.length<2||activityCity.length>100)return out({error:"شهر محل فعالیت را کامل وارد کنید."},400,origin);
+    if(officeAddress.length>500)return out({error:"نشانی بیش از حد طولانی است."},400,origin);
+    profile.company_name=companyName;
+    profile.manager_name=firstName+" "+lastName;
+    profile.activity_city=activityCity;
+    profile.office_address=officeAddress||null;
+   }
+   const {error:profileError}=await admin.from(table).update(profile).eq("id",currentUser.id);
+   if(profileError)return out({error:"ذخیره مشخصات انجام نشد؛ اطلاعات را بررسی کنید."},400,origin);
+   const {error:metaError}=await admin.auth.admin.updateUserById(currentUser.id,{user_metadata:{...currentUser.user_metadata,first_name:firstName,last_name:lastName,full_name:firstName+" "+lastName}});
+   if(metaError)return out({error:"مشخصات ذخیره شد اما همگام‌سازی حساب کامل نشد."},500,origin);
+   if(password){
+    const {error:passwordError}=await admin.auth.admin.updateUserById(currentUser.id,{password});
+    if(passwordError)return out({error:"مشخصات ذخیره شد اما تغییر رمز انجام نشد."},400,origin);
+   }
+   return out({message:"مشخصات حساب با موفقیت ذخیره شد."},200,origin);
+  }
   if(action==="login"){
    if(!username||!password)return out({error:"نام کاربری/موبایل یا رمز عبور نادرست است."},401,origin);
    const accountType=String(b.account_type??"");
