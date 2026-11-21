@@ -213,6 +213,21 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var profilePhotoUrl by remember { mutableStateOf("") }
     var profilePhotoUploading by remember { mutableStateOf(false) }
     var profilePhotoMessage by remember { mutableStateOf("") }
+    var editableProfileLoading by remember { mutableStateOf(false) }
+    var editableProfileSaving by remember { mutableStateOf(false) }
+    var editableProfileMessage by remember { mutableStateOf("") }
+    var editProfileFirstName by remember { mutableStateOf("") }
+    var editProfileLastName by remember { mutableStateOf("") }
+    var editProfileMobile by remember { mutableStateOf("") }
+    var editProfileCompanyName by remember { mutableStateOf("") }
+    var editProfileActivityCity by remember { mutableStateOf("تهران") }
+    var editProfileOfficeAddress by remember { mutableStateOf("") }
+    var editProfileVehicleType by remember { mutableStateOf("وانت مبلی") }
+    var editProfilePlate by remember { mutableStateOf("") }
+    var editProfilePrimaryDestination by remember { mutableStateOf("") }
+    var editProfileDestinations by remember { mutableStateOf("") }
+    var editProfileNewPassword by remember { mutableStateOf("") }
+    var editProfileConfirmPassword by remember { mutableStateOf("") }
     var showProfile by remember { mutableStateOf(false) }
     var showCommunication by remember { mutableStateOf(false) }
     var showChatRooms by remember { mutableStateOf(false) }
@@ -399,6 +414,29 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
             companyLoadPanelExpanded -> companyLoadPanelExpanded = false
             companyHallExpanded -> companyHallExpanded = false
             drawerState.isOpen -> scope.launch { drawerState.close() }
+        }
+    }
+    LaunchedEffect(showProfile, userLoggedIn, role, userAccessToken) {
+        if (showProfile && userLoggedIn && userAccessToken.isNotBlank()) {
+            editableProfileLoading = true
+            editableProfileMessage = ""
+            val profile = withContext(Dispatchers.IO) { fetchEditableUserProfile(userAccessToken, role) }
+            if (profile != null) {
+                editProfileFirstName = profile.optString("first_name")
+                editProfileLastName = profile.optString("last_name")
+                editProfileMobile = profile.optString("mobile")
+                editProfileCompanyName = profile.optString("company_name")
+                editProfileActivityCity = profile.optString("activity_city", "تهران").ifBlank { "تهران" }
+                editProfileOfficeAddress = profile.optString("office_address")
+                editProfileVehicleType = profile.optString("vehicle_type", "وانت مبلی").ifBlank { "وانت مبلی" }
+                editProfilePlate = profile.optString("license_plate")
+                editProfilePrimaryDestination = profile.optString("primary_destination")
+                val destinations = profile.optJSONArray("destinations")
+                editProfileDestinations = if (destinations != null) (0 until destinations.length()).map { destinations.optString(it) }.joinToString("، ") else ""
+            } else {
+                editableProfileMessage = "دریافت مشخصات ممکن نشد؛ اتصال اینترنت را بررسی و دوباره تلاش کنید."
+            }
+            editableProfileLoading = false
         }
     }
     LaunchedEffect(userLoggedIn, role, userStatus, userAccessToken) {
@@ -641,7 +679,68 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
-                    } else if (adminLoggedIn) {
+                    } else if (showProfile && userLoggedIn) {
+                    HorizontalDivider()
+                    Text("پروفایل من", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                    Text(if (role == UserRole.DRIVER) "ویرایش مشخصات راننده" else "ویرایش مشخصات شرکت", style = MaterialTheme.typography.titleMedium)
+                    Text("وضعیت حساب: " + when (userStatus) { "approved" -> "تأیید شده"; "pending" -> "در انتظار تأیید"; "rejected" -> "رد شده"; "blocked" -> "مسدود"; else -> userStatus }, color = MaterialTheme.colorScheme.secondary)
+                    if (editableProfileLoading) {
+                        CircularProgressIndicator()
+                        Text("در حال دریافت مشخصات حساب...")
+                    } else {
+                        OutlinedTextField(value = editProfileFirstName, onValueChange = { editProfileFirstName = it.take(80) }, label = { Text("نام") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = editProfileLastName, onValueChange = { editProfileLastName = it.take(100) }, label = { Text("نام خانوادگی") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = editProfileMobile, onValueChange = { editProfileMobile = it.take(15) }, label = { Text("شماره موبایل") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth())
+                        if (role == UserRole.COMPANY) {
+                            OutlinedTextField(value = editProfileCompanyName, onValueChange = { editProfileCompanyName = it.take(160) }, label = { Text("نام شرکت") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(value = editProfileActivityCity, onValueChange = { editProfileActivityCity = it.take(100) }, label = { Text("شهر محل فعالیت") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(value = editProfileOfficeAddress, onValueChange = { editProfileOfficeAddress = it.take(500) }, label = { Text("نشانی دفتر") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                        } else {
+                            OutlinedTextField(value = editProfileVehicleType, onValueChange = { editProfileVehicleType = it.take(80) }, label = { Text("نوع خودرو") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(value = editProfilePlate, onValueChange = { editProfilePlate = it.take(30) }, label = { Text("شماره پلاک") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(value = editProfilePrimaryDestination, onValueChange = { editProfilePrimaryDestination = it.take(100) }, label = { Text("مقصد اصلی") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(value = editProfileDestinations, onValueChange = { editProfileDestinations = it.take(1500) }, label = { Text("مقصدهای دیگر (با ویرگول جدا کنید)") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                        }
+                        HorizontalDivider()
+                        Text("تغییر رمز عبور (اختیاری)", style = MaterialTheme.typography.titleMedium)
+                        OutlinedTextField(value = editProfileNewPassword, onValueChange = { editProfileNewPassword = it.take(72) }, label = { Text("رمز جدید؛ حداقل ۸ نویسه") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = editProfileConfirmPassword, onValueChange = { editProfileConfirmPassword = it.take(72) }, label = { Text("تکرار رمز جدید") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                        Button(
+                            enabled = !editableProfileSaving,
+                            onClick = {
+                                if (editProfileFirstName.isBlank() || editProfileLastName.isBlank() || editProfileMobile.isBlank()) {
+                                    editableProfileMessage = "نام، نام خانوادگی و شماره موبایل را کامل کنید."
+                                } else if (editProfileNewPassword.isNotBlank() && (editProfileNewPassword.length < 8 || editProfileNewPassword != editProfileConfirmPassword)) {
+                                    editableProfileMessage = "رمز جدید باید حداقل ۸ نویسه باشد و دو رمز یکسان باشند."
+                                } else {
+                                    editableProfileSaving = true
+                                    editableProfileMessage = "در حال ذخیره تغییرات..."
+                                    scope.launch {
+                                        val result = withContext(Dispatchers.IO) {
+                                            updateEditableUserProfile(
+                                                userAccessToken, role, editProfileFirstName, editProfileLastName, editProfileMobile,
+                                                editProfileCompanyName, editProfileActivityCity, editProfileOfficeAddress,
+                                                editProfileVehicleType, editProfilePlate, editProfilePrimaryDestination,
+                                                editProfileDestinations, editProfileNewPassword
+                                            )
+                                        }
+                                        editableProfileMessage = result
+                                        if (result.contains("موفقیت")) {
+                                            userDisplayName = if (role == UserRole.COMPANY) editProfileCompanyName else (editProfileFirstName + " " + editProfileLastName).trim()
+                                            editProfileNewPassword = ""
+                                            editProfileConfirmPassword = ""
+                                        }
+                                        editableProfileSaving = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(if (editableProfileSaving) "در حال ذخیره..." else "ذخیره تغییرات") }
+                    }
+                    if (editableProfileMessage.isNotBlank()) Text(editableProfileMessage, color = MaterialTheme.colorScheme.secondary, textAlign = TextAlign.Center)
+                    Text("وضعیت تأیید حساب، مدارک هویتی و سطح دسترسی فقط توسط مدیریت تغییر می‌کند.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                    OutlinedButton(onClick = { showProfile = false }, modifier = Modifier.fillMaxWidth()) { Text("برگشت") }
+                } else if (adminLoggedIn) {
                         Text("منوی مدیریتی برای مدیران دیگر توسط مدیر ارشد اصلی خاموش شده است.", style = MaterialTheme.typography.bodySmall)
                     } else {
                         Text(if (userLoggedIn) "بخش‌های حساب شما از این منو در دسترس خواهند بود." else "برای ورود به بخش‌های برنامه، ابتدا وارد حساب شوید.", style = MaterialTheme.typography.bodySmall)
@@ -2555,6 +2654,79 @@ private fun authenticateAdmin(email: String, password: String): AdminLoginResult
     } finally {
         authConnection?.disconnect()
         profileConnection?.disconnect()
+    }
+}
+
+private fun fetchEditableUserProfile(token: String, role: UserRole): JSONObject? {
+    var connection: HttpURLConnection? = null
+    return try {
+        val table = if (role == UserRole.DRIVER) "drivers" else "companies"
+        val columns = if (role == UserRole.DRIVER)
+            "first_name,last_name,mobile,vehicle_type,license_plate,primary_destination,destinations"
+        else "first_name,last_name,mobile,company_name,activity_city,office_address"
+        val url = "$SUPABASE_URL/rest/v1/$table?select=$columns&limit=1"
+        connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15000
+            readTimeout = 20000
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $token")
+            setRequestProperty("Accept", "application/json")
+        }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code !in 200..299) null else JSONArray(body).optJSONObject(0)
+    } catch (_: Exception) {
+        null
+    } finally {
+        connection?.disconnect()
+    }
+}
+
+private fun updateEditableUserProfile(
+    token: String, role: UserRole, firstName: String, lastName: String, mobile: String,
+    companyName: String, activityCity: String, officeAddress: String,
+    vehicleType: String, plate: String, primaryDestination: String, destinationsText: String,
+    newPassword: String
+): String {
+    var connection: HttpURLConnection? = null
+    return try {
+        val destinations = JSONArray()
+        destinationsText.split(',', '،', '\\n').map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(29).forEach { destinations.put(it) }
+        val body = JSONObject()
+            .put("action", "update_profile")
+            .put("first_name", firstName.trim())
+            .put("last_name", lastName.trim())
+            .put("mobile", mobile.trim())
+            .put("new_password", newPassword)
+            .put("company_name", companyName.trim())
+            .put("activity_city", activityCity.trim())
+            .put("office_address", officeAddress.trim())
+            .put("vehicle_type", vehicleType.trim())
+            .put("license_plate", plate.trim())
+            .put("primary_destination", primaryDestination.trim())
+            .put("destinations", destinations)
+        connection = (URL("$SUPABASE_URL/functions/v1/username-auth-v2").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 25000
+            doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $token")
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code in 200..299) JSONObject(response).optString("message", "تغییرات با موفقیت ذخیره شد.")
+        else JSONObject(response).optString("error", "ذخیره تغییرات انجام نشد.")
+    } catch (_: Exception) {
+        "ارتباط با سامانه برقرار نشد؛ دوباره تلاش کنید."
+    } finally {
+        connection?.disconnect()
     }
 }
 
