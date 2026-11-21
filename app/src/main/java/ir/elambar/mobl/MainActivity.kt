@@ -544,7 +544,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         NavigationDrawerItem(
                             label = { Text("پروفایل من") },
                             selected = showProfile,
-                            onClick = { showProfile = true; scope.launch { drawerState.close() } },
+                            onClick = { showPublicHall = false; showProfile = true; scope.launch { drawerState.close() } },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -651,6 +651,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         selected = showSettings,
                         onClick = {
                             showSettings = true
+                            showPublicHall = false
                             showProfile = false
                             selectedPanel = null
                             scope.launch { drawerState.close() }
@@ -675,6 +676,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 adminRole = ""
                                 adminProfilePhotoUrl = ""
                                 showProfile = false
+                                showPublicHall = false
                                 showCommunication = false
                                 showChatRooms = false
                                 showStories = false
