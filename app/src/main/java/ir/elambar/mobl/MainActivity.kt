@@ -2693,7 +2693,7 @@ private fun updateEditableUserProfile(
     var connection: HttpURLConnection? = null
     return try {
         val destinations = JSONArray()
-        destinationsText.split(',', '،', '\\n').map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(29).forEach { destinations.put(it) }
+        destinationsText.split(',', '،', '\n').map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(29).forEach { destinations.put(it) }
         val body = JSONObject()
             .put("action", "update_profile")
             .put("first_name", firstName.trim())
