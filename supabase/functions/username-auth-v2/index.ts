@@ -111,7 +111,10 @@ Deno.serve(async(req:Request)=>{
    const password=b.new_password===undefined?"":String(b.new_password);
    if(password && (password.length<8||password.length>72))return out({error:"رمز جدید باید حداقل ۸ نویسه باشد."},400,origin);
    const table=accountType==="driver"?"drivers":"companies";
-   const profile:any={first_name:firstName,last_name:lastName,mobile};
+   const {data:currentProfile,error:currentProfileError}=await admin.from(table).select("mobile").eq("id",currentUser.id).maybeSingle();
+   if(currentProfileError||!currentProfile)return out({error:"پرونده کاربری پیدا نشد."},404,origin);
+   if(mobile!==String(currentProfile.mobile??""))return out({error:"برای تغییر شماره موبایل ابتدا باید تأیید پیامکی انجام شود."},403,origin);
+   const profile:any={first_name:firstName,last_name:lastName};
    if(accountType==="driver"){
     const vehicles=["وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون بزرگ","خاور مبلی پتو دار","کامیون دربستی کار","سایر خودروهای مبلی"];
     const vehicleType=String(b.vehicle_type??"").trim();
