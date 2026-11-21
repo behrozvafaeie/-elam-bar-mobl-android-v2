@@ -2973,6 +2973,14 @@ private fun fetchCompanyLoads(accessToken: String): String {
     finally { connection?.disconnect() }
 }
 
+private fun normalizeVehicleType(value: String): String {
+    val normalized = value.trim()
+    return when (normalized) {
+        "وانت" -> "وانت مبلی"
+        else -> normalized
+    }
+}
+
 private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<MatchedLoad>> {
     if (accessToken.isBlank()) return "نشست ورود معتبر نیست؛ دوباره وارد شوید." to emptyList()
     var profileConnection: HttpURLConnection? = null
@@ -3017,7 +3025,7 @@ private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<Ma
         if (code !in 200..299) return "دریافت بارها ناموفق بود (کد $code)." to emptyList()
         val rows = JSONArray(raw)
         val matching = (0 until rows.length()).map { rows.getJSONObject(it) }.filter { item ->
-            item.optString("vehicle_type").trim().equals(vehicle, ignoreCase = true) &&
+            normalizeVehicleType(item.optString("vehicle_type")).equals(normalizeVehicleType(vehicle), ignoreCase = true) &&
                 destinations.contains(item.optString("destination").trim().lowercase())
         }.map { item ->
             MatchedLoad(
