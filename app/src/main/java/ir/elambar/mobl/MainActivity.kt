@@ -383,7 +383,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         "مدیریت مدارک", "گفتگوها", "شکایات", "گزارش‌ها", "تنظیمات کل برنامه"
     )
     BackHandler(
-        enabled = showStories || showChatRooms || showCommunication || showProfile || showSettings || selectedPanel != null || drawerState.isOpen
+        enabled = showStories || showChatRooms || showCommunication || showProfile || showSettings || selectedPanel != null || companyLoadPanelExpanded || drawerState.isOpen
     ) {
         when {
             showStories -> showStories = false
@@ -392,6 +392,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
             showProfile -> showProfile = false
             showSettings -> showSettings = false
             selectedPanel != null -> selectedPanel = null
+            companyLoadPanelExpanded -> companyLoadPanelExpanded = false
             drawerState.isOpen -> scope.launch { drawerState.close() }
         }
     }
@@ -688,12 +689,13 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         }
                     },
                     navigationIcon = {
-                        if (showProfile || showSettings || selectedPanel != null) {
+                        if (showProfile || showSettings || selectedPanel != null || companyLoadPanelExpanded) {
                             IconButton(onClick = {
                                 when {
                                     showProfile -> showProfile = false
                                     showSettings -> showSettings = false
                                     selectedPanel != null -> selectedPanel = null
+                                    companyLoadPanelExpanded -> companyLoadPanelExpanded = false
                                 }
                             }) {
                                 Icon(Icons.Filled.ArrowBack, contentDescription = "برگشت")
