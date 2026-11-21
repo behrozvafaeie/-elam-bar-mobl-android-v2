@@ -96,7 +96,7 @@ private enum class UserRole(val label: String) {
 }
 
 private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "", val role: String = "", val refreshToken: String = "")
-private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "")
+private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "", val username: String = "")
 private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val priceMode: String, val freightAmount: String, val description: String)
 
 @Composable
@@ -1983,6 +1983,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         if (result.success && result.accessToken.isNotBlank() && result.refreshToken.isNotBlank()) {
                                             userLoggedIn = true
                                             userDisplayName = result.displayName
+                                             username = result.username.ifBlank { username }
                                             userStatus = result.status
                                             userAccessToken = result.accessToken
                                             profilePhotoUrl = result.photoUrl
@@ -2011,6 +2012,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         if (result.success && result.accessToken.isNotBlank() && result.refreshToken.isNotBlank()) {
                                             userLoggedIn = true
                                             userDisplayName = result.displayName
+                                             username = result.username.ifBlank { username }
                                             userStatus = result.status
                                             userAccessToken = result.accessToken
                                             profilePhotoUrl = result.photoUrl
@@ -2468,7 +2470,7 @@ private fun restoreDeviceSession(refreshToken: String, role: UserRole): UserLogi
         val status = p.optString("status")
         if (status !in listOf("pending", "approved")) return UserLoginResult(false, "دسترسی حساب فعال نیست.")
         val name = if (role == UserRole.COMPANY) p.optString("company_name").ifBlank { p.optString("first_name") + " " + p.optString("last_name") } else (p.optString("first_name") + " " + p.optString("last_name")).trim()
-        UserLoginResult(true, "نشست قبلی بازیابی شد.", name, status, access, fresh, profilePhotoPublicUrl(p.optString("profile_photo_path")))
+        UserLoginResult(true, "نشست قبلی بازیابی شد.", name, status, access, fresh, profilePhotoPublicUrl(p.optString("profile_photo_path")), user.optJSONObject("user_metadata")?.optString("username").orEmpty())
     } catch (_: Exception) {
         UserLoginResult(false, "ارتباط با سامانه برقرار نشد.")
     } finally {
@@ -2917,7 +2919,8 @@ private fun authenticateUser(username: String, password: String, role: UserRole)
                 displayName = displayName,
                 status = status,
                 accessToken = accessToken,
-                refreshToken = refreshToken
+                refreshToken = refreshToken,
+                username = user.optJSONObject("user_metadata")?.optString("username").orEmpty().ifBlank { username }
             )
             else -> UserLoginResult(false, "وضعیت حساب در سامانه معتبر نیست.")
         }
