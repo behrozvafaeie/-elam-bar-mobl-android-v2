@@ -139,42 +139,4 @@ jobs:
           emulator-boot-timeout: 600
           disable-animations: true
           script: |
-            set -euo pipefail
-            echo "Waiting for a responsive Android device..."
-            adb wait-for-device
-            for attempt in $(seq 1 36); do
-              state="$(adb get-state 2>/dev/null || true)"
-              if [ "$state" = "device" ]; then
-                break
-              fi
-              echo "ADB state: ${state:-unavailable}; reconnecting ($attempt/36)"
-              adb reconnect offline >/dev/null 2>&1 || true
-              sleep 5
-            done
-            test "$(adb get-state)" = "device"
-            echo "Waiting for Android framework boot..."
-            booted=""
-            for attempt in $(seq 1 60); do
-              booted="$(timeout 15s adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
-              if [ "$booted" = "1" ]; then
-                break
-              fi
-              echo "Android is still starting ($attempt/60)"
-              sleep 5
-            done
-            test "$booted" = "1"
-            echo "Installing APK..."
-            timeout 180s adb install -r artifacts/app-debug.apk
-            echo "Launching app..."
-            timeout 60s adb shell am force-stop ir.elambar.mobl
-            timeout 60s adb shell monkey -p ir.elambar.mobl 1
-            sleep 15
-            echo "Checking app process..."
-            timeout 30s adb shell pidof ir.elambar.mobl | grep -E '[0-9]+'
-            echo "Checking foreground activity..."
-            timeout 30s adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" | head -n 2
-            echo "Checking app-specific fatal crashes..."
-            if timeout 30s adb logcat -d | grep -E -A 25 -B 5 "FATAL EXCEPTION.*ir.elambar.mobl|Process: ir.elambar.mobl"; then
-              echo "Fatal crash detected."
-              exit 1
-            fi
+            set -eu; echo "Waiting for Android device..."; adb wait-for-device; echo "Installing APK..."; timeout 180s adb install -r artifacts/app-debug.apk; echo "Launching app..."; timeout 60s adb shell am force-stop ir.elambar.mobl; timeout 60s adb shell monkey -p ir.elambar.mobl 1; sleep 15; echo "Checking app process..."; timeout 30s adb shell pidof ir.elambar.mobl | grep -E '[0-9]+'; echo "Checking foreground activity..."; timeout 30s adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" | head -n 2; echo "Checking app-specific fatal crashes..."; if timeout 30s adb logcat -d | grep -E -A 25 -B 5 "FATAL EXCEPTION.*ir.elambar.mobl|Process: ir.elambar.mobl"; then echo "Fatal crash detected."; exit 1; fi
