@@ -1548,7 +1548,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                     Text("بدون محدودیت تعداد", modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), style = MaterialTheme.typography.labelSmall)
                                                 }
                                             }
-                                            Text("برای چند مقصد، هر مقصد را جداگانه به فهرست اضافه کنید؛ همه بارها با هم منتشر می‌شوند.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                            Text("برای ثبت بارهای بعدی، پس از انتشار از سالن اعلام بار گزینه «ثبت بار جدید» را بزنید.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                                         }
                                     }
                                     LoadSectionDropdown("مقصد", loadDestinationExpanded, { loadDestinationExpanded = !loadDestinationExpanded }) {
@@ -1579,44 +1579,47 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         }
                                         if (loadPriceMode == "fixed") OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("مبلغ کرایه (تومان)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                     }
-                                    LoadSectionDropdown("تعداد بار", loadQuantityExpanded, { loadQuantityExpanded = !loadQuantityExpanded }) {
-                                        OutlinedTextField(loadQuantity, { loadQuantity = it.filter(Char::isDigit).take(5) }, label = { Text("تعداد اقلام") }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                                    }
                                     LoadSectionDropdown("توضیحات بار", loadDescriptionExpanded, { loadDescriptionExpanded = !loadDescriptionExpanded }) {
                                         OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
                                     }
-                                OutlinedButton(onClick = {
-                                    if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || (loadPriceMode == "fixed" && (loadFreightAmount.isBlank() || loadFreightAmount.toLongOrNull() == null || loadFreightAmount.toLong() <= 0))) {
-                                        loadActionMessage = "مقصد، نوع بار و کرایه را کامل کنید."
-                                    } else {
-                                        loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", (if (loadQuantity.isNotBlank()) "تعداد: ${loadQuantity.trim()}\n" else "") + loadDescription.trim()))
-                                        loadDestination = ""
-                                        loadDescription = ""
-                                        loadQuantity = "1"
-                                        loadActionMessage = "بار به فهرست گروهی اضافه شد."
-                                    }
-                                }, modifier = Modifier.fillMaxWidth()) { Text("افزودن بار به فهرست") }
-                                if (loadDrafts.isNotEmpty()) {
-                                    Text("تعداد بارهای آماده انتشار: ${loadDrafts.size}", style = MaterialTheme.typography.titleSmall)
-                                }
                                     Button(enabled = !loadPublishing, onClick = {
-                                        loadPublishing = true
-                                        loadActionMessage = "در حال ثبت بارها..."
-                                        scope.launch {
-                                            val result = withContext(Dispatchers.IO) { publishLoadBatch(userAccessToken, loadDrafts.toList()) }
-                                            loadPublishing = false
-                                            loadActionMessage = result
-                                            if (result.startsWith("ثبت شد")) {
-                                                loadDrafts.clear()
-                                                companyLoadPanelExpanded = false
-                                                companyHallExpanded = true
+                                        if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || (loadPriceMode == "fixed" && (loadFreightAmount.isBlank() || loadFreightAmount.toLongOrNull() == null || loadFreightAmount.toLong() <= 0))) {
+                                            loadActionMessage = "مقصد، نوع بار و کرایه را کامل کنید."
+                                        } else {
+                                            loadPublishing = true
+                                            loadActionMessage = "در حال ثبت و انتشار بار..."
+                                            val currentLoad = LoadDraft(
+                                                loadDestination.trim(), loadCargoType.trim(), loadVehicleType,
+                                                loadLoadingType, loadPriceMode,
+                                                if (loadPriceMode == "fixed") loadFreightAmount else "0",
+                                                loadDescription.trim()
+                                            )
+                                            scope.launch {
+                                                val result = withContext(Dispatchers.IO) {
+                                                    publishLoadBatch(userAccessToken, listOf(currentLoad))
+                                                }
+                                                loadPublishing = false
+                                                loadActionMessage = result
+                                                if (result.startsWith("ثبت شد")) {
+                                                    loadDrafts.clear()
+                                                    loadDestination = ""
+                                                    loadFreightAmount = ""
+                                                    loadDescription = ""
+                                                    companyLoadPanelExpanded = false
+                                                    companyHallExpanded = true
+                                                }
                                             }
                                         }
-                                    }, modifier = Modifier.fillMaxWidth()) { Text(if (loadPublishing) "در حال ثبت..." else "انتشار همه بارهای فهرست") }
+                                    }, modifier = Modifier.fillMaxWidth()) {
+                                        Text(if (loadPublishing) "در حال ثبت..." else "ثبت و انتشار بار")
+                                    }
                                 }
                                 if (loadActionMessage.isNotBlank()) Text(loadActionMessage, color = MaterialTheme.colorScheme.secondary)
                                 }
                                 if (companyHallExpanded) {
+                                Button(onClick = { companyHallExpanded = false; companyLoadPanelExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                                    Text("＋ ثبت بار جدید")
+                                }
                                 Text("سالن اعلام بار شرکت", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
                                 Text("بارهای منتشرشده شرکت و ابزار مدیریت آن‌ها در این بخش قرار دارند.", style = MaterialTheme.typography.bodySmall)
                                 HorizontalDivider()
