@@ -587,8 +587,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         )
                     } else if (userLoggedIn && role == UserRole.COMPANY && userStatus == "approved") {
                         NavigationDrawerItem(
-                            label = { Text("اعلام بار") },
-                            selected = false,
+                            label = { Text("پنل اعلام بار") },
+                            selected = companyLoadPanelExpanded,
                             onClick = { companyLoadPanelExpanded = true; scope.launch { drawerState.close() } },
                             modifier = Modifier.fillMaxWidth()
                         )
