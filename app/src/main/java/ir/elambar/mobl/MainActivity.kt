@@ -503,7 +503,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     adminProfilePhotoUrl = withContext(Dispatchers.IO) { fetchAdminProfilePhoto(restored.accessToken) }
                     adminMenuVisibleToOtherAdmins = withContext(Dispatchers.IO) { fetchAdminMenuVisibility(restored.accessToken) }
                 } else {
-                    role = savedRole; userLoggedIn = true; userDisplayName = restored.displayName
+                    role = savedRole; userLoggedIn = true; userDisplayName = restored.displayName; username = restored.username
                     userStatus = restored.status; userAccessToken = restored.accessToken; profilePhotoUrl = restored.photoUrl
                     if (savedRole == UserRole.DRIVER) {
                         acceptedLoadContactsLoading = true
@@ -539,6 +539,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         userAccessToken = refreshed.accessToken
                         userStatus = refreshed.status
                         userDisplayName = refreshed.displayName
+                        username = refreshed.username
                         profilePhotoUrl = refreshed.photoUrl
                     }
                 } else {
@@ -1514,6 +1515,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                 userAccessToken = refreshed.accessToken
                                                 userStatus = refreshed.status
                                                 userDisplayName = refreshed.displayName
+                        username = refreshed.username
                                                 profilePhotoUrl = refreshed.photoUrl
                                                 if (refreshed.status == "approved") {
                                                     companyHallExpanded = false
