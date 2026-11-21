@@ -194,7 +194,7 @@ private fun decodeLoadDraftState(raw: String): Pair<List<LoadDraft>, JSONObject?
     }.getOrElse { emptyList<LoadDraft>() to null }
 }
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
-private data class MatchedLoad(val id: String, val origin: String, val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String)
+private data class MatchedLoad(val id: String, val origin: String, val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String, val companyName: String = "", val companyMobile: String = "")
 private data class AcceptedLoadContact(val id: String, val destination: String, val companyName: String, val managerName: String, val mobile: String)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -587,11 +587,22 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
-                    if (userLoggedIn && role == UserRole.DRIVER && userStatus == "approved") {
+                    if (userLoggedIn || adminLoggedIn) {
                         NavigationDrawerItem(
                             label = { Text("سالن عمومی بار") },
                             selected = showPublicHall,
-                            onClick = { showPublicHall = true; showProfile = false; showSettings = false; selectedPanel = null; scope.launch { drawerState.close() } },
+                            onClick = {
+                                showPublicHall = true
+                                showProfile = false
+                                showSettings = false
+                                showStories = false
+                                showChatRooms = false
+                                showCommunication = false
+                                selectedPanel = null
+                                companyLoadPanelExpanded = false
+                                companyHallExpanded = false
+                                scope.launch { drawerState.close() }
+                            },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -792,16 +803,18 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 }
                 Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
                 Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
-                if (showPublicHall && userLoggedIn && role == UserRole.DRIVER && userStatus == "approved") {
+                if (showPublicHall && (userLoggedIn || adminLoggedIn)) {
                     PublicLoadHallScreen(
                         loads = publicHallLoads,
                         message = publicHallMessage,
                         loading = publicHallLoading,
                         acceptingLoadId = acceptingLoadId,
+                        canAccept = userLoggedIn && role == UserRole.DRIVER && userStatus == "approved",
                         onRefresh = {
                             publicHallLoading = true
                             scope.launch {
-                                val result = withContext(Dispatchers.IO) { fetchPublicHallLoads(userAccessToken) }
+                                val hallToken = if (adminLoggedIn) adminAccessToken else userAccessToken
+                                val result = withContext(Dispatchers.IO) { fetchPublicHallLoads(hallToken) }
                                 publicHallMessage = result.first
                                 publicHallLoads = result.second
                                 publicHallLoading = false
@@ -1987,12 +2000,14 @@ private fun PublicLoadHallScreen(
     message: String,
     loading: Boolean,
     acceptingLoadId: String,
+    canAccept: Boolean,
     onRefresh: () -> Unit,
     onAccept: (String) -> Unit
 ) {
+    val context = LocalContext.current
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("سالن عمومی اعلام بار", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-        Text("همه بارهای منتشرشده شرکت‌ها در این سالن قرار می‌گیرند؛ این بخش مخصوص رانندگان تأییدشده است.", style = MaterialTheme.typography.bodySmall)
+        Text("بارهای منتشرشده برای همه کاربران واردشده قابل مشاهده است. شماره تماس شرکت نیز در هر آگهی نمایش داده می‌شود.", style = MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick = onRefresh, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
             Text(if (loading) "در حال بروزرسانی سالن..." else "بروزرسانی سالن عمومی")
         }
@@ -2001,12 +2016,24 @@ private fun PublicLoadHallScreen(
         loads.forEach { load ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("تهران ← undefined", style = MaterialTheme.typography.titleMedium)
-                    Text("undefined | undefined | undefined")
-                    Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: undefined تومان")
+                    Text("${load.origin} ← ${load.destination}", style = MaterialTheme.typography.titleMedium)
+                    Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
+                    Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
+                    if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")
+                    if (load.companyMobile.isNotBlank()) {
+                        Text("شماره تماس: ${load.companyMobile}", style = MaterialTheme.typography.bodyMedium)
+                        OutlinedButton(
+                            onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${load.companyMobile}"))) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("تماس با شرکت") }
+                    } else {
+                        Text("شماره تماس این آگهی در پرونده شرکت ثبت نشده است.", style = MaterialTheme.typography.bodySmall)
+                    }
                     if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
-                    Button(enabled = acceptingLoadId.isBlank(), onClick = { onAccept(load.id) }, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "درخواست دریافت این بار")
+                    if (canAccept) {
+                        Button(enabled = acceptingLoadId.isBlank(), onClick = { onAccept(load.id) }, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "درخواست دریافت این بار")
+                        }
                     }
                 }
             }
@@ -3004,18 +3031,21 @@ private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<Ma
 }
 
 private fun fetchPublicHallLoads(accessToken: String): Pair<String, List<MatchedLoad>> {
-    if (accessToken.isBlank()) return "برای مشاهده سالن عمومی وارد حساب راننده شوید." to emptyList()
+    if (accessToken.isBlank()) return "برای مشاهده سالن عمومی وارد حساب کاربری شوید." to emptyList()
     var connection: HttpURLConnection? = null
     return try {
-        val url = "$SUPABASE_URL/rest/v1/loads?select=id,origin,destination,cargo_type,vehicle_type,freight_amount,description,loading_type&status=eq.published&assigned_driver_id=is.null&order=created_at.desc&limit=200"
+        val url = "$SUPABASE_URL/rest/v1/rpc/get_public_load_hall"
         connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
+            requestMethod = "POST"
             connectTimeout = 15000
             readTimeout = 20000
+            doOutput = true
             setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
             setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Accept", "application/json")
         }
+        connection.outputStream.use { it.write(JSONObject().toString().toByteArray(Charsets.UTF_8)) }
         val code = connection.responseCode
         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
         val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
@@ -3030,7 +3060,9 @@ private fun fetchPublicHallLoads(accessToken: String): Pair<String, List<Matched
                 vehicleType = item.optString("vehicle_type"),
                 loadingType = item.optString("loading_type"),
                 freightAmount = item.optString("freight_amount", "0"),
-                description = item.optString("description").takeUnless { it == "null" }.orEmpty()
+                description = item.optString("description").takeUnless { it == "null" }.orEmpty(),
+                companyName = item.optString("company_name").takeUnless { it == "null" }.orEmpty(),
+                companyMobile = item.optString("company_mobile").takeUnless { it == "null" }.orEmpty()
             )
         }.filter { it.id.isNotBlank() }
         (if (loads.isEmpty()) "در حال حاضر بار منتشرشده‌ای در سالن عمومی وجود ندارد." else "${loads.size} بار منتشرشده در سالن عمومی موجود است.") to loads
