@@ -1515,9 +1515,6 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         "approved" -> {
                             Text("حساب شما تأیید شده است.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
                             if (role == UserRole.COMPANY) {
-                                OutlinedButton(onClick = { companyHallExpanded = false; companyLoadPanelExpanded = !companyLoadPanelExpanded }, modifier = Modifier.fillMaxWidth()) {
-                                    Text(if (companyLoadPanelExpanded) "بستن فرم اعلام بار ▲" else "باز کردن فرم اعلام بار ▼")
-                                }
                                 if (companyLoadPanelExpanded) {
                                     Box(
                                         Modifier.fillMaxWidth()
@@ -1642,7 +1639,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 }
                                 Text(driverSearchResults, textAlign = TextAlign.Start)
                                 }
-                                else {
+                                else if (!companyLoadPanelExpanded) {
                                     Text("بخش‌های شرکت", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
                                     Text("فقط فرم ثبت بار را تکمیل کنید؛ پس از انتشار، بارها به سالن اعلام بار منتقل می‌شوند.", style = MaterialTheme.typography.bodyMedium)
                                     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
