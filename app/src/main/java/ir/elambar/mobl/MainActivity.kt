@@ -2973,8 +2973,16 @@ private fun fetchCompanyLoads(accessToken: String): String {
     finally { connection?.disconnect() }
 }
 
+private fun normalizeMatchText(value: String): String =
+    value.trim()
+        .replace('ي', 'ی')
+        .replace('ى', 'ی')
+        .replace('ك', 'ک')
+        .replace(Regex("\\s+"), " ")
+        .lowercase()
+
 private fun normalizeVehicleType(value: String): String {
-    val normalized = value.trim()
+    val normalized = normalizeMatchText(value)
     return when (normalized) {
         "وانت" -> "وانت مبلی"
         else -> normalized
@@ -3007,10 +3015,10 @@ private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<Ma
         val destinationArray = driver.optJSONArray("destinations")
         if (destinationArray != null) for (i in 0 until destinationArray.length()) {
             val value = destinationArray.optString(i).trim()
-            if (value.isNotBlank()) destinations.add(value.lowercase())
+            if (value.isNotBlank()) destinations.add(normalizeMatchText(value))
         }
         val primary = driver.optString("primary_destination").trim()
-        if (primary.isNotBlank()) destinations.add(primary.lowercase())
+        if (primary.isNotBlank()) destinations.add(normalizeMatchText(primary))
         if (vehicle.isBlank() || destinations.isEmpty()) return "ابتدا نوع خودرو و مقصدهای خود را در پروفایل کامل کنید." to emptyList()
         val loadsUrl = "$SUPABASE_URL/rest/v1/loads?select=id,origin,destination,cargo_type,vehicle_type,freight_amount,description,loading_type&status=eq.published&assigned_driver_id=is.null&order=created_at.desc&limit=200"
         loadsConnection = (URL(loadsUrl).openConnection() as HttpURLConnection).apply {
@@ -3026,7 +3034,7 @@ private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<Ma
         val rows = JSONArray(raw)
         val matching = (0 until rows.length()).map { rows.getJSONObject(it) }.filter { item ->
             normalizeVehicleType(item.optString("vehicle_type")).equals(normalizeVehicleType(vehicle), ignoreCase = true) &&
-                destinations.contains(item.optString("destination").trim().lowercase())
+                destinations.contains(normalizeMatchText(item.optString("destination")) )
         }.map { item ->
             MatchedLoad(
                 id = item.optString("id"),
@@ -3168,7 +3176,7 @@ private fun fetchMatchedLoads(accessToken: String): String {
         val rows = JSONArray(response)
         val matching = (0 until rows.length()).map { rows.getJSONObject(it) }.filter { item ->
             item.optString("vehicle_type").trim().equals(vehicle, ignoreCase = true) &&
-                destinations.contains(item.optString("destination").trim().lowercase())
+                destinations.contains(normalizeMatchText(item.optString("destination")) )
         }
         if (matching.isEmpty()) return "در حال حاضر بار منتشرشده متناسب با خودرو و مقصدهای شما وجود ندارد."
         buildString {
