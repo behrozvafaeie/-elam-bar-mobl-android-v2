@@ -679,68 +679,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
-                    } else if (showProfile && userLoggedIn) {
-                    HorizontalDivider()
-                    Text("پروفایل من", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-                    Text(if (role == UserRole.DRIVER) "ویرایش مشخصات راننده" else "ویرایش مشخصات شرکت", style = MaterialTheme.typography.titleMedium)
-                    Text("وضعیت حساب: " + when (userStatus) { "approved" -> "تأیید شده"; "pending" -> "در انتظار تأیید"; "rejected" -> "رد شده"; "blocked" -> "مسدود"; else -> userStatus }, color = MaterialTheme.colorScheme.secondary)
-                    if (editableProfileLoading) {
-                        CircularProgressIndicator()
-                        Text("در حال دریافت مشخصات حساب...")
-                    } else {
-                        OutlinedTextField(value = editProfileFirstName, onValueChange = { editProfileFirstName = it.take(80) }, label = { Text("نام") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = editProfileLastName, onValueChange = { editProfileLastName = it.take(100) }, label = { Text("نام خانوادگی") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = editProfileMobile, onValueChange = { editProfileMobile = it.take(15) }, label = { Text("شماره موبایل") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth())
-                        if (role == UserRole.COMPANY) {
-                            OutlinedTextField(value = editProfileCompanyName, onValueChange = { editProfileCompanyName = it.take(160) }, label = { Text("نام شرکت") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(value = editProfileActivityCity, onValueChange = { editProfileActivityCity = it.take(100) }, label = { Text("شهر محل فعالیت") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(value = editProfileOfficeAddress, onValueChange = { editProfileOfficeAddress = it.take(500) }, label = { Text("نشانی دفتر") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
-                        } else {
-                            OutlinedTextField(value = editProfileVehicleType, onValueChange = { editProfileVehicleType = it.take(80) }, label = { Text("نوع خودرو") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(value = editProfilePlate, onValueChange = { editProfilePlate = it.take(30) }, label = { Text("شماره پلاک") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(value = editProfilePrimaryDestination, onValueChange = { editProfilePrimaryDestination = it.take(100) }, label = { Text("مقصد اصلی") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(value = editProfileDestinations, onValueChange = { editProfileDestinations = it.take(1500) }, label = { Text("مقصدهای دیگر (با ویرگول جدا کنید)") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
-                        }
-                        HorizontalDivider()
-                        Text("تغییر رمز عبور (اختیاری)", style = MaterialTheme.typography.titleMedium)
-                        OutlinedTextField(value = editProfileNewPassword, onValueChange = { editProfileNewPassword = it.take(72) }, label = { Text("رمز جدید؛ حداقل ۸ نویسه") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = editProfileConfirmPassword, onValueChange = { editProfileConfirmPassword = it.take(72) }, label = { Text("تکرار رمز جدید") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-                        Button(
-                            enabled = !editableProfileSaving,
-                            onClick = {
-                                if (editProfileFirstName.isBlank() || editProfileLastName.isBlank() || editProfileMobile.isBlank()) {
-                                    editableProfileMessage = "نام، نام خانوادگی و شماره موبایل را کامل کنید."
-                                } else if (editProfileNewPassword.isNotBlank() && (editProfileNewPassword.length < 8 || editProfileNewPassword != editProfileConfirmPassword)) {
-                                    editableProfileMessage = "رمز جدید باید حداقل ۸ نویسه باشد و دو رمز یکسان باشند."
-                                } else {
-                                    editableProfileSaving = true
-                                    editableProfileMessage = "در حال ذخیره تغییرات..."
-                                    scope.launch {
-                                        val result = withContext(Dispatchers.IO) {
-                                            updateEditableUserProfile(
-                                                userAccessToken, role, editProfileFirstName, editProfileLastName, editProfileMobile,
-                                                editProfileCompanyName, editProfileActivityCity, editProfileOfficeAddress,
-                                                editProfileVehicleType, editProfilePlate, editProfilePrimaryDestination,
-                                                editProfileDestinations, editProfileNewPassword
-                                            )
-                                        }
-                                        editableProfileMessage = result
-                                        if (result.contains("موفقیت")) {
-                                            userDisplayName = if (role == UserRole.COMPANY) editProfileCompanyName else (editProfileFirstName + " " + editProfileLastName).trim()
-                                            editProfileNewPassword = ""
-                                            editProfileConfirmPassword = ""
-                                        }
-                                        editableProfileSaving = false
-                                    }
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text(if (editableProfileSaving) "در حال ذخیره..." else "ذخیره تغییرات") }
-                    }
-                    if (editableProfileMessage.isNotBlank()) Text(editableProfileMessage, color = MaterialTheme.colorScheme.secondary, textAlign = TextAlign.Center)
-                    Text("وضعیت تأیید حساب، مدارک هویتی و سطح دسترسی فقط توسط مدیریت تغییر می‌کند.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-                    OutlinedButton(onClick = { showProfile = false }, modifier = Modifier.fillMaxWidth()) { Text("برگشت") }
-                } else if (adminLoggedIn) {
+                    } else if (adminLoggedIn) {
                         Text("منوی مدیریتی برای مدیران دیگر توسط مدیر ارشد اصلی خاموش شده است.", style = MaterialTheme.typography.bodySmall)
                     } else {
                         Text(if (userLoggedIn) "بخش‌های حساب شما از این منو در دسترس خواهند بود." else "برای ورود به بخش‌های برنامه، ابتدا وارد حساب شوید.", style = MaterialTheme.typography.bodySmall)
@@ -925,6 +864,67 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             }
                         }
                     }
+                } else if (showProfile && userLoggedIn) {
+                    HorizontalDivider()
+                    Text("پروفایل من", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                    Text(if (role == UserRole.DRIVER) "ویرایش مشخصات راننده" else "ویرایش مشخصات شرکت", style = MaterialTheme.typography.titleMedium)
+                    Text("وضعیت حساب: " + when (userStatus) { "approved" -> "تأیید شده"; "pending" -> "در انتظار تأیید"; "rejected" -> "رد شده"; "blocked" -> "مسدود"; else -> userStatus }, color = MaterialTheme.colorScheme.secondary)
+                    if (editableProfileLoading) {
+                        CircularProgressIndicator()
+                        Text("در حال دریافت مشخصات حساب...")
+                    } else {
+                        OutlinedTextField(value = editProfileFirstName, onValueChange = { editProfileFirstName = it.take(80) }, label = { Text("نام") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = editProfileLastName, onValueChange = { editProfileLastName = it.take(100) }, label = { Text("نام خانوادگی") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = editProfileMobile, onValueChange = { editProfileMobile = it.take(15) }, label = { Text("شماره موبایل") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth())
+                        if (role == UserRole.COMPANY) {
+                            OutlinedTextField(value = editProfileCompanyName, onValueChange = { editProfileCompanyName = it.take(160) }, label = { Text("نام شرکت") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(value = editProfileActivityCity, onValueChange = { editProfileActivityCity = it.take(100) }, label = { Text("شهر محل فعالیت") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(value = editProfileOfficeAddress, onValueChange = { editProfileOfficeAddress = it.take(500) }, label = { Text("نشانی دفتر") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                        } else {
+                            OutlinedTextField(value = editProfileVehicleType, onValueChange = { editProfileVehicleType = it.take(80) }, label = { Text("نوع خودرو") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(value = editProfilePlate, onValueChange = { editProfilePlate = it.take(30) }, label = { Text("شماره پلاک") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(value = editProfilePrimaryDestination, onValueChange = { editProfilePrimaryDestination = it.take(100) }, label = { Text("مقصد اصلی") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(value = editProfileDestinations, onValueChange = { editProfileDestinations = it.take(1500) }, label = { Text("مقصدهای دیگر (با ویرگول جدا کنید)") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                        }
+                        HorizontalDivider()
+                        Text("تغییر رمز عبور (اختیاری)", style = MaterialTheme.typography.titleMedium)
+                        OutlinedTextField(value = editProfileNewPassword, onValueChange = { editProfileNewPassword = it.take(72) }, label = { Text("رمز جدید؛ حداقل ۸ نویسه") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = editProfileConfirmPassword, onValueChange = { editProfileConfirmPassword = it.take(72) }, label = { Text("تکرار رمز جدید") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                        Button(
+                            enabled = !editableProfileSaving,
+                            onClick = {
+                                if (editProfileFirstName.isBlank() || editProfileLastName.isBlank() || editProfileMobile.isBlank()) {
+                                    editableProfileMessage = "نام، نام خانوادگی و شماره موبایل را کامل کنید."
+                                } else if (editProfileNewPassword.isNotBlank() && (editProfileNewPassword.length < 8 || editProfileNewPassword != editProfileConfirmPassword)) {
+                                    editableProfileMessage = "رمز جدید باید حداقل ۸ نویسه باشد و دو رمز یکسان باشند."
+                                } else {
+                                    editableProfileSaving = true
+                                    editableProfileMessage = "در حال ذخیره تغییرات..."
+                                    scope.launch {
+                                        val result = withContext(Dispatchers.IO) {
+                                            updateEditableUserProfile(
+                                                userAccessToken, role, editProfileFirstName, editProfileLastName, editProfileMobile,
+                                                editProfileCompanyName, editProfileActivityCity, editProfileOfficeAddress,
+                                                editProfileVehicleType, editProfilePlate, editProfilePrimaryDestination,
+                                                editProfileDestinations, editProfileNewPassword
+                                            )
+                                        }
+                                        editableProfileMessage = result
+                                        if (result.contains("موفقیت")) {
+                                            userDisplayName = if (role == UserRole.COMPANY) editProfileCompanyName else (editProfileFirstName + " " + editProfileLastName).trim()
+                                            editProfileNewPassword = ""
+                                            editProfileConfirmPassword = ""
+                                        }
+                                        editableProfileSaving = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(if (editableProfileSaving) "در حال ذخیره..." else "ذخیره تغییرات") }
+                    }
+                    if (editableProfileMessage.isNotBlank()) Text(editableProfileMessage, color = MaterialTheme.colorScheme.secondary, textAlign = TextAlign.Center)
+                    Text("وضعیت تأیید حساب، مدارک هویتی و سطح دسترسی فقط توسط مدیریت تغییر می‌کند.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                    OutlinedButton(onClick = { showProfile = false }, modifier = Modifier.fillMaxWidth()) { Text("برگشت") }
                 } else if (showProfile && adminLoggedIn) {
                     HorizontalDivider()
                     Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge) {
