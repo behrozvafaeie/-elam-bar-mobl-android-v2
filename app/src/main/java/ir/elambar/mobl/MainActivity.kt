@@ -244,6 +244,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var editProfileDestinations by remember { mutableStateOf("") }
     var editProfileNewPassword by remember { mutableStateOf("") }
     var editProfileConfirmPassword by remember { mutableStateOf("") }
+    var editProfileBirthDate by remember { mutableStateOf("") }
     var showProfile by remember { mutableStateOf(false) }
     var showCommunication by remember { mutableStateOf(false) }
     var showChatRooms by remember { mutableStateOf(false) }
@@ -380,11 +381,11 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         }
     }
     val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        if (uri != null && userAccessToken.isNotBlank() && role == UserRole.DRIVER) {
+        if (uri != null && userAccessToken.isNotBlank() && (role == UserRole.DRIVER || role == UserRole.COMPANY)) {
             driverDocUploading = true
             driverDocMessage = "در حال بارگذاری مدرک..."
             scope.launch {
-                driverDocMessage = withContext(Dispatchers.IO) { uploadDriverDocument(context, uri, userAccessToken, selectedDriverDocType) }
+                driverDocMessage = withContext(Dispatchers.IO) { uploadAccountDocument(context, uri, userAccessToken, selectedDriverDocType, role) }
                 driverDocUploading = false
             }
         }
@@ -439,6 +440,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
             val profile = withContext(Dispatchers.IO) { fetchEditableUserProfile(userAccessToken, role) }
             if (profile != null) {
                 editProfileFirstName = profile.optString("first_name")
+                editProfileBirthDate = formatBirthDateForDisplay(profile.optString("birth_date"))
                 editProfileLastName = profile.optString("last_name")
                 editProfileMobile = profile.optString("mobile")
                 editProfileCompanyName = profile.optString("company_name")
@@ -905,6 +907,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         OutlinedTextField(value = editProfileFirstName, onValueChange = { editProfileFirstName = it.take(80) }, label = { Text("نام") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = editProfileLastName, onValueChange = { editProfileLastName = it.take(100) }, label = { Text("نام خانوادگی") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = editProfileMobile, onValueChange = {}, readOnly = true, label = { Text("شماره موبایل (تغییر با تأیید پیامکی)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = username, onValueChange = {}, readOnly = true, label = { Text("نام کاربری") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        Text("نوع کاربری: " + if (role == UserRole.DRIVER) "راننده" else "شرکت باربری", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                        OutlinedTextField(value = editProfileBirthDate, onValueChange = { editProfileBirthDate = it.filter { ch -> ch.isDigit() || ch == '/' }.take(10) }, label = { Text("تاریخ تولد (شمسی: ۱۳۷۸/۰۵/۲۱)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                         if (role == UserRole.COMPANY) {
                             OutlinedTextField(value = editProfileCompanyName, onValueChange = { editProfileCompanyName = it.take(160) }, label = { Text("نام شرکت") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                             OutlinedTextField(value = editProfileActivityCity, onValueChange = { editProfileActivityCity = it.take(100) }, label = { Text("شهر محل فعالیت") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -916,14 +921,28 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             OutlinedTextField(value = editProfileDestinations, onValueChange = { editProfileDestinations = it.take(1500) }, label = { Text("مقصدهای دیگر (با ویرگول جدا کنید)") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
                         }
                         HorizontalDivider()
+                        HorizontalDivider()
+                        Text("عکس پروفایل", style = MaterialTheme.typography.titleMedium)
+                        if (profilePhotoUrl.isNotBlank()) AsyncImage(model = profilePhotoUrl, contentDescription = "عکس پروفایل", modifier = Modifier.size(96.dp).clip(CircleShape))
+                        OutlinedButton(enabled = !profilePhotoUploading, onClick = { photoPicker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) { Text(if (profilePhotoUploading) "در حال بارگذاری عکس..." else "انتخاب یا تغییر عکس پروفایل") }
+                        HorizontalDivider()
+                        Text("مدارک موردنیاز", style = MaterialTheme.typography.titleMedium)
+                        val requiredDocs = if (role == UserRole.DRIVER) listOf("کارت ملی", "گواهینامه", "کارت هوشمند", "کارت خودرو") else listOf("شناسه ملی شرکت", "روزنامه رسمی", "مجوز فعالیت", "مدرک هویتی مدیرعامل")
+                        requiredDocs.forEach { doc -> FilterChip(selected = selectedDriverDocType == doc, onClick = { selectedDriverDocType = doc }, label = { Text(doc) }) }
+                        OutlinedButton(enabled = !driverDocUploading, onClick = { documentPicker.launch("*/*") }, modifier = Modifier.fillMaxWidth()) { Text(if (driverDocUploading) "در حال ارسال مدرک..." else "انتخاب و ارسال مدرک انتخاب‌شده") }
+                        if (driverDocMessage.isNotBlank()) Text(driverDocMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                        HorizontalDivider()
                         Text("تغییر رمز عبور (اختیاری)", style = MaterialTheme.typography.titleMedium)
                         OutlinedTextField(value = editProfileNewPassword, onValueChange = { editProfileNewPassword = it.take(72) }, label = { Text("رمز جدید؛ حداقل ۸ نویسه") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = editProfileConfirmPassword, onValueChange = { editProfileConfirmPassword = it.take(72) }, label = { Text("تکرار رمز جدید") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
                         Button(
                             enabled = !editableProfileSaving,
                             onClick = {
+                                val birthDateIso = if (editProfileBirthDate.isBlank()) "" else parsePersianBirthDateToIso(editProfileBirthDate)
                                 if (editProfileFirstName.isBlank() || editProfileLastName.isBlank() || editProfileMobile.isBlank()) {
                                     editableProfileMessage = "نام، نام خانوادگی و شماره موبایل را کامل کنید."
+                                } else if (editProfileBirthDate.isNotBlank() && birthDateIso == null) {
+                                    editableProfileMessage = "تاریخ تولد شمسی را به شکل سال/ماه/روز وارد کنید."
                                 } else if (editProfileNewPassword.isNotBlank() && (editProfileNewPassword.length < 8 || editProfileNewPassword != editProfileConfirmPassword)) {
                                     editableProfileMessage = "رمز جدید باید حداقل ۸ نویسه باشد و دو رمز یکسان باشند."
                                 } else {
@@ -935,7 +954,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                 userAccessToken, role, editProfileFirstName, editProfileLastName, editProfileMobile,
                                                 editProfileCompanyName, editProfileActivityCity, editProfileOfficeAddress,
                                                 editProfileVehicleType, editProfilePlate, editProfilePrimaryDestination,
-                                                editProfileDestinations, editProfileNewPassword
+                                                editProfileDestinations, editProfileNewPassword, birthDateIso.orEmpty()
                                             )
                                         }
                                         editableProfileMessage = result
@@ -2098,15 +2117,47 @@ private fun formatPersianTehranDateTime(epochMillis: Long): String {
     return formatter.format(java.util.Date(epochMillis))
 }
 
-private fun uploadDriverDocument(context: Context, uri: Uri, token: String, documentType: String): String {
+private fun normalizePersianDigits(value: String): String = value
+    .replace('۰','0').replace('۱','1').replace('۲','2').replace('۳','3').replace('۴','4')
+    .replace('۵','5').replace('۶','6').replace('۷','7').replace('۸','8').replace('۹','9')
+    .replace('٠','0').replace('١','1').replace('٢','2').replace('٣','3').replace('٤','4')
+    .replace('٥','5').replace('٦','6').replace('٧','7').replace('٨','8').replace('٩','9')
+
+private fun parsePersianBirthDateToIso(value: String): String? = runCatching {
+    val normalized = normalizePersianDigits(value.trim()).replace('-', '/')
+    val parser = android.icu.text.SimpleDateFormat("yyyy/MM/dd", android.icu.util.ULocale("fa_IR@calendar=persian"))
+    parser.isLenient = false
+    parser.timeZone = android.icu.util.TimeZone.getTimeZone("UTC")
+    val date = parser.parse(normalized) ?: return null
+    val formatter = android.icu.text.SimpleDateFormat("yyyy-MM-dd", android.icu.util.ULocale.US)
+    formatter.timeZone = android.icu.util.TimeZone.getTimeZone("UTC")
+    formatter.format(date)
+}.getOrNull()
+
+private fun formatBirthDateForDisplay(value: String): String = runCatching {
+    if (value.isBlank()) return ""
+    val parser = android.icu.text.SimpleDateFormat("yyyy-MM-dd", android.icu.util.ULocale.US)
+    parser.timeZone = android.icu.util.TimeZone.getTimeZone("UTC")
+    val date = parser.parse(value) ?: return ""
+    val formatter = android.icu.text.SimpleDateFormat("yyyy/MM/dd", android.icu.util.ULocale("fa_IR@calendar=persian"))
+    formatter.timeZone = android.icu.util.TimeZone.getTimeZone("UTC")
+    formatter.format(date)
+}.getOrDefault("")
+
+private fun uploadAccountDocument(context: Context, uri: Uri, token: String, documentType: String, role: UserRole): String {
     var upload: HttpURLConnection? = null
     var insert: HttpURLConnection? = null
     var cleanup: HttpURLConnection? = null
     return try {
         val payload = token.split(".").getOrNull(1) ?: return "نشست ورود نامعتبر است."
         val decoded = Base64.decode(payload, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
-        val driverId = JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
-        if (driverId.isBlank()) return "شناسه راننده دریافت نشد."
+        val ownerId = JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
+        if (ownerId.isBlank()) return "شناسه حساب دریافت نشد."
+        val isDriver = role == UserRole.DRIVER
+        if (!isDriver && role != UserRole.COMPANY) return "نوع حساب برای ارسال مدرک مجاز نیست."
+        val bucket = if (isDriver) "driver-documents" else "company-documents"
+        val table = if (isDriver) "driver_documents" else "company_documents"
+        val ownerColumn = if (isDriver) "driver_id" else "company_id"
         val mime = context.contentResolver.getType(uri) ?: return "نوع فایل قابل تشخیص نیست."
         val allowed = listOf("application/pdf", "image/jpeg", "image/png", "image/webp")
         if (mime !in allowed) return "فقط PDF، JPG، PNG و WEBP مجاز است."
@@ -2114,8 +2165,8 @@ private fun uploadDriverDocument(context: Context, uri: Uri, token: String, docu
         if (bytes.isEmpty() || bytes.size > 10 * 1024 * 1024) return "حجم مدرک باید کمتر از ۱۰ مگابایت باشد."
         val ext = when(mime) { "application/pdf" -> "pdf"; "image/png" -> "png"; "image/webp" -> "webp"; else -> "jpg" }
         val safeType = documentType.replace(Regex("[^آ-یA-Za-z0-9_-]"), "_")
-        val path = driverId + "/" + safeType + "-" + UUID.randomUUID().toString() + "." + ext
-        upload = (URL(SUPABASE_URL + "/storage/v1/object/driver-documents/" + path).openConnection() as HttpURLConnection).apply {
+        val path = ownerId + "/" + safeType + "-" + UUID.randomUUID().toString() + "." + ext
+        upload = (URL(SUPABASE_URL + "/storage/v1/object/" + bucket + "/" + path).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"; connectTimeout = 20000; readTimeout = 30000; doOutput = true
             setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
             setRequestProperty("Authorization", "Bearer " + token)
@@ -2124,14 +2175,14 @@ private fun uploadDriverDocument(context: Context, uri: Uri, token: String, docu
         upload.outputStream.use { it.write(bytes) }
         val upCode = upload.responseCode
         if (upCode !in 200..299) return "بارگذاری مدرک مجاز نشد (کد " + upCode + ")."
-        insert = (URL(SUPABASE_URL + "/rest/v1/driver_documents").openConnection() as HttpURLConnection).apply {
+        insert = (URL(SUPABASE_URL + "/rest/v1/" + table).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"; connectTimeout = 15000; readTimeout = 20000; doOutput = true
             setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
             setRequestProperty("Authorization", "Bearer " + token)
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Prefer", "return=minimal")
         }
-        val row = JSONObject().put("driver_id", driverId).put("document_type", documentType)
+        val row = JSONObject().put(ownerColumn, ownerId).put("document_type", documentType)
             .put("storage_path", path).put("review_status", "pending")
         insert.outputStream.use { it.write(row.toString().toByteArray(Charsets.UTF_8)) }
         val insertCode = insert.responseCode
@@ -2723,8 +2774,8 @@ private fun fetchEditableUserProfile(token: String, role: UserRole): JSONObject?
         if (userId.isBlank()) return null
         val table = if (role == UserRole.DRIVER) "drivers" else "companies"
         val columns = if (role == UserRole.DRIVER)
-            "first_name,last_name,mobile,vehicle_type,license_plate,primary_destination,destinations"
-        else "first_name,last_name,mobile,company_name,activity_city,office_address"
+            "first_name,last_name,mobile,birth_date,vehicle_type,license_plate,primary_destination,destinations"
+        else "first_name,last_name,mobile,birth_date,company_name,activity_city,office_address"
         val url = "$SUPABASE_URL/rest/v1/$table?select=$columns&id=eq.$userId&limit=1"
         connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
@@ -2749,7 +2800,7 @@ private fun updateEditableUserProfile(
     token: String, role: UserRole, firstName: String, lastName: String, mobile: String,
     companyName: String, activityCity: String, officeAddress: String,
     vehicleType: String, plate: String, primaryDestination: String, destinationsText: String,
-    newPassword: String
+    newPassword: String, birthDate: String
 ): String {
     var connection: HttpURLConnection? = null
     return try {
@@ -2761,6 +2812,7 @@ private fun updateEditableUserProfile(
             .put("last_name", lastName.trim())
             .put("mobile", mobile.trim())
             .put("new_password", newPassword)
+            .put("birth_date", birthDate)
             .put("company_name", companyName.trim())
             .put("activity_city", activityCity.trim())
             .put("office_address", officeAddress.trim())
