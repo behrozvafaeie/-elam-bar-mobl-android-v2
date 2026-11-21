@@ -2,6 +2,7 @@ package ir.elambar.mobl
 
 import android.os.Bundle
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.shape.CircleShape
@@ -29,6 +30,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Visibility
@@ -380,6 +382,19 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         "مدیریت رانندگان", "مدیریت شرکت‌ها", "مدیریت بارها", "مدیریت مدیران",
         "مدیریت مدارک", "گفتگوها", "شکایات", "گزارش‌ها", "تنظیمات کل برنامه"
     )
+    BackHandler(
+        enabled = showStories || showChatRooms || showCommunication || showProfile || showSettings || selectedPanel != null || drawerState.isOpen
+    ) {
+        when {
+            showStories -> showStories = false
+            showChatRooms -> showChatRooms = false
+            showCommunication -> showCommunication = false
+            showProfile -> showProfile = false
+            showSettings -> showSettings = false
+            selectedPanel != null -> selectedPanel = null
+            drawerState.isOpen -> scope.launch { drawerState.close() }
+        }
+    }
     LaunchedEffect(userLoggedIn, role, userStatus, userAccessToken) {
         if (userLoggedIn && role == UserRole.DRIVER && userStatus == "approved" && userAccessToken.isNotBlank()) {
             publicHallLoading = true
@@ -673,8 +688,20 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         }
                     },
                     navigationIcon = {
-                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Filled.Menu, contentDescription = "باز کردن منو")
+                        if (showProfile || showSettings || selectedPanel != null) {
+                            IconButton(onClick = {
+                                when {
+                                    showProfile -> showProfile = false
+                                    showSettings -> showSettings = false
+                                    selectedPanel != null -> selectedPanel = null
+                                }
+                            }) {
+                                Icon(Icons.Filled.ArrowBack, contentDescription = "برگشت")
+                            }
+                        } else {
+                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                Icon(Icons.Filled.Menu, contentDescription = "باز کردن منو")
+                            }
                         }
                     },
                     actions = {
