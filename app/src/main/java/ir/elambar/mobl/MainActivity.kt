@@ -1440,6 +1440,22 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             Text("نشست ورود با ذخیره‌سازی امن روی دستگاه مدیریت می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
+                    if (role == UserRole.COMPANY) {
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                Modifier.fillMaxWidth().padding(18.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text("سوابق بارهای من", style = MaterialTheme.typography.titleLarge)
+                                Text(
+                                    "فقط بارهایی که با این حساب شرکت ثبت شده‌اند در این بخش نمایش داده می‌شوند.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                CompanyLoadManagement(accessToken = userAccessToken)
+                            }
+                        }
+                    }
                     OutlinedButton(
                         onClick = { showProfile = false },
                         modifier = Modifier.fillMaxWidth()
