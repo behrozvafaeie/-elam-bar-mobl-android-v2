@@ -1649,6 +1649,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     }
                                 }
                                 if (loadActionMessage.isNotBlank()) Text(loadActionMessage, color = MaterialTheme.colorScheme.secondary)
+                                }
                                 if (companyHallExpanded) {
                                 Button(onClick = { companyHallExpanded = false; companyLoadPanelExpanded = true }, modifier = Modifier.fillMaxWidth()) {
                                     Text("＋ ثبت بار جدید")
