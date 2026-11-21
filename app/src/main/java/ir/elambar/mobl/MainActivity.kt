@@ -1201,6 +1201,13 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("اطلاعات حساب", style = MaterialTheme.typography.titleMedium)
+                            if (mobile.isNotBlank()) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("شماره موبایل")
+                                    Text(mobile)
+                                }
+                                HorizontalDivider()
+                            }
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("نوع حساب")
                                 Text(if (role == UserRole.DRIVER) "راننده" else "شرکت باربری")
