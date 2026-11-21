@@ -1450,7 +1450,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         }
                                     }
                                 }
-                            } else -> {
+                            } else {
                                 Text("سالن عمومی بار | قابل مشاهده برای همه رانندگان تأییدشده", style = MaterialTheme.typography.titleLarge)
                                 Text("همه بارهای منتشرشده در این سالن نمایش داده می‌شوند؛ حتی اگر خودرو یا مقصد با مشخصات شما یکسان نباشد.", style = MaterialTheme.typography.bodySmall)
                                 OutlinedButton(enabled = !publicHallLoading, onClick = {
