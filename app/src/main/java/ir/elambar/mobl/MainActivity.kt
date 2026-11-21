@@ -241,7 +241,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var loadPriceMode by remember { mutableStateOf("fixed") }
     var loadDescription by remember { mutableStateOf("") }
     var loadQuantity by remember { mutableStateOf("1") }
-        var loadDestinationExpanded by remember { mutableStateOf(true) }
+        var loadDestinationExpanded by remember { mutableStateOf(false) }
     var loadCargoExpanded by remember { mutableStateOf(false) }
     var loadVehicleExpanded by remember { mutableStateOf(false) }
     var loadLoadingExpanded by remember { mutableStateOf(false) }
@@ -956,21 +956,20 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     LoadSectionDropdown("مقصد از تهران", loadDestinationExpanded, { loadDestinationExpanded = !loadDestinationExpanded }) {
                                         OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("نام مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                     }
-                                    LoadSectionDropdown("نوع بار", loadCargoExpanded, { loadCargoExpanded = !loadCargoExpanded }) {
+                                    Text("نوع بار", style = MaterialTheme.typography.titleSmall)
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         listOf("مبل", "سرویس خواب", "اثاث منزل", "کمد", "نهارخوری", "مبل استیل", "سایر مصنوعات چوبی").forEach { cargo ->
-                                            FilterChip(
-                                                selected = loadCargoType == cargo,
-                                                onClick = { loadCargoType = cargo },
-                                                label = { Text(cargo) }
-                                            )
+                                            FilterChip(selected = loadCargoType == cargo, onClick = { loadCargoType = cargo }, label = { Text(cargo) })
                                         }
                                     }
-                                    LoadSectionDropdown("نوع خودرو", loadVehicleExpanded, { loadVehicleExpanded = !loadVehicleExpanded }) {
+                                    Text("نوع ماشین", style = MaterialTheme.typography.titleSmall)
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         listOf("کامیونت مبلی","کامیونت روباری کار","کامیون ۶ متری","وانت").forEach { v ->
                                             FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
                                         }
                                     }
-                                    LoadSectionDropdown("نوع بارگیری", loadLoadingExpanded, { loadLoadingExpanded = !loadLoadingExpanded }) {
+                                    Text("نوع بارگیری", style = MaterialTheme.typography.titleSmall)
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         listOf("دربست","روباری","نیم بار").forEach { v ->
                                             FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
                                         }
@@ -1277,21 +1276,20 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     LoadSectionDropdown("مقصد", loadDestinationExpanded, { loadDestinationExpanded = !loadDestinationExpanded }) {
                                         OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("نام مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                     }
-                                    LoadSectionDropdown("نوع بار", loadCargoExpanded, { loadCargoExpanded = !loadCargoExpanded }) {
+                                    Text("نوع بار", style = MaterialTheme.typography.titleSmall)
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         listOf("مبل", "سرویس خواب", "اثاث منزل", "کمد", "نهارخوری", "مبل استیل", "سایر مصنوعات چوبی").forEach { cargo ->
-                                            FilterChip(
-                                                selected = loadCargoType == cargo,
-                                                onClick = { loadCargoType = cargo },
-                                                label = { Text(cargo) }
-                                            )
+                                            FilterChip(selected = loadCargoType == cargo, onClick = { loadCargoType = cargo }, label = { Text(cargo) })
                                         }
                                     }
-                                    LoadSectionDropdown("نوع خودرو", loadVehicleExpanded, { loadVehicleExpanded = !loadVehicleExpanded }) {
+                                    Text("نوع ماشین", style = MaterialTheme.typography.titleSmall)
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         listOf("کامیونت مبلی","کامیونت روباری کار","کامیون ۶ متری","وانت").forEach { v ->
                                             FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
                                         }
                                     }
-                                    LoadSectionDropdown("نوع بارگیری", loadLoadingExpanded, { loadLoadingExpanded = !loadLoadingExpanded }) {
+                                    Text("نوع بارگیری", style = MaterialTheme.typography.titleSmall)
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         listOf("دربست","روباری","نیم بار").forEach { v ->
                                             FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
                                         }
