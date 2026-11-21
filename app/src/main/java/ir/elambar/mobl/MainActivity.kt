@@ -108,19 +108,33 @@ private fun LoadSectionDropdown(title: String, expanded: Boolean, onToggle: () -
 }
 
 @Composable
-private fun LoadCargoTypeDropdown(selected: String, onSelected: (String) -> Unit) {
+private fun LoadChoiceDropdown(
+    label: String,
+    selected: String,
+    options: List<String>,
+    onSelected: (String) -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
-    val options = listOf("مبل", "سرویس خواب", "اثاث منزل", "کمد", "نهارخوری", "مبل استیل", "سایر مصنوعات چوبی")
     Box(Modifier.fillMaxWidth()) {
-        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("نوع بار: $selected  ▾")
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("$label: $selected")
+                Text("⌄", style = MaterialTheme.typography.titleMedium)
+            }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { option ->
-                DropdownMenuItem(text = { Text(option) }, onClick = {
-                    onSelected(option)
-                    expanded = false
-                })
+                DropdownMenuItem(
+                    text = { Text(option) },
+                    onClick = {
+                        onSelected(option)
+                        expanded = false
+                    }
+                )
             }
         }
     }
@@ -1147,24 +1161,24 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     LoadSectionDropdown("مقصد از تهران", loadDestinationExpanded, { loadDestinationExpanded = !loadDestinationExpanded }) {
                                         OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("نام مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                     }
-                                    Text("نوع بار", style = MaterialTheme.typography.titleSmall)
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        listOf("مبل", "سرویس خواب", "اثاث منزل", "کمد", "نهارخوری", "مبل استیل", "سایر مصنوعات چوبی").forEach { cargo ->
-                                            FilterChip(selected = loadCargoType == cargo, onClick = { loadCargoType = cargo }, label = { Text(cargo) })
-                                        }
-                                    }
+                                    LoadChoiceDropdown(
+                                        label = "نوع بار",
+                                        selected = loadCargoType,
+                                        options = listOf("مبل", "سرویس خواب", "نهارخوری", "اثاث منزل", "لوازم اداری", "سایر"),
+                                        onSelected = { loadCargoType = it }
+                                    )
                                     Text("نوع ماشین", style = MaterialTheme.typography.titleSmall)
                                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         listOf("وانت مبلی","کامیونت مبلی","کامیونت روباری کار","کامیون ۶ متری").forEach { v ->
                                             FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
                                         }
                                     }
-                                    Text("نوع بارگیری", style = MaterialTheme.typography.titleSmall)
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        listOf("دربست","روباری","نیم بار").forEach { v ->
-                                            FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
-                                        }
-                                    }
+                                    LoadChoiceDropdown(
+                                        label = "نوع اعلام بار",
+                                        selected = loadLoadingType,
+                                        options = listOf("روباری", "دربست", "نیم بار"),
+                                        onSelected = { loadLoadingType = it }
+                                    )
                                     LoadSectionDropdown("کرایه", loadPriceExpanded, { loadPriceExpanded = !loadPriceExpanded }) {
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
@@ -1503,17 +1517,24 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     Text(if (companyLoadPanelExpanded) "بستن فرم اعلام بار ▲" else "باز کردن فرم اعلام بار ▼")
                                 }
                                 if (companyLoadPanelExpanded) {
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                                        shape = MaterialTheme.shapes.extraLarge
+                                    Box(
+                                        Modifier.fillMaxWidth()
+                                            .background(
+                                                Brush.linearGradient(
+                                                    listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.secondaryContainer)
+                                                ),
+                                                shape = MaterialTheme.shapes.extraLarge
+                                            )
+                                            .padding(16.dp)
                                     ) {
-                                        Column(
-                                            Modifier.fillMaxWidth().padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            Text("پنل اعلام بار", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                            Text("ثبت سریع و گروهی بارهای شرکت", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                    Text("پنل اعلام بار", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                                    Text("ثبت سریع و گروهی بارهای شرکت", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                                }
+                                                Text("🛋️🚚", fontSize = 34.sp)
+                                            }
                                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                                 Text("مبدأ ثابت: تهران", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
                                                 Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface) {
@@ -1531,24 +1552,24 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     LoadSectionDropdown("مقصد", loadDestinationExpanded, { loadDestinationExpanded = !loadDestinationExpanded }) {
                                         OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("نام مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                     }
-                                    Text("نوع بار", style = MaterialTheme.typography.titleSmall)
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        listOf("مبل", "سرویس خواب", "اثاث منزل", "کمد", "نهارخوری", "مبل استیل", "سایر مصنوعات چوبی").forEach { cargo ->
-                                            FilterChip(selected = loadCargoType == cargo, onClick = { loadCargoType = cargo }, label = { Text(cargo) })
-                                        }
-                                    }
+                                    LoadChoiceDropdown(
+                                        label = "نوع بار",
+                                        selected = loadCargoType,
+                                        options = listOf("مبل", "سرویس خواب", "نهارخوری", "اثاث منزل", "لوازم اداری", "سایر"),
+                                        onSelected = { loadCargoType = it }
+                                    )
                                     Text("نوع ماشین", style = MaterialTheme.typography.titleSmall)
                                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         listOf("وانت مبلی","کامیونت مبلی","کامیونت روباری کار","کامیون ۶ متری").forEach { v ->
                                             FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
                                         }
                                     }
-                                    Text("نوع بارگیری", style = MaterialTheme.typography.titleSmall)
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        listOf("دربست","روباری","نیم بار").forEach { v ->
-                                            FilterChip(selected = loadLoadingType == v, onClick = { loadLoadingType = v }, label = { Text(v) })
-                                        }
-                                    }
+                                    LoadChoiceDropdown(
+                                        label = "نوع اعلام بار",
+                                        selected = loadLoadingType,
+                                        options = listOf("روباری", "دربست", "نیم بار"),
+                                        onSelected = { loadLoadingType = it }
+                                    )
                                     LoadSectionDropdown("کرایه", loadPriceExpanded, { loadPriceExpanded = !loadPriceExpanded }) {
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
