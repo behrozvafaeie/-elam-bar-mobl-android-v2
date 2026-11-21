@@ -253,6 +253,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var loadActionMessage by remember { mutableStateOf("") }
     var loadPublishing by remember { mutableStateOf(false) }
     var companyLoadPanelExpanded by remember { mutableStateOf(false) }
+    var companyApprovalRefreshing by remember { mutableStateOf(false) }
     var companyHallExpanded by remember { mutableStateOf(false) }
     var showPublicHall by remember { mutableStateOf(false) }
     var adminLoadPanelExpanded by remember { mutableStateOf(false) }
@@ -1332,9 +1333,41 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     if (profilePhotoMessage.isNotBlank()) Text(profilePhotoMessage, style = MaterialTheme.typography.bodySmall)
                     if (role == UserRole.COMPANY && userStatus != "approved") {
                         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
-                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("پنل اعلام بار شرکت", style = MaterialTheme.typography.titleMedium)
-                                Text("درخواست شرکت هنوز تأیید نشده است. پس از تأیید مدیر ارشد، ثبت و انتشار بار فعال می‌شود.", style = MaterialTheme.typography.bodySmall)
+                                Text("برای دریافت آخرین وضعیت تأیید، دکمه زیر را بزنید. پس از تأیید مدیر ارشد، پنل ثبت و انتشار بار فعال می‌شود.", style = MaterialTheme.typography.bodySmall)
+                                Button(
+                                    enabled = !companyApprovalRefreshing,
+                                    onClick = {
+                                        companyApprovalRefreshing = true
+                                        scope.launch {
+                                            val saved = DeviceSessionStore.load(context)
+                                            val refreshed = if (saved != null && saved.second == UserRole.COMPANY.name) {
+                                                withContext(Dispatchers.IO) { restoreDeviceSession(saved.first, UserRole.COMPANY) }
+                                            } else UserLoginResult(false, "نشست شرکت پیدا نشد؛ یک‌بار خارج و دوباره وارد شوید.")
+                                            companyApprovalRefreshing = false
+                                            if (refreshed.success && refreshed.refreshToken.isNotBlank()) {
+                                                DeviceSessionStore.save(context, refreshed.refreshToken, UserRole.COMPANY.name)
+                                                userAccessToken = refreshed.accessToken
+                                                userStatus = refreshed.status
+                                                userDisplayName = refreshed.displayName
+                                                profilePhotoUrl = refreshed.photoUrl
+                                                if (refreshed.status == "approved") {
+                                                    companyHallExpanded = false
+                                                    companyLoadPanelExpanded = true
+                                                    message = "شرکت تأیید شد؛ پنل اعلام بار فعال است."
+                                                } else {
+                                                    message = "وضعیت شرکت هنوز در انتظار تأیید است."
+                                                }
+                                            } else {
+                                                message = refreshed.message
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(if (companyApprovalRefreshing) "در حال بررسی وضعیت..." else "بررسی تأیید و باز کردن پنل")
+                                }
                             }
                         }
                     }
