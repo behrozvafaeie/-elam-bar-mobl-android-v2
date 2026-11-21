@@ -2020,9 +2020,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     }
 }
 
-
-
-
+}
 
 @Composable
 private fun PublicLoadHallScreen(
