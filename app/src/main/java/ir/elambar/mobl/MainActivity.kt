@@ -253,6 +253,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var loadActionMessage by remember { mutableStateOf("") }
     var loadPublishing by remember { mutableStateOf(false) }
     var companyLoadPanelExpanded by remember { mutableStateOf(false) }
+    var companyHallExpanded by remember { mutableStateOf(false) }
     var adminLoadPanelExpanded by remember { mutableStateOf(false) }
     val loadDrafts = remember { androidx.compose.runtime.mutableStateListOf<LoadDraft>() }
     var email by remember { mutableStateOf("") }
@@ -383,7 +384,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         "مدیریت مدارک", "گفتگوها", "شکایات", "گزارش‌ها", "تنظیمات کل برنامه"
     )
     BackHandler(
-        enabled = showStories || showChatRooms || showCommunication || showProfile || showSettings || selectedPanel != null || companyLoadPanelExpanded || drawerState.isOpen
+        enabled = showStories || showChatRooms || showCommunication || showProfile || showSettings || selectedPanel != null || companyLoadPanelExpanded || companyHallExpanded || drawerState.isOpen
     ) {
         when {
             showStories -> showStories = false
@@ -393,6 +394,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
             showSettings -> showSettings = false
             selectedPanel != null -> selectedPanel = null
             companyLoadPanelExpanded -> companyLoadPanelExpanded = false
+            companyHallExpanded -> companyHallExpanded = false
             drawerState.isOpen -> scope.launch { drawerState.close() }
         }
     }
@@ -590,7 +592,13 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         NavigationDrawerItem(
                             label = { Text("پنل اعلام بار") },
                             selected = companyLoadPanelExpanded,
-                            onClick = { companyLoadPanelExpanded = true; scope.launch { drawerState.close() } },
+                            onClick = { companyLoadPanelExpanded = true; companyHallExpanded = false; scope.launch { drawerState.close() } },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        NavigationDrawerItem(
+                            label = { Text("سالن اعلام بار") },
+                            selected = companyHallExpanded,
+                            onClick = { companyLoadPanelExpanded = false; companyHallExpanded = true; scope.launch { drawerState.close() } },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -689,13 +697,14 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         }
                     },
                     navigationIcon = {
-                        if (showProfile || showSettings || selectedPanel != null || companyLoadPanelExpanded) {
+                        if (showProfile || showSettings || selectedPanel != null || companyLoadPanelExpanded || companyHallExpanded) {
                             IconButton(onClick = {
                                 when {
                                     showProfile -> showProfile = false
                                     showSettings -> showSettings = false
                                     selectedPanel != null -> selectedPanel = null
                                     companyLoadPanelExpanded -> companyLoadPanelExpanded = false
+                                    companyHallExpanded -> companyHallExpanded = false
                                 }
                             }) {
                                 Icon(Icons.Filled.ArrowBack, contentDescription = "برگشت")
@@ -1297,7 +1306,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         "approved" -> {
                             Text("حساب شما تأیید شده است.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
                             if (role == UserRole.COMPANY) {
-                                OutlinedButton(onClick = { companyLoadPanelExpanded = !companyLoadPanelExpanded }, modifier = Modifier.fillMaxWidth()) {
+                                OutlinedButton(onClick = { companyHallExpanded = false; companyLoadPanelExpanded = !companyLoadPanelExpanded }, modifier = Modifier.fillMaxWidth()) {
                                     Text(if (companyLoadPanelExpanded) "بستن فرم اعلام بار ▲" else "باز کردن فرم اعلام بار ▼")
                                 }
                                 if (companyLoadPanelExpanded) {
@@ -1321,7 +1330,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                             Text("برای چند مقصد، هر مقصد را جداگانه به فهرست اضافه کنید؛ همه بارها با هم منتشر می‌شوند.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                                         }
                                     }
-                                    OutlinedButton(onClick = { companyLoadPanelExpanded = false }, modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedButton(onClick = { companyLoadPanelExpanded = false; companyHallExpanded = true }, modifier = Modifier.fillMaxWidth()) {
                                         Icon(Icons.Filled.ArrowBack, contentDescription = null)
                                         Spacer(Modifier.width(8.dp))
                                         Text("بازگشت به سالن انتشار")
@@ -1393,13 +1402,16 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                             if (result.startsWith("ثبت شد")) {
                                                 loadDrafts.clear()
                                                 companyLoadPanelExpanded = false
+                                                companyHallExpanded = true
                                             }
                                         }
                                     }, modifier = Modifier.fillMaxWidth()) { Text(if (loadPublishing) "در حال ثبت..." else "انتشار همه بارهای فهرست") }
                                 }
                                 if (loadActionMessage.isNotBlank()) Text(loadActionMessage, color = MaterialTheme.colorScheme.secondary)
                                 }
-                                if (!companyLoadPanelExpanded) {
+                                if (companyHallExpanded) {
+                                Text("سالن اعلام بار شرکت", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                                Text("بارهای منتشرشده شرکت و ابزار مدیریت آن‌ها در این بخش قرار دارند.", style = MaterialTheme.typography.bodySmall)
                                 HorizontalDivider()
                                 Text("سالن انتشار اعلام بار | بارهای ثبت‌شده شرکت", style = MaterialTheme.typography.titleMedium)
                                 CompanyLoadManagement(accessToken = userAccessToken)
@@ -1419,6 +1431,24 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     Text(if (driverSearchLoading) "در حال جست‌وجو..." else "جست‌وجوی رانندگان تأییدشده")
                                 }
                                 Text(driverSearchResults, textAlign = TextAlign.Start)
+                                }
+                                } else {
+                                    Text("بخش‌های شرکت", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                                    Text("برای ثبت بار یا مشاهده و مدیریت بارهای منتشرشده، بخش موردنظر را انتخاب کنید.", style = MaterialTheme.typography.bodyMedium)
+                                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Text("پنل اعلام بار", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                            Text("ثبت بار تکی یا گروهی، انتخاب مقصد، نوع بار، خودرو و کرایه.", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                            Button(onClick = { companyHallExpanded = false; companyLoadPanelExpanded = true }, modifier = Modifier.fillMaxWidth()) { Text("ورود به پنل اعلام بار") }
+                                        }
+                                    }
+                                    Card(Modifier.fillMaxWidth()) {
+                                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Text("سالن اعلام بار", style = MaterialTheme.typography.titleLarge)
+                                            Text("مشاهده بارهای منتشرشده شرکت، مدیریت وضعیت بارها و جست‌وجوی رانندگان.")
+                                            OutlinedButton(onClick = { companyLoadPanelExpanded = false; companyHallExpanded = true }, modifier = Modifier.fillMaxWidth()) { Text("ورود به سالن اعلام بار") }
+                                        }
+                                    }
                                 }
                             } else {
                                 Text("سالن عمومی بار | قابل مشاهده برای همه رانندگان تأییدشده", style = MaterialTheme.typography.titleLarge)
