@@ -957,7 +957,13 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("نام مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                     }
                                     LoadSectionDropdown("نوع بار", loadCargoExpanded, { loadCargoExpanded = !loadCargoExpanded }) {
-                                        LoadCargoTypeDropdown(selected = loadCargoType, onSelected = { loadCargoType = it })
+                                        listOf("مبل", "سرویس خواب", "اثاث منزل", "کمد", "نهارخوری", "مبل استیل", "سایر مصنوعات چوبی").forEach { cargo ->
+                                            FilterChip(
+                                                selected = loadCargoType == cargo,
+                                                onClick = { loadCargoType = cargo },
+                                                label = { Text(cargo) }
+                                            )
+                                        }
                                     }
                                     LoadSectionDropdown("نوع خودرو", loadVehicleExpanded, { loadVehicleExpanded = !loadVehicleExpanded }) {
                                         listOf("کامیونت مبلی","کامیونت روباری کار","کامیون ۶ متری","وانت").forEach { v ->
@@ -1272,7 +1278,13 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("نام مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                     }
                                     LoadSectionDropdown("نوع بار", loadCargoExpanded, { loadCargoExpanded = !loadCargoExpanded }) {
-                                        LoadCargoTypeDropdown(selected = loadCargoType, onSelected = { loadCargoType = it })
+                                        listOf("مبل", "سرویس خواب", "اثاث منزل", "کمد", "نهارخوری", "مبل استیل", "سایر مصنوعات چوبی").forEach { cargo ->
+                                            FilterChip(
+                                                selected = loadCargoType == cargo,
+                                                onClick = { loadCargoType = cargo },
+                                                label = { Text(cargo) }
+                                            )
+                                        }
                                     }
                                     LoadSectionDropdown("نوع خودرو", loadVehicleExpanded, { loadVehicleExpanded = !loadVehicleExpanded }) {
                                         listOf("کامیونت مبلی","کامیونت روباری کار","کامیون ۶ متری","وانت").forEach { v ->
