@@ -2125,26 +2125,30 @@ private fun normalizePersianDigits(value: String): String = value
     .replace('٠','0').replace('١','1').replace('٢','2').replace('٣','3').replace('٤','4')
     .replace('٥','5').replace('٦','6').replace('٧','7').replace('٨','8').replace('٩','9')
 
-private fun parsePersianBirthDateToIso(value: String): String? = runCatching {
-    val normalized = normalizePersianDigits(value.trim()).replace('-', '/')
-    val parser = android.icu.text.SimpleDateFormat("yyyy/MM/dd", android.icu.util.ULocale("fa_IR@calendar=persian"))
-    parser.isLenient = false
-    parser.timeZone = android.icu.util.TimeZone.getTimeZone("UTC")
-    val date = parser.parse(normalized) ?: return null
-    val formatter = android.icu.text.SimpleDateFormat("yyyy-MM-dd", android.icu.util.ULocale.US)
-    formatter.timeZone = android.icu.util.TimeZone.getTimeZone("UTC")
-    formatter.format(date)
-}.getOrNull()
+private fun parsePersianBirthDateToIso(value: String): String? {
+    return runCatching {
+        val normalized = normalizePersianDigits(value.trim()).replace('-', '/')
+        val parser = android.icu.text.SimpleDateFormat("yyyy/MM/dd", android.icu.util.ULocale("fa_IR@calendar=persian"))
+        parser.isLenient = false
+        parser.timeZone = android.icu.util.TimeZone.getTimeZone("UTC")
+        val date = parser.parse(normalized) ?: throw IllegalArgumentException("invalid date")
+        val formatter = android.icu.text.SimpleDateFormat("yyyy-MM-dd", android.icu.util.ULocale.US)
+        formatter.timeZone = android.icu.util.TimeZone.getTimeZone("UTC")
+        formatter.format(date)
+    }.getOrNull()
+}
 
-private fun formatBirthDateForDisplay(value: String): String = runCatching {
+private fun formatBirthDateForDisplay(value: String): String {
     if (value.isBlank()) return ""
-    val parser = android.icu.text.SimpleDateFormat("yyyy-MM-dd", android.icu.util.ULocale.US)
-    parser.timeZone = android.icu.util.TimeZone.getTimeZone("UTC")
-    val date = parser.parse(value) ?: return ""
-    val formatter = android.icu.text.SimpleDateFormat("yyyy/MM/dd", android.icu.util.ULocale("fa_IR@calendar=persian"))
-    formatter.timeZone = android.icu.util.TimeZone.getTimeZone("UTC")
-    formatter.format(date)
-}.getOrDefault("")
+    return runCatching {
+        val parser = android.icu.text.SimpleDateFormat("yyyy-MM-dd", android.icu.util.ULocale.US)
+        parser.timeZone = android.icu.util.TimeZone.getTimeZone("UTC")
+        val date = parser.parse(value) ?: throw IllegalArgumentException("invalid date")
+        val formatter = android.icu.text.SimpleDateFormat("yyyy/MM/dd", android.icu.util.ULocale("fa_IR@calendar=persian"))
+        formatter.timeZone = android.icu.util.TimeZone.getTimeZone("UTC")
+        formatter.format(date)
+    }.getOrDefault("")
+}
 
 private fun uploadAccountDocument(context: Context, uri: Uri, token: String, documentType: String, role: UserRole): String {
     var upload: HttpURLConnection? = null
@@ -2189,7 +2193,7 @@ private fun uploadAccountDocument(context: Context, uri: Uri, token: String, doc
         insert.outputStream.use { it.write(row.toString().toByteArray(Charsets.UTF_8)) }
         val insertCode = insert.responseCode
         if (insertCode !in 200..299) {
-            cleanup = (URL(SUPABASE_URL + "/storage/v1/object/driver-documents/" + path).openConnection() as HttpURLConnection).apply {
+            cleanup = (URL(SUPABASE_URL + "/storage/v1/object/" + bucket + "/" + path).openConnection() as HttpURLConnection).apply {
                 requestMethod = "DELETE"; connectTimeout = 10000; readTimeout = 10000
                 setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
                 setRequestProperty("Authorization", "Bearer " + token)
