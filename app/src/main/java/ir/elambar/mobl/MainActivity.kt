@@ -1432,7 +1432,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 }
                                 Text(driverSearchResults, textAlign = TextAlign.Start)
                                 }
-                                } else {
+                                else {
                                     Text("بخش‌های شرکت", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
                                     Text("برای ثبت بار یا مشاهده و مدیریت بارهای منتشرشده، بخش موردنظر را انتخاب کنید.", style = MaterialTheme.typography.bodyMedium)
                                     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
