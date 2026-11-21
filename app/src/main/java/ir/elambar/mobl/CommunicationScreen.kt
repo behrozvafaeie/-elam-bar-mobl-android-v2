@@ -142,7 +142,7 @@ internal fun CommunicationScreen(accessToken: String, isSuperAdmin: Boolean = fa
             Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("پیام‌ها و گفتگوها", style = MaterialTheme.typography.titleLarge)
-                    TextButton(onClick = onClose) { Text("بستن") }
+                    TextButton(onClick = onClose) { Text("برگشت") }
                 }
                 if (selected == null) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
