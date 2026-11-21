@@ -247,12 +247,12 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var companyLoadsText by remember { mutableStateOf("برای مشاهده بارهای ثبت‌شده، بروزرسانی را بزنید.") }
     var companyLoadsLoading by remember { mutableStateOf(false) }
     var driverSearchDestination by remember { mutableStateOf("") }
-    var driverSearchVehicle by remember { mutableStateOf("وانت") }
+    var driverSearchVehicle by remember { mutableStateOf("وانت مبلی") }
     var driverSearchResults by remember { mutableStateOf("برای پیدا کردن راننده، مقصد را وارد کنید.") }
     var driverSearchLoading by remember { mutableStateOf(false) }
     var loadDestination by remember { mutableStateOf("") }
     var loadCargoType by remember { mutableStateOf("مبل") }
-    var loadVehicleType by remember { mutableStateOf("وانت") }
+    var loadVehicleType by remember { mutableStateOf("وانت مبلی") }
     var loadLoadingType by remember { mutableStateOf("روباری") }
     var loadFreightAmount by remember { mutableStateOf("") }
     var loadPriceMode by remember { mutableStateOf("fixed") }
@@ -1155,7 +1155,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     }
                                     Text("نوع ماشین", style = MaterialTheme.typography.titleSmall)
                                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون دربستی کار","خاور مبلی پتو دار").forEach { v ->
+                                        listOf("وانت مبلی","کامیونت مبلی","کامیونت روباری کار","کامیون ۶ متری").forEach { v ->
                                             FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
                                         }
                                     }
@@ -1539,7 +1539,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     }
                                     Text("نوع ماشین", style = MaterialTheme.typography.titleSmall)
                                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        listOf("کامیونت مبلی","کامیونت روباری کار","کامیون ۶ متری","وانت").forEach { v ->
+                                        listOf("وانت مبلی","کامیونت مبلی","کامیونت روباری کار","کامیون ۶ متری").forEach { v ->
                                             FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
                                         }
                                     }
@@ -1611,7 +1611,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 HorizontalDivider()
                                 Text("جست‌وجوی راننده مناسب", style = MaterialTheme.typography.titleMedium)
                                 OutlinedTextField(driverSearchDestination, { driverSearchDestination = it }, label = { Text("مقصد موردنظر") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                                listOf("کامیونت مبلی","کامیونت روباری کار","کامیون ۶ متری","وانت").forEach { v ->
+                                listOf("وانت مبلی","کامیونت مبلی","کامیونت روباری کار","کامیون ۶ متری").forEach { v ->
                                     FilterChip(selected = driverSearchVehicle == v, onClick = { driverSearchVehicle = v }, label = { Text(v) })
                                 }
                                 OutlinedButton(enabled = !driverSearchLoading && driverSearchDestination.trim().length >= 2, onClick = {
@@ -1855,7 +1855,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             OutlinedTextField(nationalId, { nationalId = it.filter { c -> c.isDigit() }.take(10) }, label = { Text("کد ملی ۱۰ رقمی") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
                             OutlinedTextField(smartCardNumber, { smartCardNumber = it }, label = { Text("شماره کارت هوشمند") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                             Text("نوع خودرو")
-                            listOf("کامیونت مبلی","کامیونت روباری کار","کامیون ۶ متری","وانت").forEach { v ->
+                            listOf("وانت مبلی","کامیونت مبلی","کامیونت روباری کار","کامیون ۶ متری").forEach { v ->
                                 FilterChip(selected = vehicleType == v, onClick = { vehicleType = v }, label = { Text(v) })
                             }
                             OutlinedTextField(licensePlate, { licensePlate = it }, label = { Text("شماره پلاک") }, singleLine = true, modifier = Modifier.fillMaxWidth())
