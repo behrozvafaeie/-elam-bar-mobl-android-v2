@@ -1531,11 +1531,16 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     ) {
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                                Image(
+                                                    painter = painterResource(id = R.drawable.ic_app_logo),
+                                                    contentDescription = "نشان کامیون اعلام بار مبل",
+                                                    modifier = Modifier.size(72.dp)
+                                                )
+                                                Spacer(Modifier.width(10.dp))
                                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                    Text("پنل اعلام بار", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                                    Text("ثبت سریع و گروهی بارهای شرکت", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                                    Text("ثبت بار جدید", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                                    Text("فرم ثبت بار شرکت؛ پس از انتشار، بار به سالن اعلام بار منتقل می‌شود.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
                                                 }
-                                                Text("🛋️🚚", fontSize = 34.sp)
                                             }
                                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                                 Text("مبدأ ثابت: تهران", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
@@ -1545,11 +1550,6 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                             }
                                             Text("برای چند مقصد، هر مقصد را جداگانه به فهرست اضافه کنید؛ همه بارها با هم منتشر می‌شوند.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                                         }
-                                    }
-                                    OutlinedButton(onClick = { companyLoadPanelExpanded = false; companyHallExpanded = true }, modifier = Modifier.fillMaxWidth()) {
-                                        Icon(Icons.Filled.ArrowBack, contentDescription = null)
-                                        Spacer(Modifier.width(8.dp))
-                                        Text("بازگشت به سالن انتشار")
                                     }
                                     LoadSectionDropdown("مقصد", loadDestinationExpanded, { loadDestinationExpanded = !loadDestinationExpanded }) {
                                         OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("نام مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -1597,17 +1597,8 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     }
                                 }, modifier = Modifier.fillMaxWidth()) { Text("افزودن بار به فهرست") }
                                 if (loadDrafts.isNotEmpty()) {
-                                    Text("بارهای آماده انتشار: ${loadDrafts.size}", style = MaterialTheme.typography.titleSmall)
-                                    loadDrafts.forEachIndexed { index, draft ->
-                                        Card(Modifier.fillMaxWidth()) {
-                                            Column(Modifier.padding(horizontal = 9.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                                Text("${index + 1}. تهران ← ${draft.destination}")
-                                                Text("${draft.cargoType} | ${draft.vehicleType} | ${draft.loadingType}")
-                                                Text(if (draft.priceMode == "negotiable") "کرایه: توافقی" else "کرایه: ${draft.freightAmount} تومان")
-                                                TextButton(onClick = { loadDrafts.removeAt(index) }) { Text("حذف از فهرست") }
-                                            }
-                                        }
-                                    }
+                                    Text("تعداد بارهای آماده انتشار: ${loadDrafts.size}", style = MaterialTheme.typography.titleSmall)
+                                }
                                     Button(enabled = !loadPublishing, onClick = {
                                         loadPublishing = true
                                         loadActionMessage = "در حال ثبت بارها..."
@@ -1650,19 +1641,12 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 }
                                 else {
                                     Text("بخش‌های شرکت", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-                                    Text("برای ثبت بار یا مشاهده و مدیریت بارهای منتشرشده، بخش موردنظر را انتخاب کنید.", style = MaterialTheme.typography.bodyMedium)
+                                    Text("فقط فرم ثبت بار را تکمیل کنید؛ پس از انتشار، بارها به سالن اعلام بار منتقل می‌شوند.", style = MaterialTheme.typography.bodyMedium)
                                     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Text("پنل اعلام بار", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                            Text("ثبت بار تکی یا گروهی، انتخاب مقصد، نوع بار، خودرو و کرایه.", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                            Text("ثبت بار تکی یا چند بار پشت سر هم؛ پس از انتشار، بارها در سالن اعلام بار نمایش داده می‌شوند.", color = MaterialTheme.colorScheme.onPrimaryContainer)
                                             Button(onClick = { companyHallExpanded = false; companyLoadPanelExpanded = true }, modifier = Modifier.fillMaxWidth()) { Text("ورود به پنل اعلام بار") }
-                                        }
-                                    }
-                                    Card(Modifier.fillMaxWidth()) {
-                                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Text("سالن اعلام بار", style = MaterialTheme.typography.titleLarge)
-                                            Text("مشاهده بارهای منتشرشده شرکت، مدیریت وضعیت بارها و جست‌وجوی رانندگان.")
-                                            OutlinedButton(onClick = { companyLoadPanelExpanded = false; companyHallExpanded = true }, modifier = Modifier.fillMaxWidth()) { Text("ورود به سالن اعلام بار") }
                                         }
                                     }
                                 }
