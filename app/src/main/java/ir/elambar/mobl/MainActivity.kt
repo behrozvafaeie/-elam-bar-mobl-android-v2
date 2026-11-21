@@ -1612,7 +1612,6 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     }
                                 }
                                 if (loadActionMessage.isNotBlank()) Text(loadActionMessage, color = MaterialTheme.colorScheme.secondary)
-                                }
                                 if (companyHallExpanded) {
                                 Button(onClick = { companyHallExpanded = false; companyLoadPanelExpanded = true }, modifier = Modifier.fillMaxWidth()) {
                                     Text("＋ ثبت بار جدید")
@@ -1763,7 +1762,6 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     }
                                 }
                             }
-                        }
                         else -> Text("وضعیت حساب: $userStatus", textAlign = TextAlign.Center)
                     }
                     Text("ورود شما روی این دستگاه محفوظ می‌ماند؛ خروج فقط با حذف حساب توسط مدیر ارشد اصلی انجام می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
@@ -2008,7 +2006,6 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
 
 
 
-}
 
 
 @Composable
