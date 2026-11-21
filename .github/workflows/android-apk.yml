@@ -70,8 +70,8 @@ jobs:
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 29' app/build.gradle.kts
-          grep -F 'versionName = "1.5.3"' app/build.gradle.kts
+          grep -F 'versionCode = 30' app/build.gradle.kts
+          grep -F 'versionName = "1.5.4"' app/build.gradle.kts
           ! grep -E 'ELAM_TURN_(URL|USERNAME|PASSWORD)' .github/workflows/android-apk.yml
 
       - name: Build debug APK
@@ -85,7 +85,7 @@ jobs:
         shell: bash
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='29' versionName='1.5.3'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='30' versionName='1.5.4'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           sha256sum "$APK"
           du -h "$APK"
@@ -93,7 +93,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: elam-bar-mobl-v1.5.3-debug-apk
+          name: elam-bar-mobl-v1.5.4-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 90
@@ -108,7 +108,7 @@ jobs:
       - name: Download built APK
         uses: actions/download-artifact@v4
         with:
-          name: elam-bar-mobl-v1.5.3-debug-apk
+          name: elam-bar-mobl-v1.5.4-debug-apk
           path: artifacts
 
       - name: Install and launch APK on Android emulator
