@@ -3339,19 +3339,62 @@ private fun fetchAcceptedLoadContacts(accessToken: String): List<AcceptedLoadCon
 
 private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRecord> {
     if (accessToken.isBlank()) return emptyList()
+    if (panel == "مدیریت مدارک") {
+        fun fetchRows(table: String, select: String): JSONArray? {
+            var connection: HttpURLConnection? = null
+            return try {
+                val url = "$SUPABASE_URL/rest/v1/$table?select=$select&order=created_at.desc&limit=100"
+                connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 12000
+                    readTimeout = 18000
+                    setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+                    setRequestProperty("Authorization", "Bearer $accessToken")
+                    setRequestProperty("Accept", "application/json")
+                }
+                if (connection.responseCode !in 200..299) null
+                else JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
+            } catch (_: Exception) { null }
+            finally { connection?.disconnect() }
+        }
+        val driverRows = fetchRows("driver_documents", "id,driver_id,document_type,storage_path,review_status")
+        val companyRows = fetchRows("company_documents", "id,company_id,document_type,storage_path,review_status")
+        val result = mutableListOf<AdminRecord>()
+        driverRows?.let { rows ->
+            for (i in 0 until rows.length()) {
+                val item = rows.getJSONObject(i)
+                result += AdminRecord(
+                    "driver|" + item.optString("id"),
+                    item.optString("document_type"),
+                    "راننده: " + item.optString("driver_id"),
+                    item.optString("review_status"),
+                    createSignedDriverDocumentUrl(accessToken, item.optString("storage_path"), "driver-documents")
+                )
+            }
+        }
+        companyRows?.let { rows ->
+            for (i in 0 until rows.length()) {
+                val item = rows.getJSONObject(i)
+                result += AdminRecord(
+                    "company|" + item.optString("id"),
+                    item.optString("document_type"),
+                    "شرکت: " + item.optString("company_id"),
+                    item.optString("review_status"),
+                    createSignedDriverDocumentUrl(accessToken, item.optString("storage_path"), "company-documents")
+                )
+            }
+        }
+        return result
+    }
     val table = when (panel) {
         "مدیریت رانندگان" -> "drivers"
         "مدیریت شرکت‌ها" -> "companies"
-        "مدیریت مدارک" -> "driver_documents"
         else -> return emptyList()
     }
     var connection: HttpURLConnection? = null
     return try {
-        val select = when (table) {
-            "drivers" -> "id,first_name,last_name,full_name,mobile,vehicle_type,primary_destination,status"
-            "companies" -> "id,first_name,last_name,company_name,manager_name,mobile,status"
-            else -> "id,driver_id,document_type,storage_path,review_status"
-        }
+        val select = if (table == "drivers") "id,first_name,last_name,full_name,mobile,vehicle_type,primary_destination,status"
+            else "id,first_name,last_name,company_name,manager_name,mobile,status"
         val url = "$SUPABASE_URL/rest/v1/$table?select=$select&order=created_at.desc&limit=100"
         connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
@@ -3365,33 +3408,24 @@ private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRec
         val rows = JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
         (0 until rows.length()).map { i ->
             val item = rows.getJSONObject(i)
-            val title = when (table) {
-                "drivers" -> (item.optString("first_name") + " " + item.optString("last_name")).trim().ifBlank { item.optString("full_name") }
-                "companies" -> item.optString("company_name")
-                else -> item.optString("document_type")
-            }
-            val detail = when (table) {
-                "drivers" -> item.optString("mobile") + " | " + item.optString("vehicle_type") + " | " + item.optString("primary_destination")
-                "companies" -> item.optString("manager_name") + " | " + item.optString("mobile")
-                else -> "راننده: " + item.optString("driver_id") + " | " + item.optString("storage_path")
-            }
-            val mediaUrl = if (table == "driver_documents") createSignedDriverDocumentUrl(accessToken, item.optString("storage_path")) else ""
-            AdminRecord(item.optString("id"), title, detail, if (table == "driver_documents") item.optString("review_status") else item.optString("status"), mediaUrl)
+            val title = if (table == "drivers")
+                (item.optString("first_name") + " " + item.optString("last_name")).trim().ifBlank { item.optString("full_name") }
+            else item.optString("company_name")
+            val detail = if (table == "drivers")
+                item.optString("mobile") + " | " + item.optString("vehicle_type") + " | " + item.optString("primary_destination")
+            else item.optString("manager_name") + " | " + item.optString("mobile")
+            AdminRecord(item.optString("id"), title, detail, item.optString("status"))
         }
-    } catch (_: Exception) {
-        emptyList()
-    } finally {
-        connection?.disconnect()
-    }
+    } catch (_: Exception) { emptyList() }
+    finally { connection?.disconnect() }
 }
 
-
-private fun createSignedDriverDocumentUrl(accessToken: String, path: String): String {
+private fun createSignedDriverDocumentUrl(accessToken: String, path: String, bucket: String = "driver-documents"): String {
     if (accessToken.isBlank() || path.isBlank()) return ""
     var connection: HttpURLConnection? = null
     return try {
         val encodedPath = path.split("/").joinToString("/") { URLEncoder.encode(it, "UTF-8").replace("+", "%20") }
-        connection = (URL(SUPABASE_URL + "/storage/v1/object/sign/driver-documents/" + encodedPath).openConnection() as HttpURLConnection).apply {
+        connection = (URL(SUPABASE_URL + "/storage/v1/object/sign/" + bucket + "/" + encodedPath).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"; connectTimeout = 10000; readTimeout = 15000; doOutput = true
             setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
             setRequestProperty("Authorization", "Bearer " + accessToken)
@@ -3410,9 +3444,12 @@ private fun createSignedDriverDocumentUrl(accessToken: String, path: String): St
 
 private fun updateDriverDocumentStatus(accessToken: String, id: String, status: String): String {
     if (accessToken.isBlank() || id.isBlank() || status !in listOf("approved", "rejected")) return "درخواست تغییر وضعیت مدرک معتبر نیست."
+    val parts = id.split("|", limit = 2)
+    val table = if (parts.size == 2 && parts[0] == "company") "company_documents" else "driver_documents"
+    val recordId = if (parts.size == 2) parts[1] else id
     var connection: HttpURLConnection? = null
     return try {
-        connection = (URL(SUPABASE_URL + "/rest/v1/driver_documents?id=eq." + id).openConnection() as HttpURLConnection).apply {
+        connection = (URL(SUPABASE_URL + "/rest/v1/" + table + "?id=eq." + recordId).openConnection() as HttpURLConnection).apply {
             requestMethod = "PATCH"; connectTimeout = 15000; readTimeout = 20000; doOutput = true
             setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
             setRequestProperty("Authorization", "Bearer " + accessToken)
