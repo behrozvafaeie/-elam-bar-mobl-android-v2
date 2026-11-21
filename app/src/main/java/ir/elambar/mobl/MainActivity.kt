@@ -589,7 +589,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         NavigationDrawerItem(
                             label = { Text("اعلام بار") },
                             selected = false,
-                            onClick = { scope.launch { drawerState.close() } },
+                            onClick = { companyLoadPanelExpanded = true; scope.launch { drawerState.close() } },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -1299,7 +1299,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     Text(if (companyLoadPanelExpanded) "بستن فرم اعلام بار ▲" else "باز کردن فرم اعلام بار ▼")
                                 }
                                 if (companyLoadPanelExpanded) {
-                                Text("اعلام بار | ثبت گروهی از مبدأ تهران", style = MaterialTheme.typography.titleMedium)
+                                    Text("پنل اعلام بار", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                                    OutlinedButton(onClick = { companyLoadPanelExpanded = false }, modifier = Modifier.fillMaxWidth()) { Text("برگشت به سالن انتشار اعلام بار") }
+                                    Text("ثبت گروهی بار از مبدأ ثابت تهران", style = MaterialTheme.typography.titleMedium)
                                     LoadSectionDropdown("مقصد", loadDestinationExpanded, { loadDestinationExpanded = !loadDestinationExpanded }) {
                                         OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("نام مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                     }
@@ -1370,8 +1372,9 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 }
                                 if (loadActionMessage.isNotBlank()) Text(loadActionMessage, color = MaterialTheme.colorScheme.secondary)
                                 }
+                                if (!companyLoadPanelExpanded) {
                                 HorizontalDivider()
-                                Text("بارهای ثبت‌شده شرکت", style = MaterialTheme.typography.titleMedium)
+                                Text("سالن انتشار اعلام بار | بارهای ثبت‌شده شرکت", style = MaterialTheme.typography.titleMedium)
                                 CompanyLoadManagement(accessToken = userAccessToken)
                                 HorizontalDivider()
                                 Text("جست‌وجوی راننده مناسب", style = MaterialTheme.typography.titleMedium)
@@ -1389,6 +1392,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     Text(if (driverSearchLoading) "در حال جست‌وجو..." else "جست‌وجوی رانندگان تأییدشده")
                                 }
                                 Text(driverSearchResults, textAlign = TextAlign.Start)
+                                }
                             } else {
                                 Text("سالن عمومی بار | قابل مشاهده برای همه رانندگان تأییدشده", style = MaterialTheme.typography.titleLarge)
                                 Text("همه بارهای منتشرشده در این سالن نمایش داده می‌شوند؛ حتی اگر خودرو یا مقصد با مشخصات شما یکسان نباشد.", style = MaterialTheme.typography.bodySmall)
