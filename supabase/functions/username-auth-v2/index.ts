@@ -104,7 +104,7 @@ Deno.serve(async(req:Request)=>{
    const lastName=String(b.last_name??"").trim();
    const mobileRaw=String(b.mobile??"").trim();
    const birthDateRaw=String(b.birth_date??"").trim();
-   if(birthDateRaw && !/^\\d{4}-\\d{2}-\\d{2}$/.test(birthDateRaw))return out({error:"تاریخ تولد معتبر نیست."},400,origin);
+   if(birthDateRaw && !/^\d{4}-\d{2}-\d{2}$/.test(birthDateRaw))return out({error:"تاریخ تولد معتبر نیست."},400,origin);
    if(birthDateRaw && Number.isNaN(Date.parse(birthDateRaw+"T00:00:00Z")))return out({error:"تاریخ تولد معتبر نیست."},400,origin);
    const digits=(v:string)=>v.replace(/[^۰-۹٠-٩0-9]/g,"").replace(/[۰-۹]/g,(c)=>String("۰۱۲۳۴۵۶۷۸۹".indexOf(c))).replace(/[٠-٩]/g,(c)=>String("٠١٢٣٤٥٦٧٨٩".indexOf(c)));
    const mobileDigits=digits(mobileRaw);
