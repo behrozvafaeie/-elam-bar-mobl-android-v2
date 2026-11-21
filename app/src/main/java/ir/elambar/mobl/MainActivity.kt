@@ -598,7 +598,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             },
                             modifier = Modifier.fillMaxWidth()
                         )
-                    } else if (userLoggedIn && role == UserRole.COMPANY && userStatus == "approved") {
+                    } else if (userLoggedIn && role == UserRole.COMPANY) {
                         NavigationDrawerItem(
                             label = { Text("پنل اعلام بار") },
                             selected = companyLoadPanelExpanded,
@@ -1330,6 +1330,14 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         Text(if (profilePhotoUploading) "در حال بارگذاری..." else "انتخاب عکس پروفایل")
                     }
                     if (profilePhotoMessage.isNotBlank()) Text(profilePhotoMessage, style = MaterialTheme.typography.bodySmall)
+                    if (role == UserRole.COMPANY && userStatus != "approved") {
+                        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("پنل اعلام بار شرکت", style = MaterialTheme.typography.titleMedium)
+                                Text("درخواست شرکت هنوز تأیید نشده است. پس از تأیید مدیر ارشد، ثبت و انتشار بار فعال می‌شود.", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
                     if (role == UserRole.DRIVER) {
                         HorizontalDivider()
                         Text("مدارک راننده", style = MaterialTheme.typography.titleMedium)
