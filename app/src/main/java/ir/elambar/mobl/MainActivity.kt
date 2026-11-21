@@ -243,11 +243,11 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var loadPriceMode by remember { mutableStateOf("fixed") }
     var loadDescription by remember { mutableStateOf("") }
     var loadQuantity by remember { mutableStateOf("1") }
-        var loadDestinationExpanded by remember { mutableStateOf(false) }
+        var loadDestinationExpanded by remember { mutableStateOf(true) }
     var loadCargoExpanded by remember { mutableStateOf(false) }
     var loadVehicleExpanded by remember { mutableStateOf(false) }
     var loadLoadingExpanded by remember { mutableStateOf(false) }
-    var loadPriceExpanded by remember { mutableStateOf(false) }
+    var loadPriceExpanded by remember { mutableStateOf(true) }
     var loadQuantityExpanded by remember { mutableStateOf(false) }
     var loadDescriptionExpanded by remember { mutableStateOf(false) }
     var loadActionMessage by remember { mutableStateOf("") }
@@ -1301,9 +1301,31 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     Text(if (companyLoadPanelExpanded) "بستن فرم اعلام بار ▲" else "باز کردن فرم اعلام بار ▼")
                                 }
                                 if (companyLoadPanelExpanded) {
-                                    Text("پنل اعلام بار", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-                                    OutlinedButton(onClick = { companyLoadPanelExpanded = false }, modifier = Modifier.fillMaxWidth()) { Text("برگشت به سالن انتشار اعلام بار") }
-                                    Text("ثبت گروهی بار از مبدأ ثابت تهران", style = MaterialTheme.typography.titleMedium)
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                        shape = MaterialTheme.shapes.extraLarge
+                                    ) {
+                                        Column(
+                                            Modifier.fillMaxWidth().padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text("پنل اعلام بار", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                            Text("ثبت سریع و گروهی بارهای شرکت", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                                Text("مبدأ ثابت: تهران", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface) {
+                                                    Text("بدون محدودیت تعداد", modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), style = MaterialTheme.typography.labelSmall)
+                                                }
+                                            }
+                                            Text("برای چند مقصد، هر مقصد را جداگانه به فهرست اضافه کنید؛ همه بارها با هم منتشر می‌شوند.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                        }
+                                    }
+                                    OutlinedButton(onClick = { companyLoadPanelExpanded = false }, modifier = Modifier.fillMaxWidth()) {
+                                        Icon(Icons.Filled.ArrowBack, contentDescription = null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("بازگشت به سالن انتشار")
+                                    }
                                     LoadSectionDropdown("مقصد", loadDestinationExpanded, { loadDestinationExpanded = !loadDestinationExpanded }) {
                                         OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("نام مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                     }
