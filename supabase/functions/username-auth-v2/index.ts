@@ -93,7 +93,7 @@ Deno.serve(async(req:Request)=>{
   }
   if(action==="update_profile"){
    const bearer=req.headers.get("authorization")??"";
-   const token=bearer.replace(/^Bearer\\s+/i,"").trim();
+   const token=bearer.replace(/^Bearer\s+/i,"").trim();
    if(!token)return out({error:"نشست ورود معتبر نیست؛ دوباره وارد شوید."},401,origin);
    const {data:verified,error:verifyError}=await auth.auth.getUser(token);
    const currentUser=verified.user;
