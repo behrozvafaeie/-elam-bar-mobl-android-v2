@@ -1155,7 +1155,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     }
                                     Text("نوع ماشین", style = MaterialTheme.typography.titleSmall)
                                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        listOf("کامیونت مبلی","کامیونت روباری کار","کامیون ۶ متری","وانت").forEach { v ->
+                                        listOf("وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون دربستی کار","خاور مبلی پتو دار").forEach { v ->
                                             FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
                                         }
                                     }
