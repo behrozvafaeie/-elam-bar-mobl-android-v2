@@ -20,6 +20,21 @@ android {
         buildConfigField("String", "TURN_PASSWORD", "\"\"")
     }
     buildFeatures { compose = true; buildConfig = true }
+    // Always sign debug builds with the cached CI keystore so updates keep
+    // the same Android signing identity across workflow runs.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+    buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
