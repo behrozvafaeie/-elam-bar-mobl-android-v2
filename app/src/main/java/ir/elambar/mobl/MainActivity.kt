@@ -1644,7 +1644,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     }
                                 }
                             } else {
-                                Text("سالن عمومی بار | قابل مشاهده برای همه رانندگان تأییدشده", style = MaterialTheme.typography.titleLarge)
+                                Text("سالن عمومی بار", style = MaterialTheme.typography.titleLarge)
                                 Text("همه بارهای منتشرشده در این سالن نمایش داده می‌شوند؛ حتی اگر خودرو یا مقصد با مشخصات شما یکسان نباشد.", style = MaterialTheme.typography.bodySmall)
                                 OutlinedButton(enabled = !publicHallLoading, onClick = {
                                     publicHallLoading = true
@@ -1664,6 +1664,16 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                             Text("تهران ← ${load.destination}", style = MaterialTheme.typography.titleMedium)
                                             Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
                                             Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
+                                            if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")
+                                            if (load.companyMobile.isNotBlank()) {
+                                                Text("شماره تماس: ${load.companyMobile}")
+                                                OutlinedButton(
+                                                    onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${load.companyMobile}"))) },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) { Text("تماس با شرکت") }
+                                            } else {
+                                                Text("شماره تماس شرکت در این آگهی ثبت نشده است.", style = MaterialTheme.typography.bodySmall)
+                                            }
                                             if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                                             Button(enabled = acceptingLoadId.isBlank(), onClick = {
                                                 acceptingLoadId = load.id
