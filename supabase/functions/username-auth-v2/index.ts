@@ -103,6 +103,9 @@ Deno.serve(async(req:Request)=>{
    const firstName=String(b.first_name??"").trim();
    const lastName=String(b.last_name??"").trim();
    const mobileRaw=String(b.mobile??"").trim();
+   const birthDateRaw=String(b.birth_date??"").trim();
+   if(birthDateRaw && !/^\\d{4}-\\d{2}-\\d{2}$/.test(birthDateRaw))return out({error:"تاریخ تولد معتبر نیست."},400,origin);
+   if(birthDateRaw && Number.isNaN(Date.parse(birthDateRaw+"T00:00:00Z")))return out({error:"تاریخ تولد معتبر نیست."},400,origin);
    const digits=(v:string)=>v.replace(/[^۰-۹٠-٩0-9]/g,"").replace(/[۰-۹]/g,(c)=>String("۰۱۲۳۴۵۶۷۸۹".indexOf(c))).replace(/[٠-٩]/g,(c)=>String("٠١٢٣٤٥٦٧٨٩".indexOf(c)));
    const mobileDigits=digits(mobileRaw);
    const mobile=mobileDigits.startsWith("0098")?"0"+mobileDigits.slice(4):mobileDigits.startsWith("98")?"0"+mobileDigits.slice(2):mobileDigits.startsWith("9")&&mobileDigits.length===10?"0"+mobileDigits:mobileDigits;
@@ -115,6 +118,7 @@ Deno.serve(async(req:Request)=>{
    if(currentProfileError||!currentProfile)return out({error:"پرونده کاربری پیدا نشد."},404,origin);
    if(mobile!==String(currentProfile.mobile??""))return out({error:"برای تغییر شماره موبایل ابتدا باید تأیید پیامکی انجام شود."},403,origin);
    const profile:any={first_name:firstName,last_name:lastName};
+   profile.birth_date=birthDateRaw||null;
    if(accountType==="driver"){
     const vehicles=["وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون بزرگ","خاور مبلی پتو دار","کامیون دربستی کار","سایر خودروهای مبلی"];
     const vehicleType=String(b.vehicle_type??"").trim();
