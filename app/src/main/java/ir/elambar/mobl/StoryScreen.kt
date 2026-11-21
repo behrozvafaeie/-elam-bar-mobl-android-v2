@@ -73,8 +73,9 @@ internal fun StoryScreen(accessToken: String, role: String, isSuperAdmin: Boolea
     fun refresh() {
         scope.launch {
             loading = true
-            val loaded = withContext(Dispatchers.IO) { fetchStories(accessToken, myUserId) }
-            stories = loaded
+            val result = withContext(Dispatchers.IO) { fetchStories(accessToken, myUserId) }
+            stories = result.first
+            if (result.second.isNotBlank()) message = result.second
             loading = false
         }
     }
@@ -188,8 +189,8 @@ private fun storyUserId(token: String): String {
     } catch (_: Exception) { "" }
 }
 
-private fun fetchStories(token: String, userId: String): List<StoryCardData> {
-    if (token.isBlank()) return emptyList()
+private fun fetchStories(token: String, userId: String): Pair<List<StoryCardData>, String> {
+    if (token.isBlank()) return emptyList<StoryCardData>() to "نشست ورود معتبر نیست؛ دوباره وارد حساب شوید."
     var connection: HttpURLConnection? = null
     return try {
         connection = (URL("$STORY_SUPABASE_URL/rest/v1/user_stories?select=id,user_id,user_role,caption,media_path,expires_at&order=created_at.desc&limit=100").openConnection() as HttpURLConnection).apply {
@@ -199,9 +200,12 @@ private fun fetchStories(token: String, userId: String): List<StoryCardData> {
             setRequestProperty("Accept", "application/json")
         }
         val code = connection.responseCode
-        if (code !in 200..299) return emptyList()
+        if (code !in 200..299) {
+            val detail = runCatching { connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty() }.getOrDefault("")
+            return emptyList<StoryCardData>() to "دریافت استوری ناموفق بود (HTTP $code). ${detail.take(220)}"
+        }
         val rows = JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
-        (0 until rows.length()).mapNotNull { i ->
+        val items = (0 until rows.length()).mapNotNull { i ->
             val row = rows.getJSONObject(i)
             val path = row.optString("media_path")
             val signed = signedStoryUrl(token, path)
@@ -212,7 +216,10 @@ private fun fetchStories(token: String, userId: String): List<StoryCardData> {
                 fetchStoryComments(token, row.optString("id"))
             )
         }
-    } catch (_: Exception) { emptyList() }
+        items to ""
+    } catch (e: Exception) {
+        emptyList<StoryCardData>() to "خطا در دریافت استوری: ${e.message ?: e.javaClass.simpleName}"
+    }
     finally { connection?.disconnect() }
 }
 
