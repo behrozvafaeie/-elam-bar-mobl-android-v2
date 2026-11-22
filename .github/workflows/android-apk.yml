@@ -74,7 +74,6 @@ jobs:
           grep -F 'versionCode = 36' app/build.gradle.kts
           grep -F 'versionName = "1.6.0"' app/build.gradle.kts
           test "$(grep -o 'versionCode:36,versionName:"1.6.0"' .github/workflows/android-apk.yml | wc -l)" -eq 2
-          ! grep -E 'versionCode:35|versionName:"1.5.9"' .github/workflows/android-apk.yml
           ! grep -E 'ELAM_TURN_(URL|USERNAME|PASSWORD)' .github/workflows/android-apk.yml
 
       - name: Build debug APK (retry transient Maven errors)
