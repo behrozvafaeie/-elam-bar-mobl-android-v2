@@ -206,15 +206,17 @@ class MainActivity : ComponentActivity() {
         val expectedHash = getSharedPreferences("elambar_update", MODE_PRIVATE).getString("expected_sha256", "").orEmpty()
         val actualHash = runCatching {
             val digest = java.security.MessageDigest.getInstance("SHA-256")
-            manager.openDownloadedFile(downloadId).use { input ->
-                val buffer = ByteArray(8192)
-                while (true) {
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    digest.update(buffer, 0, count)
+            manager.openDownloadedFile(downloadId).use { descriptor ->
+                java.io.FileInputStream(descriptor.fileDescriptor).use { input ->
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        digest.update(buffer, 0, count)
+                    }
                 }
             }
-            digest.digest().joinToString("") { "%02x".format(it) }
+            digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
         }.getOrDefault("")
         if (expectedHash.isBlank() || actualHash != expectedHash) {
             manager.remove(downloadId)
