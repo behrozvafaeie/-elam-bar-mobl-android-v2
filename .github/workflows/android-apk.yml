@@ -207,30 +207,51 @@ jobs:
           emulator-boot-timeout: 600
           disable-animations: true
           script: |
-            set -eu
+            set +e
             echo "Waiting for Android device..."
             adb wait-for-device
             echo "Waiting for Android package manager..."
             ready=0
-            for i in $(seq 1 36); do
-              if timeout 15s adb shell pm list packages >/dev/null 2>&1; then ready=1; break; fi
-              echo "Package manager not ready ($i/36)"
+            for i in $(seq 1 24); do
+              if timeout 10s adb shell pm list packages >/dev/null 2>&1; then ready=1; break; fi
+              echo "Package manager not ready ($i/24)"
               sleep 5
             done
-            test "$ready" -eq 1
-            echo "Installing APK..."
-            timeout 180s adb install -r artifacts/app-debug.apk
-            echo "Starting app explicitly..."
-            timeout 45s adb shell am force-stop ir.elambar.mobl
-            timeout 45s adb shell am start -W -n ir.elambar.mobl/.MainActivity
-            sleep 10
-            echo "Checking app process..."
-            timeout 30s adb shell pidof ir.elambar.mobl
-            echo "Checking foreground activity..."
-            timeout 30s adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" | head -n 2
-            echo "Checking app-specific fatal crashes..."
-            if timeout 30s adb logcat -d | grep -E -A 35 -B 5 "FATAL EXCEPTION.*ir.elambar.mobl|Process: ir.elambar.mobl"; then
-              echo "Fatal crash detected."
+            if [ "$ready" -ne 1 ]; then
+              echo "Android package manager did not become ready."
+              adb logcat -d -v threadtime | tail -n 500
               exit 1
             fi
-# Emulator smoke-test script is intentionally a single shell line for the runner.
+            echo "Installing APK..."
+            timeout 180s adb install -r artifacts/app-debug.apk
+            install_rc=$?
+            if [ "$install_rc" -ne 0 ]; then
+              echo "APK install failed with exit code $install_rc"
+              adb logcat -d -v threadtime | tail -n 500
+              exit "$install_rc"
+            fi
+            adb logcat -c
+            echo "Starting app explicitly and waiting for launch result..."
+            timeout 45s adb shell am force-stop ir.elambar.mobl
+            timeout 60s adb shell am start -W -n ir.elambar.mobl/.MainActivity
+            launch_rc=$?
+            echo "Activity launch exit code: $launch_rc"
+            sleep 20
+            echo "===== APP PROCESS ====="
+            adb shell pidof ir.elambar.mobl
+            process_rc=$?
+            echo "Process check exit code: $process_rc"
+            echo "===== FOREGROUND ACTIVITY ====="
+            adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" | head -n 4
+            echo "===== APP CRASH LOG (if any) ====="
+            adb logcat -d -v threadtime | grep -E -A 45 -B 8 "FATAL EXCEPTION|AndroidRuntime|Process: ir.elambar.mobl|ir.elambar.mobl.*(Fatal|Exception)" | tail -n 250
+            crash_rc=$?
+            echo "Crash-log grep exit code: $crash_rc"
+            echo "===== RECENT LOGCAT ====="
+            adb logcat -d -v threadtime -t 400 | tail -n 400
+            if [ "$launch_rc" -ne 0 ] || [ "$process_rc" -ne 0 ] || [ "$crash_rc" -eq 0 ]; then
+              echo "Startup smoke test failed; diagnostic logs were printed above."
+              exit 1
+            fi
+            echo "Startup smoke test passed: process is alive and no fatal crash was found."
+# Emulator smoke-test script captures launch status and logcat even when launch fails.
