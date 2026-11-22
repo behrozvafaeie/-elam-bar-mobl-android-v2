@@ -183,7 +183,7 @@ jobs:
   emulator-smoke-test:
     name: Optional emulator smoke test
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     continue-on-error: true
     steps:
@@ -203,9 +203,9 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -memory 2048 -cores 2 -no-snapshot -no-metrics
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -memory 4096 -cores 2 -no-snapshot -no-metrics
           emulator-boot-timeout: 1200
-          disable-animations: true
+          disable-animations: false
           script: |
             set +e
             echo "Waiting for Android device..."
