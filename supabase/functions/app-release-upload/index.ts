@@ -9,7 +9,7 @@ if (!projectUrl || !serviceKey) throw new Error("Server configuration unavailabl
 const admin = createClient(projectUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 const githubJwks = createRemoteJWKSet(new URL("https://token.actions.githubusercontent.com/.well-known/jwks"));
 const expectedRepository = "behrozvafaeie/-elam-bar-mobl-android-v2";
-const expectedRef = "refs/heads/fix/load-status-edit-delete-logout-v1";
+const expectedRef = "refs/heads/diagnostic/startup-crash-log-v1";
 const expectedWorkflow = expectedRepository + "/.github/workflows/android-apk.yml@" + expectedRef;
 
 function json(body: unknown, status = 200) {
