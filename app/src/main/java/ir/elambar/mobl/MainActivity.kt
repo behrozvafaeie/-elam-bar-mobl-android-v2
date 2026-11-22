@@ -1419,7 +1419,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     )
                                     Text("نوع ماشین", style = MaterialTheme.typography.titleSmall)
                                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        listOf("وانت مبلی","کامیونت مبلی","کامیونت روباری کار","کامیون ۶ متری").forEach { v ->
+                                        listOf("وانت مبلی", "کامیونت مبلی", "کامیون ۶ متری", "کامیون دربستی کار", "خاور مبلی پتو‌دار").forEach { v ->
                                             FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
                                         }
                                     }
@@ -1824,7 +1824,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     )
                                     Text("نوع ماشین", style = MaterialTheme.typography.titleSmall)
                                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        listOf("وانت مبلی","کامیونت مبلی","کامیونت روباری کار","کامیون ۶ متری").forEach { v ->
+                                        listOf("وانت مبلی", "کامیونت مبلی", "کامیون ۶ متری", "کامیون دربستی کار", "خاور مبلی پتو‌دار").forEach { v ->
                                             FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
                                         }
                                     }
@@ -1896,7 +1896,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                 HorizontalDivider()
                                 Text("جست‌وجوی راننده مناسب", style = MaterialTheme.typography.titleMedium)
                                 OutlinedTextField(driverSearchDestination, { driverSearchDestination = it }, label = { Text("مقصد موردنظر") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                                listOf("وانت مبلی","کامیونت مبلی","کامیونت روباری کار","کامیون ۶ متری").forEach { v ->
+                                listOf("وانت مبلی", "کامیونت مبلی", "کامیون ۶ متری", "کامیون دربستی کار", "خاور مبلی پتو‌دار").forEach { v ->
                                     FilterChip(selected = driverSearchVehicle == v, onClick = { driverSearchVehicle = v }, label = { Text(v) })
                                 }
                                 OutlinedButton(enabled = !driverSearchLoading && driverSearchDestination.trim().length >= 2, onClick = {
@@ -2133,7 +2133,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             OutlinedTextField(nationalId, { nationalId = it.filter { c -> c.isDigit() }.take(10) }, label = { Text("کد ملی ۱۰ رقمی") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
                             OutlinedTextField(smartCardNumber, { smartCardNumber = it }, label = { Text("شماره کارت هوشمند") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                             Text("نوع خودرو")
-                            listOf("وانت مبلی","کامیونت مبلی","کامیونت روباری کار","کامیون ۶ متری").forEach { v ->
+                            listOf("وانت مبلی", "کامیونت مبلی", "کامیون ۶ متری", "کامیون دربستی کار", "خاور مبلی پتو‌دار").forEach { v ->
                                 FilterChip(selected = vehicleType == v, onClick = { vehicleType = v }, label = { Text(v) })
                             }
                             OutlinedTextField(licensePlate, { licensePlate = it }, label = { Text("شماره پلاک") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -3110,6 +3110,14 @@ private fun callPasswordRecovery(action: String, token: String, code: String, ne
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Accept", "application/json")
         }
+        val normalizedCode = code.map { ch ->
+            when (ch) {
+                in '۰'..'۹' -> ('0'.code + (ch - '۰')).toChar()
+                in '٠'..'٩' -> ('0'.code + (ch - '٠')).toChar()
+                else -> ch
+            }
+        }.joinToString("").filter { it in '0'..'9' }
+        body.put("code", normalizedCode)
         connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
         val status = connection.responseCode
         val stream = if (status in 200..299) connection.inputStream else connection.errorStream
