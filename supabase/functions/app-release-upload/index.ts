@@ -43,24 +43,28 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Invalid app version" }, 400);
     }
 
-    const apkPath = "elam-bar-mobl-latest.apk";
+    const releasePath = "elam-bar-mobl-latest.zip";
     if (action === "prepare") {
-      const { data, error } = await admin.storage.from("app-releases").createSignedUploadUrl(apkPath, { upsert: true });
+      const { data, error } = await admin.storage.from("app-releases").createSignedUploadUrl(releasePath, { upsert: true });
       if (error || !data?.signedUrl || !data?.token) return json({ error: "Could not create signed APK upload URL" }, 500);
-      return json({ signedUrl: data.signedUrl, path: apkPath, expiresIn: 7200 });
+      return json({ signedUrl: data.signedUrl, path: releasePath, expiresIn: 7200 });
     }
 
     if (action === "finalize") {
-      const sha256 = String(body.sha256 ?? "").toLowerCase();
-      if (!/^[a-f0-9]{64}$/.test(sha256)) return json({ error: "Invalid APK checksum" }, 400);
-      const { data: objects, error: listError } = await admin.storage.from("app-releases").list("", { search: apkPath, limit: 10 });
-      if (listError || !objects?.some((item) => item.name === apkPath)) return json({ error: "Uploaded APK was not found" }, 409);
+      const archiveSha256 = String(body.archiveSha256 ?? "").toLowerCase();
+      const apkSha256 = String(body.apkSha256 ?? "").toLowerCase();
+      if (!/^[a-f0-9]{64}$/.test(archiveSha256) || !/^[a-f0-9]{64}$/.test(apkSha256)) {
+        return json({ error: "Invalid release checksum" }, 400);
+      }
+      const { data: objects, error: listError } = await admin.storage.from("app-releases").list("", { search: releasePath, limit: 10 });
+      if (listError || !objects?.some((item) => item.name === releasePath)) return json({ error: "Uploaded release archive was not found" }, 409);
 
       const manifest = {
         versionCode,
         versionName,
-        apkUrl: projectUrl + "/storage/v1/object/public/app-releases/" + apkPath,
-        sha256,
+        apkUrl: projectUrl + "/storage/v1/object/public/app-releases/" + releasePath,
+        archiveSha256,
+        apkSha256,
         mandatory: false,
         releaseNotes: "به‌روزرسانی برنامه اعلام بار مبل",
       };
@@ -71,7 +75,7 @@ Deno.serve(async (req: Request) => {
         { contentType: "application/json; charset=utf-8", cacheControl: "0", upsert: true },
       );
       if (manifestError) return json({ error: "Manifest publication failed" }, 500);
-      return json({ ok: true, versionCode, versionName, sha256 });
+      return json({ ok: true, versionCode, versionName, archiveSha256, apkSha256 });
     }
 
     return json({ error: "Unknown action" }, 400);
