@@ -1,7 +1,7 @@
 name: Android APK
 on:
   push:
-    branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25", "fix/source-343-stabilization", "stable/source-343-baseline", "fix/post-merge-ci-stabilization", "feature/v1.5.1-load-draft-autosave", "release/v1.5.1-clean-candidate", "fix/load-status-edit-delete-logout-v1" ]
+    branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25", "fix/source-343-stabilization", "stable/source-343-baseline", "fix/post-merge-ci-stabilization", "feature/v1.5.1-load-draft-autosave", "release/v1.5.1-clean-candidate", "fix/load-status-edit-delete-logout-v1", "feature/company-panel-v2-isolated", "feature/company-panel-v2-install-safe" ]
     paths:
       - "app/**"
       - "supabase/**"
@@ -79,10 +79,10 @@ jobs:
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 36' app/build.gradle.kts
-          grep -F 'versionName = "1.6.0"' app/build.gradle.kts
-          awk '/^[[:space:]]*PREPARE_JSON=/ && /versionCode:36,versionName:"1.6.0"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
-          awk '/^[[:space:]]*FINALIZE_JSON=/ && /versionCode:36,versionName:"1.6.0"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
+          grep -F 'versionCode = 37' app/build.gradle.kts
+          grep -F 'versionName = "1.6.1"' app/build.gradle.kts
+          awk '/^[[:space:]]*PREPARE_JSON=/ && /versionCode:37,versionName:"1.6.1"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
+          awk '/^[[:space:]]*FINALIZE_JSON=/ && /versionCode:37,versionName:"1.6.1"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
           ! grep -E 'ELAM_TURN_(URL|USERNAME|PASSWORD)' .github/workflows/android-apk.yml
 
       - name: Build debug APK (retry transient Maven errors)
@@ -123,7 +123,7 @@ jobs:
         shell: bash
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='36' versionName='1.6.0'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='37' versionName='1.6.1'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs --verbose "$APK"
           keytool -list -v -keystore /home/runner/.android/debug.keystore -storepass android -alias androiddebugkey | grep -E "SHA256:"
           sha256sum "$APK"
@@ -132,13 +132,14 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: elam-bar-mobl-v1.6.0-debug-apk
+          name: elam-bar-mobl-v1.6.1-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 90
 
       - name: Publish APK to public update storage using GitHub OIDC
-        if: github.event_name == 'push'
+        # PR validation builds must never publish to the public update channel.
+        if: github.event_name == 'push' && github.ref == 'refs/heads/fix/load-status-edit-delete-logout-v1'
         shell: bash
         run: |
           set -euo pipefail
@@ -157,7 +158,7 @@ jobs:
           }
 
           OIDC_TOKEN=$(get_oidc_token)
-          PREPARE_JSON=$(jq -n '{action:"prepare",versionCode:36,versionName:"1.6.0"}')
+          PREPARE_JSON=$(jq -n '{action:"prepare",versionCode:37,versionName:"1.6.1"}')
           PREPARE_RESULT=$(curl -fsS -X POST "https://sckcxtceybwtiecyxqsy.supabase.co/functions/v1/app-release-upload" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
@@ -173,7 +174,7 @@ jobs:
           ARCHIVE_SHA256=$(sha256sum "$ARCHIVE" | awk '{print $1}')
           APK_SHA256=$(sha256sum "$APK" | awk '{print $1}')
           OIDC_TOKEN=$(get_oidc_token)
-          FINALIZE_JSON=$(jq -n --arg archiveSha256 "$ARCHIVE_SHA256" --arg apkSha256 "$APK_SHA256" '{action:"finalize",versionCode:36,versionName:"1.6.0",archiveSha256:$archiveSha256,apkSha256:$apkSha256}')
+          FINALIZE_JSON=$(jq -n --arg archiveSha256 "$ARCHIVE_SHA256" --arg apkSha256 "$APK_SHA256" '{action:"finalize",versionCode:37,versionName:"1.6.1",archiveSha256:$archiveSha256,apkSha256:$apkSha256}')
           curl -fsS -X POST "https://sckcxtceybwtiecyxqsy.supabase.co/functions/v1/app-release-upload" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
@@ -183,17 +184,17 @@ jobs:
     name: Optional emulator smoke test
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 22
+    timeout-minutes: 30
     continue-on-error: true
     steps:
       - name: Download built APK
         uses: actions/download-artifact@v4
         with:
-          name: elam-bar-mobl-v1.6.0-debug-apk
+          name: elam-bar-mobl-v1.6.1-debug-apk
           path: artifacts
 
       - name: Install and launch APK on Android emulator
-        timeout-minutes: 18
+        timeout-minutes: 24
         env:
           ANDROID_I_WANT_MY_TCG: "yes"
         uses: reactivecircus/android-emulator-runner@v2
@@ -206,5 +207,30 @@ jobs:
           emulator-boot-timeout: 600
           disable-animations: true
           script: |
-            set -eu; echo "Waiting for Android device..."; adb wait-for-device; echo "Waiting for Android package manager..."; ready=0; for i in $(seq 1 36); do if timeout 15s adb shell pm list packages >/dev/null 2>&1; then ready=1; break; fi; echo "Package manager not ready ($i/36)"; sleep 5; done; test "$ready" -eq 1; echo "Installing APK with retry..."; installed=0; for i in 1 2 3; do if timeout 180s adb install -r artifacts/app-debug.apk; then installed=1; break; fi; echo "Install attempt $i failed; reconnecting ADB"; adb reconnect || true; sleep 10; done; test "$installed" -eq 1; echo "Launching app..."; timeout 60s adb shell am force-stop ir.elambar.mobl; timeout 60s adb shell monkey -p ir.elambar.mobl 1; sleep 15; echo "Checking app process..."; timeout 30s adb shell pidof ir.elambar.mobl | grep -E '[0-9]+'; echo "Checking foreground activity..."; timeout 30s adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" | head -n 2; echo "Checking app-specific fatal crashes..."; if timeout 30s adb logcat -d | grep -E -A 25 -B 5 "FATAL EXCEPTION.*ir.elambar.mobl|Process: ir.elambar.mobl"; then echo "Fatal crash detected."; exit 1; fi
+            set -eu
+            echo "Waiting for Android device..."
+            adb wait-for-device
+            echo "Waiting for Android package manager..."
+            ready=0
+            for i in $(seq 1 36); do
+              if timeout 15s adb shell pm list packages >/dev/null 2>&1; then ready=1; break; fi
+              echo "Package manager not ready ($i/36)"
+              sleep 5
+            done
+            test "$ready" -eq 1
+            echo "Installing APK..."
+            timeout 180s adb install -r artifacts/app-debug.apk
+            echo "Starting app explicitly..."
+            timeout 45s adb shell am force-stop ir.elambar.mobl
+            timeout 45s adb shell am start -W -n ir.elambar.mobl/.MainActivity
+            sleep 10
+            echo "Checking app process..."
+            timeout 30s adb shell pidof ir.elambar.mobl
+            echo "Checking foreground activity..."
+            timeout 30s adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" | head -n 2
+            echo "Checking app-specific fatal crashes..."
+            if timeout 30s adb logcat -d | grep -E -A 35 -B 5 "FATAL EXCEPTION.*ir.elambar.mobl|Process: ir.elambar.mobl"; then
+              echo "Fatal crash detected."
+              exit 1
+            fi
 # Emulator smoke-test script is intentionally a single shell line for the runner.

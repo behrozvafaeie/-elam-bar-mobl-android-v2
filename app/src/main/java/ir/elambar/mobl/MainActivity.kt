@@ -332,7 +332,7 @@ private enum class UserRole(val label: String) {
 
 private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "", val role: String = "", val refreshToken: String = "")
 private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "", val username: String = "")
-private data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val priceMode: String, val freightAmount: String, val description: String)
+internal data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val priceMode: String, val freightAmount: String, val description: String)
 
 @Composable
 private fun LoadSectionDropdown(title: String, expanded: Boolean, onToggle: () -> Unit, content: @Composable () -> Unit) {
@@ -529,6 +529,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var companyLoadPanelExpanded by remember { mutableStateOf(true) }
     var companyApprovalRefreshing by remember { mutableStateOf(false) }
     var companyHallExpanded by remember { mutableStateOf(false) }
+    var companyPanelV2Selected by remember { mutableStateOf(false) }
     var showPublicHall by remember { mutableStateOf(false) }
     var adminLoadPanelExpanded by remember { mutableStateOf(false) }
     val loadDrafts = remember { androidx.compose.runtime.mutableStateListOf<LoadDraft>() }
@@ -1889,7 +1890,23 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         "approved" -> {
                             Text("حساب شما تأیید شده است.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
                             if (role == UserRole.COMPANY) {
-                                if (companyLoadPanelExpanded) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    OutlinedButton(
+                                        onClick = { companyPanelV2Selected = false },
+                                        modifier = Modifier.weight(1f)
+                                    ) { Text("پنل فعلی") }
+                                    Button(
+                                        onClick = { companyPanelV2Selected = true },
+                                        modifier = Modifier.weight(1f)
+                                    ) { Text("پنل جدید") }
+                                }
+                                if (companyPanelV2Selected) {
+                                    CompanyPanelV2(
+                                        accessToken = userAccessToken,
+                                        onBackToOldPanel = { companyPanelV2Selected = false }
+                                    )
+                                } else {
+
                                     Box(
                                         Modifier.fillMaxWidth()
                                             .background(
@@ -3336,7 +3353,7 @@ private fun authenticateUser(username: String, password: String, role: UserRole)
 }
 
 
-private fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>, publisherType: String = "company"): String {
+internal fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>, publisherType: String = "company"): String {
     if (accessToken.isBlank()) return "نشست ورود معتبر نیست؛ خارج شوید و دوباره وارد شوید."
     if (drafts.isEmpty()) return "ابتدا حداقل یک بار به فهرست اضافه کنید."
     var connection: HttpURLConnection? = null
@@ -3386,7 +3403,7 @@ private fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>, publi
 
 
 
-private fun fetchCompanyDrivers(accessToken: String, vehicle: String, destination: String): String {
+internal fun fetchCompanyDrivers(accessToken: String, vehicle: String, destination: String): String {
     if (accessToken.isBlank()) return "نشست ورود معتبر نیست."
     var connection: HttpURLConnection? = null
     return try {
