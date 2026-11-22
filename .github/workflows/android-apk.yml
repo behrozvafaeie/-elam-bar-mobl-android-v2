@@ -128,7 +128,7 @@ jobs:
         shell: bash
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='40' versionName='1.6.4'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='41' versionName='1.6.5'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs --verbose "$APK"
           keytool -list -v -keystore /home/runner/.android/debug.keystore -storepass android -alias androiddebugkey | grep -E "SHA256:"
           sha256sum "$APK"
@@ -212,9 +212,6 @@ jobs:
 
       - name: Publish tested APK to public update storage using GitHub OIDC
         shell: bash
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
         run: |
           set -euo pipefail
           APK=artifacts/app-debug.apk
