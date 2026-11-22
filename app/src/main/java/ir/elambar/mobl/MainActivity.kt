@@ -1,6 +1,12 @@
 package ir.elambar.mobl
 
 import android.os.Bundle
+import android.app.DownloadManager
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+import android.os.Build
+import android.os.Environment
+import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -51,6 +57,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -66,8 +73,27 @@ private const val SUPABASE_URL = "https://sckcxtceybwtiecyxqsy.supabase.co"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_rcJe7tZqCkHPgnAXZffzUg_f9ixVbwg"
 
 class MainActivity : ComponentActivity() {
+    private var updateInfo by mutableStateOf<JSONObject?>(null)
+    private var updateDownloadId: Long
+        get() = getSharedPreferences("elambar_update", MODE_PRIVATE).getLong("download_id", -1L)
+        set(value) { getSharedPreferences("elambar_update", MODE_PRIVATE).edit().putLong("download_id", value).apply() }
+
+    private val updateDownloadReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == DownloadManager.ACTION_DOWNLOAD_COMPLETE) {
+                val completedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
+                if (completedId == updateDownloadId) installDownloadedUpdate(completedId)
+            }
+        }
+    }
+    private var updateReceiverRegistered = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val downloadFilter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(updateDownloadReceiver, downloadFilter, Context.RECEIVER_NOT_EXPORTED)
+        else @Suppress("DEPRECATION") registerReceiver(updateDownloadReceiver, downloadFilter)
+        updateReceiverRegistered = true
         setContent {
             var palette by remember { mutableIntStateOf(getSharedPreferences("elambar_ui", MODE_PRIVATE).getInt("palette", 0).coerceIn(0, 4)) }
             val schemes = listOf(
@@ -84,8 +110,111 @@ class MainActivity : ComponentActivity() {
                     palette = (palette + 1) % 5
                     getSharedPreferences("elambar_ui", MODE_PRIVATE).edit().putInt("palette", palette).apply()
                 }
+                val availableUpdate = updateInfo
+                if (availableUpdate != null) {
+                    AlertDialog(
+                        onDismissRequest = { updateInfo = null },
+                        title = { Text("به‌روزرسانی برنامه آماده است") },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("نسخه ${availableUpdate.optString("versionName", "جدید")} برای نصب آماده است.")
+                                val notes = availableUpdate.optString("releaseNotes")
+                                if (notes.isNotBlank()) Text(notes)
+                                Text("برای دریافت و نصب، فقط دکمه زیر را بزنید. تأیید نهایی نصب با اندروید است.")
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                val id = enqueueAppUpdate(availableUpdate)
+                                if (id > 0L) {
+                                    updateDownloadId = id
+                                    updateInfo = null
+                                }
+                            }) { Text("دریافت و نصب") }
+                        },
+                        dismissButton = { TextButton(onClick = { updateInfo = null }) { Text("بعداً") } }
+                    )
+                }
             }
         }
+        lifecycleScope.launch {
+            val latest = withContext(Dispatchers.IO) { fetchAppUpdateManifest() }
+            if (latest != null && latest.optInt("versionCode", 0) > BuildConfig.VERSION_CODE) {
+                updateInfo = latest
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val pendingId = updateDownloadId
+        if (pendingId > 0L) installDownloadedUpdate(pendingId)
+    }
+
+    override fun onDestroy() {
+        if (updateReceiverRegistered) {
+            runCatching { unregisterReceiver(updateDownloadReceiver) }
+            updateReceiverRegistered = false
+        }
+        super.onDestroy()
+    }
+
+    private fun enqueueAppUpdate(info: JSONObject): Long {
+        val apkUrl = info.optString("apkUrl")
+        if (!apkUrl.startsWith("https://")) return -1L
+        return runCatching {
+            val request = DownloadManager.Request(Uri.parse(apkUrl))
+                .setTitle("به‌روزرسانی اعلام بار مبل")
+                .setDescription("در حال دریافت نسخه جدید برنامه")
+                .setMimeType("application/vnd.android.package-archive")
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setAllowedOverMetered(true)
+                .setAllowedOverRoaming(false)
+                .setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, "elambar-update-${info.optInt("versionCode")}.apk")
+            (getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
+        }.getOrDefault(-1L)
+    }
+
+    private fun installDownloadedUpdate(downloadId: Long) {
+        val manager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val query = DownloadManager.Query().setFilterById(downloadId)
+        val cursor = manager.query(query) ?: return
+        cursor.use {
+            if (!it.moveToFirst()) return
+            val statusIndex = it.getColumnIndex(DownloadManager.COLUMN_STATUS)
+            if (statusIndex < 0 || it.getInt(statusIndex) != DownloadManager.STATUS_SUCCESSFUL) return
+        }
+        val apkUri = manager.getUriForDownloadedFile(downloadId) ?: return
+        if (Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()) {
+            val settingsIntent = Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))
+            startActivity(settingsIntent)
+            return
+        }
+        val installIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(apkUri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        startActivity(installIntent)
+        updateDownloadId = -1L
+    }
+}
+
+private fun fetchAppUpdateManifest(): JSONObject? {
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL("https://sckcxtceybwtiecyxqsy.supabase.co/functions/v1/app-update").openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 12000
+            readTimeout = 15000
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Accept", "application/json")
+        }
+        if (connection.responseCode !in 200..299) null
+        else JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+    } catch (_: Exception) {
+        null
+    } finally {
+        connection?.disconnect()
     }
 }
 
