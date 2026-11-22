@@ -2048,7 +2048,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     }
                                 }
                                 }
-                            } else if (role == UserRole.DRIVER) {
+                            } else {
                                 Text("سالن عمومی بار", style = MaterialTheme.typography.titleLarge)
                                 Text("همه بارهای منتشرشده در این سالن نمایش داده می‌شوند؛ حتی اگر خودرو یا مقصد با مشخصات شما یکسان نباشد.", style = MaterialTheme.typography.bodySmall)
                                 OutlinedButton(enabled = !publicHallLoading, onClick = {
