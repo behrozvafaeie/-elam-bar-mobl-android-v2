@@ -529,7 +529,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var companyLoadPanelExpanded by remember { mutableStateOf(true) }
     var companyApprovalRefreshing by remember { mutableStateOf(false) }
     var companyHallExpanded by remember { mutableStateOf(false) }
-    var companyPanelV2Selected by remember { mutableStateOf(false) }
+    var companyPanelV2Selected by remember { mutableStateOf(true) }
     var showPublicHall by remember { mutableStateOf(false) }
     var adminLoadPanelExpanded by remember { mutableStateOf(false) }
     val loadDrafts = remember { androidx.compose.runtime.mutableStateListOf<LoadDraft>() }
