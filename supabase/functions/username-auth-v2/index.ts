@@ -58,7 +58,7 @@ Deno.serve(async(req:Request)=>{
    if(accountType==="company"){
     if(companyName.length<2||companyName.length>160||activityCity.length<2||activityCity.length>100)return out({error:"نام شرکت و شهر محل فعالیت را کامل وارد کنید."},400,origin);
    }else{
-    const vehicles=["وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون بزرگ","خاور مبلی پتو دار","کامیون دربستی کار","سایر خودروهای مبلی"];
+    const vehicles=["وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون دربستی کار","خاور مبلی پتو‌دار"];
     if(!/^[0-9]{10}$/.test(normalizedNationalId))return out({error:"کد ملی باید ۱۰ رقم باشد."},400,origin);
     if(smartCard.length<3||smartCard.length>40)return out({error:"شماره کارت هوشمند معتبر نیست."},400,origin);
     if(!vehicles.includes(vehicleType))return out({error:"نوع خودرو را از فهرست انتخاب کنید."},400,origin);
@@ -142,7 +142,7 @@ Deno.serve(async(req:Request)=>{
     }
     return out({message:"کد بازیابی به شماره موبایل ثبت‌شده ارسال شد؛ پنج دقیقه اعتبار دارد."},200,origin);
    }
-   const otp=String(b.code??"").replace(/\\D/g,"");
+   const otp=String(b.code??"").replace(/[۰-۹]/g,(c)=>String("۰۱۲۳۴۵۶۷۸۹".indexOf(c))).replace(/[٠-٩]/g,(c)=>String("٠١٢٣٤٥٦٧٨٩".indexOf(c))).replace(/\\D/g,"");
    const newPassword=String(b.new_password??"");
    if(!/^\\d{6}$/.test(otp))return out({error:"کد پیامکی باید ۶ رقم باشد."},400,origin);
    if(newPassword.length<8||newPassword.length>72)return out({error:"رمز جدید باید حداقل ۸ نویسه باشد."},400,origin);
