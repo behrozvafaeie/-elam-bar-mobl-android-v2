@@ -188,7 +188,7 @@ jobs:
           github-token: ${{ github.token }}
           path: previous
 
-      - name: Install and launch APK on Android 13 emulator
+      - name: Install and launch APK on Android ${{ matrix.api-level }} emulator
         timeout-minutes: 35
         env:
           ANDROID_I_WANT_MY_TCG: "yes"
@@ -199,7 +199,7 @@ jobs:
           arch: x86_64
           profile: pixel_2
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -memory 4096 -cores 2 -no-snapshot -no-metrics
-          emulator-boot-timeout: 1800
+          emulator-boot-timeout: 900
           disable-animations: false
           script: bash .github/scripts/android-emulator-smoke-test.sh
 
