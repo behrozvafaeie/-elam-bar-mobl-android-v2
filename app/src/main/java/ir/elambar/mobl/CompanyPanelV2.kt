@@ -158,14 +158,14 @@ internal fun CompanyPanelV2(
                 Button(
                     enabled = !publishing,
                     onClick = {
-                        val destinations = destinationText
+                        val enteredDestinations = destinationText
                             .split(',', '،', ';', '\n')
                             .map { it.trim() }
-                            .filter { it.length >= 2 && it.length <= 100 }
-                            .distinctBy { it.lowercase() }
+                            .filter { it.isNotEmpty() }
+                        val destinations = enteredDestinations.distinctBy { it.lowercase() }
                         val amount = freightAmount.trim().toLongOrNull()
-                        if (destinations.isEmpty()) {
-                            actionMessage = "حداقل یک مقصد معتبر وارد کنید."
+                        if (destinations.isEmpty() || destinations.any { it.length < 2 || it.length > 100 }) {
+                            actionMessage = "همه مقصدها باید معتبر و بین ۲ تا ۱۰۰ نویسه باشند؛ مقصد نامعتبر را اصلاح کنید."
                         } else if (priceMode == "fixed" && (amount == null || amount <= 0)) {
                             actionMessage = "مبلغ کرایه را به‌درستی وارد کنید یا گزینه توافقی را انتخاب کنید."
                         } else {
