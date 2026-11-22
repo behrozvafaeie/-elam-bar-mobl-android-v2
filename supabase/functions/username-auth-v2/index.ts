@@ -133,11 +133,11 @@ Deno.serve(async(req:Request)=>{
      let smsJson:any={};try{smsJson=JSON.parse(smsText);}catch{}
      const smsStatus=Number(smsJson?.return?.status??0);
      if(!smsResponse.ok||smsStatus<200||smsStatus>=300){
-      await admin.from("account_password_recovery_otps").delete().eq("id",otpRow.id);
+      await admin.from("account_password_recovery_otps").update({consumed_at:new Date().toISOString()}).eq("id",otpRow.id);
       return out({error:"ارسال پیامک ناموفق بود؛ وضعیت خط پیامک را بررسی کنید."},502,origin);
      }
     }catch(_){
-     await admin.from("account_password_recovery_otps").delete().eq("id",otpRow.id);
+     await admin.from("account_password_recovery_otps").update({consumed_at:new Date().toISOString()}).eq("id",otpRow.id);
      return out({error:"ارتباط با سرویس پیامک برقرار نشد؛ دوباره تلاش کنید."},502,origin);
     }
     return out({message:"کد بازیابی به شماره موبایل ثبت‌شده ارسال شد؛ پنج دقیقه اعتبار دارد."},200,origin);
