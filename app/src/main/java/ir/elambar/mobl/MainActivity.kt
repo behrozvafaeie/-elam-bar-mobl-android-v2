@@ -1078,7 +1078,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         modifier = Modifier.size(88.dp)
                     ) {
                         Image(
-                            painter = painterResource(id = R.drawable.ic_app_logo),
+                            painter = painterResource(id = R.drawable.elambar_logo),
                             contentDescription = "نشان اعلام بار مبل",
                             modifier = Modifier.fillMaxSize().padding(8.dp)
                         )
@@ -1920,7 +1920,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                                 Image(
-                                                    painter = painterResource(id = R.drawable.ic_app_logo),
+                                                    painter = painterResource(id = R.drawable.elambar_logo),
                                                     contentDescription = "نشان کامیون اعلام بار مبل",
                                                     modifier = Modifier.size(48.dp)
                                                 )
