@@ -134,6 +134,9 @@ class MainActivity : ComponentActivity() {
                                 if (id > 0L) {
                                     updateDownloadId = id
                                     updateInfo = null
+                                    android.widget.Toast.makeText(this, "دریافت نسخه جدید آغاز شد؛ پس از دانلود، نصب با تأیید اندروید انجام می‌شود.", android.widget.Toast.LENGTH_LONG).show()
+                                } else {
+                                    android.widget.Toast.makeText(this, "شروع دریافت به‌روزرسانی ممکن نشد؛ دوباره تلاش کنید.", android.widget.Toast.LENGTH_LONG).show()
                                 }
                             }) { Text("دریافت و نصب") }
                         },
@@ -227,6 +230,9 @@ class MainActivity : ComponentActivity() {
             val status = it.getInt(statusIndex)
             if (status == DownloadManager.STATUS_FAILED) {
                 updateDownloadId = -1L
+                getSharedPreferences("elambar_update", MODE_PRIVATE).edit()
+                    .remove("expected_archive_sha256").remove("expected_apk_sha256")
+                    .putBoolean("install_permission_pending", false).apply()
                 android.widget.Toast.makeText(this, "دریافت به‌روزرسانی ناموفق بود؛ اینترنت را بررسی کنید.", android.widget.Toast.LENGTH_LONG).show()
                 return
             }
@@ -307,6 +313,14 @@ class MainActivity : ComponentActivity() {
         }.getOrDefault("")
         if (expectedApkHash.isBlank() || actualApkHash != expectedApkHash) {
             rejectUpdate("اعتبار فایل نصب تأیید نشد؛ بسته به‌روزرسانی حذف شد.")
+            return
+        }
+
+        val packageInfo = runCatching {
+            packageManager.getPackageArchiveInfo(extractedApk.absolutePath, 0)
+        }.getOrNull()
+        if (packageInfo == null || packageInfo.packageName != packageName || packageInfo.versionCode <= BuildConfig.VERSION_CODE) {
+            rejectUpdate("مشخصات فایل نصب با برنامه فعلی سازگار نیست؛ به‌روزرسانی لغو شد.")
             return
         }
 
