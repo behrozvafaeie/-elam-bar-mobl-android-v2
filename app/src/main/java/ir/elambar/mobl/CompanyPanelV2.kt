@@ -181,7 +181,7 @@ internal fun CompanyPanelV2(
                                 )
                             }
                             publishing = true
-                            actionMessage = "در حال ثبت \${destinations.size} بار..."
+                            actionMessage = "در حال ثبت ${destinations.size} بار..."
                             scope.launch {
                                 val result = withContext(Dispatchers.IO) { publishLoadBatch(accessToken, drafts) }
                                 publishing = false
