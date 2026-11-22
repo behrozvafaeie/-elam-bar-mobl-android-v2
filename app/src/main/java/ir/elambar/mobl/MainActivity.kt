@@ -2059,7 +2059,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                     modifier = Modifier.fillMaxWidth()
                                                 ) { Text("تماس با شرکت") }
                                             } else {
-                                                Text("شماره تماس شرکت در این آگهی ثبت نشده است.", style = MaterialTheme.typography.bodySmall)
+                                                Text("پس از دریافت بار، امکان تماس با شرکت در بخش بارهای گرفته‌شده فعال می‌شود.", style = MaterialTheme.typography.bodySmall)
                                             }
                                             if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                                             Button(enabled = acceptingLoadId.isBlank(), onClick = {
@@ -2423,7 +2423,7 @@ private fun PublicLoadHallScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("تماس با شرکت") }
                     } else {
-                        Text("شماره تماس این آگهی در پرونده شرکت ثبت نشده است.", style = MaterialTheme.typography.bodySmall)
+                        Text("پس از دریافت بار، امکان تماس با شرکت در بخش بارهای گرفته‌شده فعال می‌شود.", style = MaterialTheme.typography.bodySmall)
                     }
                     if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                     if (canAccept) {
