@@ -1181,7 +1181,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                     Text("اعلام بار به نام مدیریت سامانه", style = MaterialTheme.typography.titleMedium)
                                     Text("ثبت این بار با مجوز مدیر ارشد و بدون انتساب به شرکت انجام می‌شود.", style = MaterialTheme.typography.bodySmall)
                                     LoadSectionDropdown("مقصد از تهران", loadDestinationExpanded, { loadDestinationExpanded = !loadDestinationExpanded }) {
-                                        OutlinedTextField(loadDestination, { loadDestination = it.take(1200) }, label = { Text("مقصد یا مقصدها (با ویرگول جدا کنید)") }, supportingText = { Text("مثال: اصفهان، شیراز، مشهد") }, singleLine = false, minLines = 1, maxLines = 3, modifier = Modifier.fillMaxWidth())
+                                        OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("نام مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                     }
                                     LoadChoiceDropdown(
                                         label = "نوع بار",
@@ -1586,7 +1586,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         }
                                     }
                                     LoadSectionDropdown("مقصد", loadDestinationExpanded, { loadDestinationExpanded = !loadDestinationExpanded }) {
-                                        OutlinedTextField(loadDestination, { loadDestination = it }, label = { Text("نام مقصد") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                        OutlinedTextField(loadDestination, { loadDestination = it.take(1200) }, label = { Text("مقصد یا مقصدها (با ویرگول جدا کنید)") }, supportingText = { Text("مثال: اصفهان، شیراز، مشهد") }, singleLine = false, minLines = 1, maxLines = 3, modifier = Modifier.fillMaxWidth())
                                     }
                                     LoadChoiceDropdown(
                                         label = "نوع بار",
