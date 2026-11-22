@@ -74,6 +74,8 @@ private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_rcJe7tZqCkHPgnAXZff
 
 class MainActivity : ComponentActivity() {
     private var updateInfo by mutableStateOf<JSONObject?>(null)
+    private var updateCheckMessage by mutableStateOf("")
+    private var updateCheckInProgress by mutableStateOf(false)
     private var updateDownloadId: Long
         get() = getSharedPreferences("elambar_update", MODE_PRIVATE).getLong("download_id", -1L)
         set(value) { getSharedPreferences("elambar_update", MODE_PRIVATE).edit().putLong("download_id", value).apply() }
@@ -109,7 +111,7 @@ class MainActivity : ComponentActivity() {
                 if (androidx.compose.foundation.isSystemInDarkTheme()) schemes[3] else schemes[0]
             } else schemes[palette]
             MaterialTheme(colorScheme = activeScheme) {
-                ElaanBarApp(palette) {
+                ElaanBarApp(palette, updateCheckMessage, updateCheckInProgress, onCheckForUpdates = { checkForAppUpdates() }) {
                     palette = (palette + 1) % 5
                     getSharedPreferences("elambar_ui", MODE_PRIVATE).edit().putInt("palette", palette).apply()
                 }
@@ -140,10 +142,23 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        checkForAppUpdates()
+    }
+
+    private fun checkForAppUpdates() {
+        if (updateCheckInProgress) return
+        updateCheckInProgress = true
+        updateCheckMessage = "در حال بررسی نسخه جدید..."
         lifecycleScope.launch {
             val latest = withContext(Dispatchers.IO) { fetchAppUpdateManifest() }
-            if (latest != null && latest.optInt("versionCode", 0) > BuildConfig.VERSION_CODE) {
+            updateCheckInProgress = false
+            if (latest == null) {
+                updateCheckMessage = "بررسی نسخه جدید ممکن نشد؛ اتصال اینترنت را بررسی کنید."
+            } else if (latest.optInt("versionCode", 0) > BuildConfig.VERSION_CODE) {
+                updateCheckMessage = "نسخه جدید ${latest.optString("versionName", "")} در دسترس است."
                 updateInfo = latest
+            } else {
+                updateCheckMessage = "برنامه شما به‌روز است."
             }
         }
     }
@@ -450,7 +465,13 @@ private data class AcceptedLoadContact(val id: String, val destination: String, 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
+private fun ElaanBarApp(
+    palette: Int,
+    updateCheckMessage: String,
+    updateCheckInProgress: Boolean,
+    onCheckForUpdates: () -> Unit,
+    onNextPalette: () -> Unit
+) {
     var role by remember { mutableStateOf(UserRole.DRIVER) }
     var register by remember { mutableStateOf(false) }
     var firstName by remember { mutableStateOf("") }
@@ -1123,6 +1144,11 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Text("تنظیمات برنامه", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                            Text("نسخه نصب‌شده: ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall)
+                            OutlinedButton(onClick = onCheckForUpdates, enabled = !updateCheckInProgress, modifier = Modifier.fillMaxWidth()) {
+                                Text(if (updateCheckInProgress) "در حال بررسی..." else "بررسی به‌روزرسانی برنامه")
+                            }
+                            if (updateCheckMessage.isNotBlank()) Text(updateCheckMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                             Text("پوسته و رنگ‌بندی", style = MaterialTheme.typography.titleMedium)
                             TextButton(onClick = onNextPalette, modifier = Modifier.fillMaxWidth()) {
                                 Text("پوسته فعلی: " + listOf("روشن", "سبز", "آبی", "تیره", "خودکار")[palette] + "  |  تغییر پوسته")
