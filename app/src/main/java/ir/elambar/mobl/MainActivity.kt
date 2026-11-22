@@ -169,7 +169,8 @@ class MainActivity : ComponentActivity() {
 
     private fun enqueueAppUpdate(info: JSONObject): Long {
         val apkUrl = info.optString("apkUrl")
-        if (!apkUrl.startsWith("https://")) return -1L
+        val expectedHash = info.optString("sha256").lowercase()
+        if (!apkUrl.startsWith("https://") || !expectedHash.matches(Regex("^[a-f0-9]{64}$"))) return -1L
         return runCatching {
             val request = DownloadManager.Request(Uri.parse(apkUrl))
                 .setTitle("به‌روزرسانی اعلام بار مبل")
@@ -179,7 +180,9 @@ class MainActivity : ComponentActivity() {
                 .setAllowedOverMetered(true)
                 .setAllowedOverRoaming(false)
                 .setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, "elambar-update-${info.optInt("versionCode")}.apk")
-            (getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
+            val id = (getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
+            getSharedPreferences("elambar_update", MODE_PRIVATE).edit().putString("expected_sha256", expectedHash).apply()
+            id
         }.getOrDefault(-1L)
     }
 
@@ -200,6 +203,26 @@ class MainActivity : ComponentActivity() {
             if (status != DownloadManager.STATUS_SUCCESSFUL) return
         }
         val apkUri = manager.getUriForDownloadedFile(downloadId) ?: return
+        val expectedHash = getSharedPreferences("elambar_update", MODE_PRIVATE).getString("expected_sha256", "").orEmpty()
+        val actualHash = runCatching {
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+            manager.openDownloadedFile(downloadId).use { input ->
+                val buffer = ByteArray(8192)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    digest.update(buffer, 0, count)
+                }
+            }
+            digest.digest().joinToString("") { "%02x".format(it) }
+        }.getOrDefault("")
+        if (expectedHash.isBlank() || actualHash != expectedHash) {
+            manager.remove(downloadId)
+            updateDownloadId = -1L
+            getSharedPreferences("elambar_update", MODE_PRIVATE).edit().remove("expected_sha256").putBoolean("install_permission_pending", false).apply()
+            android.widget.Toast.makeText(this, "اعتبار فایل به‌روزرسانی تأیید نشد؛ فایل حذف شد.", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
         if (Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()) {
             getSharedPreferences("elambar_update", MODE_PRIVATE).edit().putBoolean("install_permission_pending", true).apply()
             val settingsIntent = Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))
@@ -213,6 +236,7 @@ class MainActivity : ComponentActivity() {
         }
         startActivity(installIntent)
         updateDownloadId = -1L
+        getSharedPreferences("elambar_update", MODE_PRIVATE).edit().remove("expected_sha256").apply()
     }
 }
 
