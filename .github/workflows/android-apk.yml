@@ -162,7 +162,7 @@ jobs:
           ARCHIVE_SHA256=$(sha256sum "$ARCHIVE" | awk '{print $1}')
           APK_SHA256=$(sha256sum "$APK" | awk '{print $1}')
           OIDC_TOKEN=$(get_oidc_token)
-          FINALIZE_JSON=$(jq -n --arg archiveSha256 "$ARCHIVE_SHA256" --arg apkSha256 "$APK_SHA256" '{action:"finalize",versionCode:35,versionName:"1.5.9",archiveSha256:$archiveSha256,apkSha256:$apkSha256}')
+          FINALIZE_JSON=$(jq -n --arg archiveSha256 "$ARCHIVE_SHA256" --arg apkSha256 "$APK_SHA256" '{action:"finalize",versionCode:36,versionName:"1.6.0",archiveSha256:$archiveSha256,apkSha256:$apkSha256}')
           curl -fsS -X POST "https://sckcxtceybwtiecyxqsy.supabase.co/functions/v1/app-release-upload" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
