@@ -2514,18 +2514,32 @@ private fun uploadProfilePhoto(context: Context, uri: Uri, token: String, role: 
         if (subject.isBlank()) return "شناسه حساب از نشست دریافت نشد."
         val mime = context.contentResolver.getType(uri) ?: return "نوع تصویر قابل تشخیص نیست."
         if (mime !in listOf("image/jpeg", "image/png", "image/webp")) return "فقط تصویر JPG، PNG یا WEBP مجاز است."
-        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return "خواندن تصویر انجام نشد."
-        if (bytes.isEmpty()) return "فایل تصویر خالی است."
+        val fileLength = context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
+        if (fileLength == 0L) return "فایل تصویر خالی است."
         val ext = when (mime) { "image/png" -> "png"; "image/webp" -> "webp"; else -> "jpg" }
         val path = subject + "/profile." + ext
         upload = (URL(SUPABASE_URL + "/storage/v1/object/profile-photos/" + path).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"; connectTimeout = 20000; readTimeout = 30000; doOutput = true
+            requestMethod = "POST"; connectTimeout = 20000; readTimeout = 60000; doOutput = true
             setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
             setRequestProperty("Authorization", "Bearer " + token)
             setRequestProperty("Content-Type", mime)
             setRequestProperty("x-upsert", "true")
+            if (fileLength > 0L) setFixedLengthStreamingMode(fileLength) else setChunkedStreamingMode(64 * 1024)
         }
-        upload.outputStream.use { it.write(bytes) }
+        var uploadedBytes = 0L
+        val photoInput = context.contentResolver.openInputStream(uri) ?: return "خواندن تصویر انجام نشد."
+        upload.outputStream.use { output ->
+            photoInput.use { input ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    output.write(buffer, 0, count)
+                    uploadedBytes += count
+                }
+            }
+        }
+        if (uploadedBytes == 0L) return "فایل تصویر خالی است."
         val uploadCode = upload.responseCode
         if (uploadCode !in 200..299) return "بارگذاری تصویر مجاز نشد (کد " + uploadCode + ")."
         update = (URL(SUPABASE_URL + "/rest/v1/rpc/set_my_profile_photo_path").openConnection() as HttpURLConnection).apply {
