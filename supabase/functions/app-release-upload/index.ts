@@ -20,7 +20,7 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   try {
     const authorization = req.headers.get("authorization") ?? "";
-    const token = authorization.replace(/^Bearer\\s+/i, "").trim();
+    const token = authorization.replace(/^Bearer\s+/i, "").trim();
     if (!token) return json({ error: "GitHub Actions identity required" }, 401);
 
     const { payload } = await jwtVerify(token, githubJwks, {
@@ -38,7 +38,7 @@ Deno.serve(async (req: Request) => {
     const url = new URL(req.url);
     const versionCode = Number(url.searchParams.get("versionCode") ?? 0);
     const versionName = String(url.searchParams.get("versionName") ?? "");
-    if (!Number.isSafeInteger(versionCode) || versionCode < 1 || !/^\\d+\\.\\d+\\.\\d+$/.test(versionName)) {
+    if (!Number.isSafeInteger(versionCode) || versionCode < 1 || !/^\d+\\.\d+\\.\d+$/.test(versionName)) {
       return json({ error: "Invalid app version" }, 400);
     }
     if (!req.headers.get("content-type")?.toLowerCase().includes("application/vnd.android.package-archive")) {
