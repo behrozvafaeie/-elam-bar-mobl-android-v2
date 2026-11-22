@@ -58,7 +58,7 @@ Deno.serve(async(req:Request)=>{
    if(accountType==="company"){
     if(companyName.length<2||companyName.length>160||activityCity.length<2||activityCity.length>100)return out({error:"نام شرکت و شهر محل فعالیت را کامل وارد کنید."},400,origin);
    }else{
-    const vehicles=["وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون دربستی کار","خاور مبلی پتو‌دار"];
+    const vehicles=["وانت مبلی","کامیونت مبلی","کامیون ۶ متری","کامیون دربستی کار","خاور مبلی پتو دار"];
     if(!/^[0-9]{10}$/.test(normalizedNationalId))return out({error:"کد ملی باید ۱۰ رقم باشد."},400,origin);
     if(smartCard.length<3||smartCard.length>40)return out({error:"شماره کارت هوشمند معتبر نیست."},400,origin);
     if(!vehicles.includes(vehicleType))return out({error:"نوع خودرو را از فهرست انتخاب کنید."},400,origin);
