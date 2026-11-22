@@ -104,7 +104,7 @@ internal fun CompanyPanelV2(
                 Text("فرم اعلام بار", style = MaterialTheme.typography.headlineSmall, color = CompanyPanelBlue)
                 OutlinedTextField(
                     value = destinationText,
-                    onValueChange = { destinationText = it.take(1200) },
+                    onValueChange = { destinationText = it },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("مقصد یا مقصدها") },
                     supportingText = { Text("چند مقصد را با ویرگول جدا کنید؛ برای هر مقصد یک بار ثبت می‌شود.") },
