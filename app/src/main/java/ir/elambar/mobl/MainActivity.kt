@@ -152,10 +152,18 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             val latest = withContext(Dispatchers.IO) { fetchAppUpdateManifest() }
             updateCheckInProgress = false
-            if (latest == null) {
-                updateCheckMessage = "بررسی نسخه جدید ممکن نشد؛ اتصال اینترنت را بررسی کنید."
-            } else if (latest.optInt("versionCode", 0) > BuildConfig.VERSION_CODE) {
-                updateCheckMessage = "نسخه جدید ${latest.optString("versionName", "")} در دسترس است."
+            val latestCode = latest?.optInt("versionCode", 0) ?: 0
+            val latestApkUrl = latest?.optString("apkUrl").orEmpty()
+            val archiveHash = latest?.optString("archiveSha256").orEmpty()
+            val apkHash = latest?.optString("apkSha256").orEmpty()
+            val validManifest = latestCode > 0 &&
+                latestApkUrl.startsWith("https://") &&
+                archiveHash.matches(Regex("^[a-fA-F0-9]{64}$")) &&
+                apkHash.matches(Regex("^[a-fA-F0-9]{64}$"))
+            if (!validManifest) {
+                updateCheckMessage = "اطلاعات نسخه از سرور دریافت نشد؛ بعداً دوباره تلاش کنید."
+            } else if (latestCode > BuildConfig.VERSION_CODE) {
+                updateCheckMessage = "نسخه جدید ${latest?.optString("versionName", "")} در دسترس است."
                 updateInfo = latest
             } else {
                 updateCheckMessage = "برنامه شما به‌روز است."
