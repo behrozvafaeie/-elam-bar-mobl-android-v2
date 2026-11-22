@@ -92,7 +92,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val downloadFilter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(updateDownloadReceiver, downloadFilter, Context.RECEIVER_NOT_EXPORTED)
-        else { @Suppress("DEPRECATION") registerReceiver(updateDownloadReceiver, downloadFilter) }
+        else {
+            @Suppress("DEPRECATION")
+            registerReceiver(updateDownloadReceiver, downloadFilter)
+        }
         updateReceiverRegistered = true
         setContent {
             var palette by remember { mutableIntStateOf(getSharedPreferences("elambar_ui", MODE_PRIVATE).getInt("palette", 0).coerceIn(0, 4)) }
