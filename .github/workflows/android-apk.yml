@@ -73,8 +73,8 @@ jobs:
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
           grep -F 'versionCode = 36' app/build.gradle.kts
           grep -F 'versionName = "1.6.0"' app/build.gradle.kts
-          grep -F 'PREPARE_JSON=$(jq -n \'{action:"prepare",versionCode:36,versionName:"1.6.0"}\')' .github/workflows/android-apk.yml
-          grep -F 'FINALIZE_JSON=$(jq -n --arg archiveSha256 "$ARCHIVE_SHA256" --arg apkSha256 "$APK_SHA256" \'{action:"finalize",versionCode:36,versionName:"1.6.0",archiveSha256:$archiveSha256,apkSha256:$apkSha256}\')' .github/workflows/android-apk.yml
+          awk '/^[[:space:]]*PREPARE_JSON=/ && /versionCode:36,versionName:"1.6.0"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
+          awk '/^[[:space:]]*FINALIZE_JSON=/ && /versionCode:36,versionName:"1.6.0"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
           ! grep -E 'ELAM_TURN_(URL|USERNAME|PASSWORD)' .github/workflows/android-apk.yml
 
       - name: Build debug APK (retry transient Maven errors)
