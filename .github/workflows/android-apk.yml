@@ -132,13 +132,33 @@ jobs:
         run: |
           set -euo pipefail
           APK=app/build/outputs/apk/debug/app-debug.apk
-          TOKEN_JSON=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=elambar-release-upload")
-          OIDC_TOKEN=$(echo "$TOKEN_JSON" | jq -r '.value')
-          test -n "$OIDC_TOKEN"
-          curl -fsS -X POST "https://sckcxtceybwtiecyxqsy.supabase.co/functions/v1/app-release-upload?versionCode=35&versionName=1.5.9" \
+          get_oidc_token() {
+            local token_json
+            token_json=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=elambar-release-upload")
+            echo "$token_json" | jq -r '.value'
+          }
+
+          OIDC_TOKEN=$(get_oidc_token)
+          PREPARE_JSON=$(jq -n '{action:"prepare",versionCode:35,versionName:"1.5.9"}')
+          PREPARE_RESULT=$(curl -fsS -X POST "https://sckcxtceybwtiecyxqsy.supabase.co/functions/v1/app-release-upload" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$PREPARE_JSON")
+          SIGNED_URL=$(echo "$PREPARE_RESULT" | jq -r '.signedUrl')
+          test -n "$SIGNED_URL" && test "$SIGNED_URL" != "null"
+
+          curl -fsS -X PUT "$SIGNED_URL" \
             -H "Content-Type: application/vnd.android.package-archive" \
+            -H "x-upsert: true" \
             --data-binary "@$APK"
+
+          APK_SHA256=$(sha256sum "$APK" | awk '{print $1}')
+          OIDC_TOKEN=$(get_oidc_token)
+          FINALIZE_JSON=$(jq -n --arg sha256 "$APK_SHA256" '{action:"finalize",versionCode:35,versionName:"1.5.9",sha256:$sha256}')
+          curl -fsS -X POST "https://sckcxtceybwtiecyxqsy.supabase.co/functions/v1/app-release-upload" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$FINALIZE_JSON"
 
   emulator-smoke-test:
     name: Optional emulator smoke test
