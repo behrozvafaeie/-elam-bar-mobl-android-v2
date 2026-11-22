@@ -390,6 +390,13 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var editProfileDestinations by remember { mutableStateOf("") }
     var editProfileNewPassword by remember { mutableStateOf("") }
     var editProfileConfirmPassword by remember { mutableStateOf("") }
+    var showPasswordRecovery by remember { mutableStateOf(false) }
+    var recoveryCodeSent by remember { mutableStateOf(false) }
+    var recoveryCode by remember { mutableStateOf("") }
+    var recoveryNewPassword by remember { mutableStateOf("") }
+    var recoveryConfirmPassword by remember { mutableStateOf("") }
+    var recoveryBusy by remember { mutableStateOf(false) }
+    var recoveryMessage by remember { mutableStateOf("") }
     var editProfileBirthDate by remember { mutableStateOf("") }
     var showProfile by remember { mutableStateOf(false) }
     var showCommunication by remember { mutableStateOf(false) }
@@ -610,9 +617,12 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
             publicHallMessage = result.first
             publicHallLoads = result.second
             publicHallLoading = false
-        } else if (!userLoggedIn || role != UserRole.DRIVER) {
+        } else {
             publicHallLoads = emptyList()
-            publicHallMessage = "برای مشاهده سالن عمومی وارد حساب راننده شوید."
+            publicHallMessage = if (userLoggedIn && role == UserRole.DRIVER && userStatus != "approved")
+                "دسترسی سالن پس از تأیید مدیر فعال می‌شود."
+            else "برای مشاهده سالن عمومی وارد حساب راننده شوید."
+            if (role == UserRole.DRIVER && userStatus != "approved") showPublicHall = false
         }
     }
     LaunchedEffect(Unit) {
@@ -752,7 +762,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
-                    if (userLoggedIn || adminLoggedIn) {
+                    if ((userLoggedIn && role == UserRole.DRIVER && userStatus == "approved") || adminLoggedIn) {
                         NavigationDrawerItem(
                             label = { Text("سالن عمومی بار") },
                             selected = showPublicHall,
@@ -968,7 +978,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 }
                 Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
                 Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
-                if (showPublicHall && (userLoggedIn || adminLoggedIn)) {
+                if (showPublicHall && (adminLoggedIn || (userLoggedIn && role == UserRole.DRIVER && userStatus == "approved"))) {
                     PublicLoadHallScreen(
                         loads = publicHallLoads,
                         message = publicHallMessage,
@@ -1116,6 +1126,78 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(if (editableProfileSaving) "در حال ذخیره..." else "ذخیره تغییرات") }
+                    }
+                    OutlinedButton(
+                        enabled = !recoveryBusy,
+                        onClick = {
+                            showPasswordRecovery = true
+                            recoveryCodeSent = false
+                            recoveryCode = ""
+                            recoveryNewPassword = ""
+                            recoveryConfirmPassword = ""
+                            recoveryMessage = ""
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("بازیابی رمز عبور با پیامک") }
+                    if (showPasswordRecovery) {
+                        AlertDialog(
+                            onDismissRequest = { if (!recoveryBusy) showPasswordRecovery = false },
+                            title = { Text("بازیابی رمز عبور") },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("کد بازیابی به شماره موبایل ثبت‌شده در پروفایل ارسال می‌شود.")
+                                    if (recoveryCodeSent) {
+                                        OutlinedTextField(
+                                            value = recoveryCode,
+                                            onValueChange = { recoveryCode = it.filter(Char::isDigit).take(6) },
+                                            label = { Text("کد ۶ رقمی پیامک‌شده") },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            singleLine = true
+                                        )
+                                        OutlinedTextField(
+                                            value = recoveryNewPassword,
+                                            onValueChange = { recoveryNewPassword = it.take(72) },
+                                            label = { Text("رمز جدید؛ حداقل ۸ نویسه") },
+                                            visualTransformation = PasswordVisualTransformation(),
+                                            singleLine = true
+                                        )
+                                        OutlinedTextField(
+                                            value = recoveryConfirmPassword,
+                                            onValueChange = { recoveryConfirmPassword = it.take(72) },
+                                            label = { Text("تکرار رمز جدید") },
+                                            visualTransformation = PasswordVisualTransformation(),
+                                            singleLine = true
+                                        )
+                                    }
+                                    if (recoveryMessage.isNotBlank()) Text(recoveryMessage, color = MaterialTheme.colorScheme.secondary)
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(
+                                    enabled = !recoveryBusy && (!recoveryCodeSent || (recoveryCode.length == 6 && recoveryNewPassword.length >= 8 && recoveryNewPassword == recoveryConfirmPassword)),
+                                    onClick = {
+                                        recoveryBusy = true
+                                        scope.launch {
+                                            val result = withContext(Dispatchers.IO) {
+                                                if (!recoveryCodeSent) requestPasswordRecoveryCode(userAccessToken)
+                                                else confirmPasswordRecovery(userAccessToken, recoveryCode, recoveryNewPassword)
+                                            }
+                                            recoveryMessage = result
+                                            recoveryBusy = false
+                                            if (!recoveryCodeSent && result.contains("ارسال شد")) recoveryCodeSent = true
+                                            else if (recoveryCodeSent && result.contains("موفقیت")) {
+                                                editProfileNewPassword = ""
+                                                editProfileConfirmPassword = ""
+                                                showPasswordRecovery = false
+                                            }
+                                        }
+                                    }
+                                ) { Text(if (recoveryBusy) "لطفاً صبر کنید..." else if (recoveryCodeSent) "تأیید کد و تغییر رمز" else "ارسال کد بازیابی") }
+                            },
+                            dismissButton = {
+                                TextButton(enabled = !recoveryBusy, onClick = { showPasswordRecovery = false }) { Text("بستن") }
+                            }
+                        )
                     }
                     if (editableProfileMessage.isNotBlank()) Text(editableProfileMessage, color = MaterialTheme.colorScheme.secondary, textAlign = TextAlign.Center)
                     Text("وضعیت تأیید حساب، مدارک هویتی و سطح دسترسی فقط توسط مدیریت تغییر می‌کند.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
@@ -2998,6 +3080,42 @@ private fun updateEditableUserProfile(
         val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
         if (code in 200..299) JSONObject(response).optString("message", "تغییرات با موفقیت ذخیره شد.")
         else JSONObject(response).optString("error", "ذخیره تغییرات انجام نشد.")
+    } catch (_: Exception) {
+        "ارتباط با سامانه برقرار نشد؛ دوباره تلاش کنید."
+    } finally {
+        connection?.disconnect()
+    }
+}
+
+private fun requestPasswordRecoveryCode(token: String): String =
+    callPasswordRecovery("recovery_send", token, "", "")
+
+private fun confirmPasswordRecovery(token: String, code: String, newPassword: String): String =
+    callPasswordRecovery("recovery_confirm", token, code, newPassword)
+
+private fun callPasswordRecovery(action: String, token: String, code: String, newPassword: String): String {
+    var connection: HttpURLConnection? = null
+    return try {
+        val body = JSONObject()
+            .put("action", action)
+            .put("code", code)
+            .put("new_password", newPassword)
+        connection = (URL("$SUPABASE_URL/functions/v1/username-auth-v2").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 20000
+            doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $token")
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+        val status = connection.responseCode
+        val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+        val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (status in 200..299) JSONObject(response).optString("message", "عملیات با موفقیت انجام شد.")
+        else JSONObject(response).optString("error", "عملیات بازیابی رمز انجام نشد.")
     } catch (_: Exception) {
         "ارتباط با سامانه برقرار نشد؛ دوباره تلاش کنید."
     } finally {
