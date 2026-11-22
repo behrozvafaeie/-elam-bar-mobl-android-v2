@@ -146,7 +146,7 @@ jobs:
           }
 
           OIDC_TOKEN=$(get_oidc_token)
-          PREPARE_JSON=$(jq -n '{action:"prepare",versionCode:35,versionName:"1.5.9"}')
+          PREPARE_JSON=$(jq -n '{action:"prepare",versionCode:36,versionName:"1.6.0"}')
           PREPARE_RESULT=$(curl -fsS -X POST "https://sckcxtceybwtiecyxqsy.supabase.co/functions/v1/app-release-upload" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
