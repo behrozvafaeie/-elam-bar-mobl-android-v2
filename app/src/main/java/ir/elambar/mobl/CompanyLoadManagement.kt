@@ -145,7 +145,7 @@ private class CompanyLoadRepository(private val token: String) {
         if (item.status != "published" || item.assignedDriverId != null) return "این بار پس از انتخاب راننده قابل ویرایش نیست."
         if (draft.destination.trim().length !in 2..100 || draft.cargoType.trim().length !in 2..160) return "مقصد یا نوع بار باید کامل و در محدوده مجاز باشد."
         val allowedVehicles = setOf(
-            "وانت مبلی", "کامیونت مبلی", "کامیون ۶ متری", "کامیون دربستی کار", "خاور مبلی پتو‌دار",
+            "وانت مبلی", "کامیونت مبلی", "کامیون ۶ متری", "کامیون دربستی کار", "خاور مبلی پتو دار",
             "کامیونت روباری کار", "وانت", "کامیون مبلی", "کامیون بزرگ", "خاور مبلی پتو دار", "سایر خودروهای مبلی"
         )
         if (draft.vehicleType !in allowedVehicles) return "نوع خودرو را از فهرست معتبر سامانه انتخاب کنید."
@@ -273,7 +273,7 @@ internal fun CompanyLoadManagement(accessToken: String) {
                             singleLine = true
                         )
                         DropdownMenu(expanded = vehicleMenu, onDismissRequest = { vehicleMenu = false }) {
-                            listOf("وانت مبلی", "کامیونت مبلی", "کامیون ۶ متری", "کامیون دربستی کار", "خاور مبلی پتو‌دار").forEach { option ->
+                            listOf("وانت مبلی", "کامیونت مبلی", "کامیون ۶ متری", "کامیون دربستی کار", "خاور مبلی پتو دار").forEach { option ->
                                 DropdownMenuItem(text = { Text(option) }, onClick = {
                                     draft = draft.copy(vehicleType = option)
                                     vehicleMenu = false
