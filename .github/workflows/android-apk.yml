@@ -74,8 +74,22 @@ jobs:
           grep -F 'versionName = "1.5.9"' app/build.gradle.kts
           ! grep -E 'ELAM_TURN_(URL|USERNAME|PASSWORD)' .github/workflows/android-apk.yml
 
-      - name: Build debug APK
-        run: gradle --no-daemon assembleDebug
+      - name: Build debug APK (retry transient Maven errors)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            echo "Gradle build attempt ${attempt}/3"
+            if gradle --no-daemon --max-workers=2 assembleDebug; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "Build failed; waiting before retry in case Maven Central is rate-limiting requests."
+              sleep $((attempt * 20))
+            fi
+          done
+          echo "Gradle build failed after three attempts."
+          exit 1
 
       - name: Re-sign APK with the persistent CI key
         shell: bash
