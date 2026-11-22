@@ -168,20 +168,27 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun enqueueAppUpdate(info: JSONObject): Long {
-        val apkUrl = info.optString("apkUrl")
-        val expectedHash = info.optString("sha256").lowercase()
-        if (!apkUrl.startsWith("https://") || !expectedHash.matches(Regex("^[a-f0-9]{64}$"))) return -1L
+        val downloadUrl = info.optString("apkUrl")
+        val archiveHash = info.optString("archiveSha256").lowercase()
+        val apkHash = info.optString("apkSha256").lowercase()
+        if (!downloadUrl.startsWith("https://") ||
+            !archiveHash.matches(Regex("^[a-f0-9]{64}$")) ||
+            !apkHash.matches(Regex("^[a-f0-9]{64}$"))
+        ) return -1L
         return runCatching {
-            val request = DownloadManager.Request(Uri.parse(apkUrl))
+            val request = DownloadManager.Request(Uri.parse(downloadUrl))
                 .setTitle("به‌روزرسانی اعلام بار مبل")
                 .setDescription("در حال دریافت نسخه جدید برنامه")
-                .setMimeType("application/vnd.android.package-archive")
+                .setMimeType("application/zip")
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 .setAllowedOverMetered(true)
                 .setAllowedOverRoaming(false)
-                .setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, "elambar-update-${info.optInt("versionCode")}.apk")
+                .setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, "elambar-update-${info.optInt("versionCode")}.zip")
             val id = (getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
-            getSharedPreferences("elambar_update", MODE_PRIVATE).edit().putString("expected_sha256", expectedHash).apply()
+            getSharedPreferences("elambar_update", MODE_PRIVATE).edit()
+                .putString("expected_archive_sha256", archiveHash)
+                .putString("expected_apk_sha256", apkHash)
+                .apply()
             id
         }.getOrDefault(-1L)
     }
@@ -202,12 +209,70 @@ class MainActivity : ComponentActivity() {
             }
             if (status != DownloadManager.STATUS_SUCCESSFUL) return
         }
-        val apkUri = manager.getUriForDownloadedFile(downloadId) ?: return
-        val expectedHash = getSharedPreferences("elambar_update", MODE_PRIVATE).getString("expected_sha256", "").orEmpty()
-        val actualHash = runCatching {
+
+        val prefs = getSharedPreferences("elambar_update", MODE_PRIVATE)
+        val expectedArchiveHash = prefs.getString("expected_archive_sha256", "").orEmpty()
+        val expectedApkHash = prefs.getString("expected_apk_sha256", "").orEmpty()
+        fun sha256Of(read: (java.security.MessageDigest) -> Unit): String {
             val digest = java.security.MessageDigest.getInstance("SHA-256")
+            read(digest)
+            return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        }
+        fun rejectUpdate(message: String) {
+            manager.remove(downloadId)
+            updateDownloadId = -1L
+            prefs.edit().remove("expected_archive_sha256").remove("expected_apk_sha256")
+                .putBoolean("install_permission_pending", false).apply()
+            java.io.File(cacheDir, "updates/app-update.apk").delete()
+            android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show()
+        }
+
+        val actualArchiveHash = runCatching {
+            sha256Of { digest ->
+                manager.openDownloadedFile(downloadId).use { descriptor ->
+                    java.io.FileInputStream(descriptor.fileDescriptor).use { input ->
+                        val buffer = ByteArray(8192)
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            digest.update(buffer, 0, count)
+                        }
+                    }
+                }
+            }
+        }.getOrDefault("")
+        if (expectedArchiveHash.isBlank() || actualArchiveHash != expectedArchiveHash) {
+            rejectUpdate("اعتبار فایل فشرده به‌روزرسانی تأیید نشد؛ فایل حذف شد.")
+            return
+        }
+
+        val extractedApk = java.io.File(cacheDir, "updates/app-update.apk")
+        val extracted = runCatching {
+            extractedApk.parentFile?.mkdirs()
             manager.openDownloadedFile(downloadId).use { descriptor ->
-                java.io.FileInputStream(descriptor.fileDescriptor).use { input ->
+                java.util.zip.ZipInputStream(java.io.FileInputStream(descriptor.fileDescriptor)).use { zip ->
+                    var entry = zip.nextEntry
+                    var found = false
+                    while (entry != null) {
+                        if (!entry.isDirectory && entry.name.endsWith(".apk", ignoreCase = true)) {
+                            java.io.FileOutputStream(extractedApk).use { output -> zip.copyTo(output, 8192) }
+                            found = true
+                            break
+                        }
+                        entry = zip.nextEntry
+                    }
+                    found
+                }
+            }
+        }.getOrDefault(false)
+        if (!extracted || !extractedApk.exists() || extractedApk.length() < 1024L) {
+            rejectUpdate("فایل نصب داخل بسته به‌روزرسانی پیدا نشد.")
+            return
+        }
+
+        val actualApkHash = runCatching {
+            sha256Of { digest ->
+                java.io.FileInputStream(extractedApk).use { input ->
                     val buffer = ByteArray(8192)
                     while (true) {
                         val count = input.read(buffer)
@@ -216,31 +281,29 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
         }.getOrDefault("")
-        if (expectedHash.isBlank() || actualHash != expectedHash) {
-            manager.remove(downloadId)
-            updateDownloadId = -1L
-            getSharedPreferences("elambar_update", MODE_PRIVATE).edit().remove("expected_sha256").putBoolean("install_permission_pending", false).apply()
-            android.widget.Toast.makeText(this, "اعتبار فایل به‌روزرسانی تأیید نشد؛ فایل حذف شد.", android.widget.Toast.LENGTH_LONG).show()
+        if (expectedApkHash.isBlank() || actualApkHash != expectedApkHash) {
+            rejectUpdate("اعتبار فایل نصب تأیید نشد؛ بسته به‌روزرسانی حذف شد.")
             return
         }
+
         if (Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()) {
-            getSharedPreferences("elambar_update", MODE_PRIVATE).edit().putBoolean("install_permission_pending", true).apply()
+            prefs.edit().putBoolean("install_permission_pending", true).apply()
             val settingsIntent = Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))
             startActivity(settingsIntent)
             return
         }
-        getSharedPreferences("elambar_update", MODE_PRIVATE).edit().putBoolean("install_permission_pending", false).apply()
+        prefs.edit().putBoolean("install_permission_pending", false).apply()
+        val apkUri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.fileprovider", extractedApk)
         val installIntent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(apkUri, "application/vnd.android.package-archive")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         startActivity(installIntent)
         updateDownloadId = -1L
-        getSharedPreferences("elambar_update", MODE_PRIVATE).edit().remove("expected_sha256").apply()
+        prefs.edit().remove("expected_archive_sha256").remove("expected_apk_sha256").apply()
     }
-}
+}}
 
 private fun fetchAppUpdateManifest(): JSONObject? {
     var connection: HttpURLConnection? = null
