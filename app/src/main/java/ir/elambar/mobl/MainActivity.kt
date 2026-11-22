@@ -2261,7 +2261,7 @@ private fun uploadProfilePhoto(context: Context, uri: Uri, token: String, role: 
         val mime = context.contentResolver.getType(uri) ?: return "نوع تصویر قابل تشخیص نیست."
         if (mime !in listOf("image/jpeg", "image/png", "image/webp")) return "فقط تصویر JPG، PNG یا WEBP مجاز است."
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return "خواندن تصویر انجام نشد."
-        if (bytes.isEmpty() || bytes.size > 2 * 1024 * 1024) return "حجم تصویر باید کمتر از ۲ مگابایت باشد."
+        if (bytes.isEmpty()) return "فایل تصویر خالی است."
         val ext = when (mime) { "image/png" -> "png"; "image/webp" -> "webp"; else -> "jpg" }
         val path = subject + "/profile." + ext
         upload = (URL(SUPABASE_URL + "/storage/v1/object/profile-photos/" + path).openConnection() as HttpURLConnection).apply {
