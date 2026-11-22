@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: android-apk-${{ github.ref }}
@@ -111,6 +111,17 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 90
+
+      - name: Publish APK for automatic in-app updates
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.5.9
+          name: اعلام بار مبل v1.5.9
+          body: انتشار نسخه 1.5.9 برای نصب و به‌روزرسانی درون‌برنامه‌ای.
+          files: app/build/outputs/apk/debug/app-debug.apk
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   emulator-smoke-test:
     name: Optional emulator smoke test
