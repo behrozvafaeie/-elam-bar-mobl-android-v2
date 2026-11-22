@@ -138,6 +138,7 @@ jobs:
           retention-days: 90
 
       - name: Publish APK to public update storage using GitHub OIDC
+        # PR validation builds must never publish to the public update channel.
         if: github.event_name == 'push'
         shell: bash
         run: |
