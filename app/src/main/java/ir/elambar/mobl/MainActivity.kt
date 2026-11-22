@@ -3363,6 +3363,7 @@ private fun normalizeMatchText(value: String): String =
         .replace('ي', 'ی')
         .replace('ى', 'ی')
         .replace('ك', 'ک')
+        .replace("\\u200c", " ")
         .replace(Regex("\\s+"), " ")
         .lowercase()
 
