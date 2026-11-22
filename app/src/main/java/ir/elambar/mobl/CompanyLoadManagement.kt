@@ -118,13 +118,19 @@ private class CompanyLoadRepository(private val token: String) {
         if (token.isBlank()) return "نشست معتبر نیست؛ دوباره وارد شوید." to emptyList()
         val uid = companyJwtUserId(token)
         if (uid.isBlank()) return "شناسه حساب از نشست دریافت نشد." to emptyList()
-        val query = "loads?select=id,destination,cargo_type,vehicle_type,loading_type,freight_amount,description,status,assigned_driver_id&publisher_user_id=eq." + enc(uid) + "&order=created_at.desc&limit=200"
-        val (code, body) = request("GET", query)
-        if (code !in 200..299) return "دریافت بارها ناموفق بود (کد " + code + ")." to emptyList()
         return runCatching {
-            val rows = JSONArray(body)
-            null to (0 until rows.length()).map { i ->
-                val row = rows.getJSONObject(i)
+            val allRows = mutableListOf<JSONObject>()
+            var offset = 0
+            while (true) {
+                val query = "loads?select=id,destination,cargo_type,vehicle_type,loading_type,freight_amount,description,status,assigned_driver_id&publisher_user_id=eq." + enc(uid) + "&order=created_at.desc&limit=200&offset=" + offset
+                val (code, body) = request("GET", query)
+                if (code !in 200..299) return "دریافت بارها ناموفق بود (کد " + code + ")." to emptyList()
+                val page = JSONArray(body)
+                for (i in 0 until page.length()) allRows.add(page.getJSONObject(i))
+                if (page.length() < 200) break
+                offset += 200
+            }
+            null to allRows.map { row ->
                 CompanyLoadItem(
                     id = row.optString("id"),
                     destination = row.optString("destination"),
