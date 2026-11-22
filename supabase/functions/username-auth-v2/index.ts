@@ -91,6 +91,75 @@ Deno.serve(async(req:Request)=>{
    if(profileError){await rollback();return out({error:"ساخت پرونده انجام نشد. اطلاعات واردشده را بررسی و دوباره تلاش کنید."},400,origin);}
    return out({user:createdUser,session,needsEmailConfirmation:!!suppliedEmail&&!session},200,origin);
   }
+  if(action==="recovery_send" || action==="recovery_confirm"){
+   const bearer=req.headers.get("authorization")??"";
+   const token=bearer.replace(/^Bearer\\s+/i,"").trim();
+   if(!token)return out({error:"برای بازیابی رمز ابتدا وارد حساب شوید."},401,origin);
+   const {data:verified,error:verifyError}=await auth.auth.getUser(token);
+   const currentUser=verified.user;
+   if(verifyError||!currentUser?.id)return out({error:"نشست ورود معتبر نیست؛ دوباره وارد شوید."},401,origin);
+   const accountType=String(currentUser.app_metadata?.account_type??"");
+   if(!["driver","company"].includes(accountType))return out({error:"نوع حساب برای این عملیات مجاز نیست."},403,origin);
+   const table=accountType==="driver"?"drivers":"companies";
+   const {data:profile,error:profileError}=await admin.from(table).select("mobile").eq("id",currentUser.id).maybeSingle();
+   if(profileError||!profile?.mobile)return out({error:"شماره موبایل ثبت‌شده در پروفایل پیدا نشد."},404,origin);
+   const mobile=String(profile.mobile).trim();
+   if(!/^09[0-9]{9}$/.test(mobile))return out({error:"شماره موبایل پروفایل معتبر نیست؛ با پشتیبانی تماس بگیرید."},400,origin);
+   if(action==="recovery_send"){
+    const apiKey=Deno.env.get("KAVENEGAR_API_KEY")??"";
+    const sender=Deno.env.get("KAVENEGAR_SENDER")??"";
+    if(!apiKey||!sender)return out({error:"سرویس پیامک بازیابی هنوز تنظیم نشده است."},503,origin);
+    const sinceMinute=new Date(Date.now()-60*1000).toISOString();
+    const {data:recentMinute,error:minuteError}=await admin.from("account_password_recovery_otps").select("id").eq("user_id",currentUser.id).gte("created_at",sinceMinute).limit(1);
+    if(minuteError)return out({error:"بررسی محدودیت ارسال کد انجام نشد؛ دوباره تلاش کنید."},500,origin);
+    if(recentMinute?.length)return out({error:"برای امنیت، ارسال کد فقط هر ۶۰ ثانیه یک‌بار ممکن است."},429,origin);
+    const sinceHour=new Date(Date.now()-60*60*1000).toISOString();
+    const {data:recentHour,error:hourError}=await admin.from("account_password_recovery_otps").select("id").eq("user_id",currentUser.id).gte("created_at",sinceHour).limit(6);
+    if(hourError)return out({error:"بررسی محدودیت ارسال کد انجام نشد."},500,origin);
+    if((recentHour?.length??0)>=5)return out({error:"سقف پنج کد بازیابی در یک ساعت تکمیل شده است."},429,origin);
+    const random=new Uint32Array(1);crypto.getRandomValues(random);
+    const otp=String(random[0]%1000000).padStart(6,"0");
+    const saltBytes=new Uint8Array(16);crypto.getRandomValues(saltBytes);
+    const salt=Array.from(saltBytes).map(v=>v.toString(16).padStart(2,"0")).join("");
+    const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(currentUser.id+":"+otp+":"+salt));
+    const hash=Array.from(new Uint8Array(digest)).map(v=>v.toString(16).padStart(2,"0")).join("");
+    await admin.from("account_password_recovery_otps").update({consumed_at:new Date().toISOString()}).eq("user_id",currentUser.id).is("consumed_at",null);
+    const {data:otpRow,error:insertError}=await admin.from("account_password_recovery_otps").insert({user_id:currentUser.id,otp_hash:hash,otp_salt:salt,expires_at:new Date(Date.now()+5*60*1000).toISOString()}).select("id").single();
+    if(insertError||!otpRow?.id)return out({error:"ساخت کد بازیابی انجام نشد؛ دوباره تلاش کنید."},500,origin);
+    try{
+     const smsBody=new URLSearchParams({receptor:mobile,message:"کد بازیابی رمز اعلام بار مبل: "+otp+" | اعتبار: ۵ دقیقه",sender});
+     const smsResponse=await fetch("https://api.kavenegar.com/v1/"+encodeURIComponent(apiKey)+"/sms/send.json",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:smsBody.toString(),signal:AbortSignal.timeout(12000)});
+     const smsText=await smsResponse.text();
+     let smsJson:any={};try{smsJson=JSON.parse(smsText);}catch{}
+     const smsStatus=Number(smsJson?.return?.status??0);
+     if(!smsResponse.ok||smsStatus<200||smsStatus>=300){
+      await admin.from("account_password_recovery_otps").delete().eq("id",otpRow.id);
+      return out({error:"ارسال پیامک ناموفق بود؛ وضعیت خط پیامک را بررسی کنید."},502,origin);
+     }
+    }catch(_){
+     await admin.from("account_password_recovery_otps").delete().eq("id",otpRow.id);
+     return out({error:"ارتباط با سرویس پیامک برقرار نشد؛ دوباره تلاش کنید."},502,origin);
+    }
+    return out({message:"کد بازیابی به شماره موبایل ثبت‌شده ارسال شد؛ پنج دقیقه اعتبار دارد."},200,origin);
+   }
+   const otp=String(b.code??"").replace(/\\D/g,"");
+   const newPassword=String(b.new_password??"");
+   if(!/^\\d{6}$/.test(otp))return out({error:"کد پیامکی باید ۶ رقم باشد."},400,origin);
+   if(newPassword.length<8||newPassword.length>72)return out({error:"رمز جدید باید حداقل ۸ نویسه باشد."},400,origin);
+   const {data:row,error:rowError}=await admin.from("account_password_recovery_otps").select("id,otp_hash,otp_salt,attempts,expires_at,consumed_at").eq("user_id",currentUser.id).is("consumed_at",null).order("created_at",{ascending:false}).limit(1).maybeSingle();
+   if(rowError||!row||row.consumed_at||new Date(row.expires_at).getTime()<=Date.now()||Number(row.attempts)>=5)return out({error:"کد بازیابی معتبر نیست یا منقضی شده است؛ کد تازه بگیرید."},400,origin);
+   const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(currentUser.id+":"+otp+":"+row.otp_salt));
+   const suppliedHash=Array.from(new Uint8Array(digest)).map(v=>v.toString(16).padStart(2,"0")).join("");
+   if(suppliedHash!==row.otp_hash){
+    const nextAttempts=Number(row.attempts)+1;
+    await admin.from("account_password_recovery_otps").update({attempts:nextAttempts,...(nextAttempts>=5?{consumed_at:new Date().toISOString()}:{})}).eq("id",row.id);
+    return out({error:nextAttempts>=5?"تعداد تلاش‌ها بیش از حد مجاز است؛ کد تازه بگیرید.":"کد واردشده صحیح نیست."},400,origin);
+   }
+   const {error:passwordError}=await admin.auth.admin.updateUserById(currentUser.id,{password:newPassword});
+   if(passwordError)return out({error:"تغییر رمز انجام نشد؛ دوباره تلاش کنید."},500,origin);
+   await admin.from("account_password_recovery_otps").update({consumed_at:new Date().toISOString()}).eq("id",row.id);
+   return out({message:"رمز عبور با موفقیت بازیابی و تغییر کرد."},200,origin);
+  }
   if(action==="update_profile"){
    const bearer=req.headers.get("authorization")??"";
    const token=bearer.replace(/^Bearer\s+/i,"").trim();
