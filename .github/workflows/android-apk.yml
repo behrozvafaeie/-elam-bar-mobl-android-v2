@@ -2,7 +2,7 @@ name: Android APK
 # Trigger validation after fixing emulator marker command quoting.
 on:
   push:
-    branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25", "fix/source-343-stabilization", "stable/source-343-baseline", "fix/post-merge-ci-stabilization", "feature/v1.5.1-load-draft-autosave", "release/v1.5.1-clean-candidate", "fix/load-status-edit-delete-logout-v1", "feature/company-panel-v2-isolated", "feature/company-panel-v2-install-safe", "diagnostic/startup-crash-log-v1", "work/1.6.3-isolated-company-hall" ]
+    branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25", "fix/source-343-stabilization", "stable/source-343-baseline", "fix/post-merge-ci-stabilization", "feature/v1.5.1-load-draft-autosave", "release/v1.5.1-clean-candidate", "fix/load-status-edit-delete-logout-v1", "feature/company-panel-v2-isolated", "feature/company-panel-v2-install-safe", "diagnostic/startup-crash-log-v1", "work/1.6.3-isolated-company-hall", "work/628-safe-changes" ]
     paths:
       - "app/**"
       - "supabase/**"
@@ -161,10 +161,14 @@ jobs:
           retention-days: 90
 
   emulator-smoke-test:
-    name: Android emulator startup test
+    name: Android ${{ matrix.api-level }} compatibility and update test
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 42
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [24, 28, 33, 35]
     steps:
       - name: Checkout diagnostic source and smoke-test script
         uses: actions/checkout@v4
@@ -190,7 +194,7 @@ jobs:
           ANDROID_I_WANT_MY_TCG: "yes"
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 33
+          api-level: ${{ matrix.api-level }}
           target: google_apis
           arch: x86_64
           profile: pixel_2
