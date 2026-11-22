@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 APK="artifacts/app-debug.apk"
+PREVIOUS_APK="previous/app-debug.apk"
 PACKAGE="ir.elambar.mobl"
 ACTIVITY="$PACKAGE/.MainActivity"
 INSTALL_LOG="/tmp/adb-install.log"
@@ -46,15 +47,34 @@ fi
 
 echo "APK size:"
 ls -lh "$APK"
-echo "Installing APK (up to 600 seconds)..."
-if timeout 600s adb install -r "$APK" 2>&1 | tee "$INSTALL_LOG"; then
-  echo "APK installation completed."
-else
-  install_rc=$?
-  echo "APK install failed or timed out (exit code: $install_rc)."
+echo "Checking previous 1.6.4 baseline APK..."
+if [ ! -s "$PREVIOUS_APK" ]; then
+  echo "Previous 1.6.4 APK artifact is missing."
+  exit 1
+fi
+echo "Installing baseline 1.6.4 APK..."
+if ! timeout 600s adb install -r "$PREVIOUS_APK" 2>&1 | tee "$INSTALL_LOG"; then
+  echo "Baseline APK install failed."
   dump_diagnostics
   exit 1
 fi
+adb shell dumpsys package "$PACKAGE" | grep -F "versionCode=40"
+echo "Writing a private app-data marker before update..."
+adb shell run-as "$PACKAGE" sh -c 'mkdir -p files && printf "keep-data-across-update-1.6.4-to-1.6.5" > files/update_marker.txt'
+adb shell am force-stop "$PACKAGE" || true
+
+echo "Installing 1.6.5 over the existing 1.6.4 app (up to 600 seconds)..."
+if timeout 600s adb install -r "$APK" 2>&1 | tee "$INSTALL_LOG"; then
+  echo "In-place update installation completed."
+else
+  install_rc=$?
+  echo "In-place update failed or timed out (exit code: $install_rc)."
+  dump_diagnostics
+  exit 1
+fi
+adb shell dumpsys package "$PACKAGE" | grep -F "versionCode=41"
+adb shell run-as "$PACKAGE" cat files/update_marker.txt | grep -Fx "keep-data-across-update-1.6.4-to-1.6.5"
+echo "Existing app data survived the in-place update."
 
 adb logcat -c
 echo "Starting app explicitly..."
