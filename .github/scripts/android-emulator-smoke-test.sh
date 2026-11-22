@@ -60,7 +60,7 @@ if ! timeout 600s adb install -r "$PREVIOUS_APK" 2>&1 | tee "$INSTALL_LOG"; then
 fi
 adb shell dumpsys package "$PACKAGE" | grep -F "versionCode=40"
 echo "Writing a private app-data marker before update..."
-adb shell run-as "$PACKAGE" sh -c 'mkdir -p files && printf "keep-data-across-update-1.6.4-to-1.6.5" > files/update_marker.txt'
+adb shell "run-as $PACKAGE sh -c 'mkdir -p files && printf \"keep-data-across-update-1.6.4-to-1.6.5\" > files/update_marker.txt'"
 adb shell am force-stop "$PACKAGE" || true
 
 echo "Installing 1.6.5 over the existing 1.6.4 app (up to 600 seconds)..."
