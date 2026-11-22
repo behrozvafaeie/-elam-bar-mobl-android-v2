@@ -239,7 +239,6 @@ jobs:
 
           curl -fsS -X PUT "$SIGNED_URL" \
             -H "Content-Type: application/zip" \
-            -H "x-upsert: true" \
             --data-binary "@$ARCHIVE"
 
           ARCHIVE_SHA256=$(sha256sum "$ARCHIVE" | awk '{print $1}')
