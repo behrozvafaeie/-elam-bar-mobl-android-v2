@@ -79,8 +79,8 @@ jobs:
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 39' app/build.gradle.kts
-          grep -F 'versionName = "1.6.3"' app/build.gradle.kts
+          grep -F 'versionCode = 40' app/build.gradle.kts
+          grep -F 'versionName = "1.6.4"' app/build.gradle.kts
           awk '/^[[:space:]]*PREPARE_JSON=/ && /versionCode:40,versionName:"1.6.4"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
           awk '/^[[:space:]]*FINALIZE_JSON=/ && /versionCode:40,versionName:"1.6.4"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
           ! grep -E 'ELAM_TURN_(URL|USERNAME|PASSWORD)' .github/workflows/android-apk.yml
