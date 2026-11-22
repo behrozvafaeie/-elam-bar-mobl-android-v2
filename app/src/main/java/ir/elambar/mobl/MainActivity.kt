@@ -747,7 +747,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
         }
     }
     val tehranClockText = remember(clockNowMillis) { formatPersianTehranDateTime(clockNowMillis) }
-    var textScale by remember { mutableFloatStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getFloat("text_scale", 1f).coerceIn(0.9f, 1.35f)) }
+    var textScale by remember { mutableFloatStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getFloat("text_scale", 1.15f).coerceIn(0.9f, 1.35f)) }
     val currentDensity = androidx.compose.ui.platform.LocalDensity.current
     val scaledDensity = androidx.compose.ui.unit.Density(density = currentDensity.density, fontScale = textScale)
     LaunchedEffect(Unit) {
