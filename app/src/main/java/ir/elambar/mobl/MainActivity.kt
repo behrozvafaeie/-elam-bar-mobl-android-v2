@@ -517,16 +517,16 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var loadPriceMode by remember { mutableStateOf("fixed") }
     var loadDescription by remember { mutableStateOf("") }
     var loadQuantity by remember { mutableStateOf("1") }
-        var loadDestinationExpanded by remember { mutableStateOf(true) }
+        var loadDestinationExpanded by remember { mutableStateOf(false) }
     var loadCargoExpanded by remember { mutableStateOf(false) }
     var loadVehicleExpanded by remember { mutableStateOf(false) }
     var loadLoadingExpanded by remember { mutableStateOf(false) }
-    var loadPriceExpanded by remember { mutableStateOf(true) }
+    var loadPriceExpanded by remember { mutableStateOf(false) }
     var loadQuantityExpanded by remember { mutableStateOf(false) }
     var loadDescriptionExpanded by remember { mutableStateOf(false) }
     var loadActionMessage by remember { mutableStateOf("") }
     var loadPublishing by remember { mutableStateOf(false) }
-    var companyLoadPanelExpanded by remember { mutableStateOf(false) }
+    var companyLoadPanelExpanded by remember { mutableStateOf(true) }
     var companyApprovalRefreshing by remember { mutableStateOf(false) }
     var companyHallExpanded by remember { mutableStateOf(false) }
     var showPublicHall by remember { mutableStateOf(false) }
@@ -555,6 +555,22 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
             adminLoggedIn -> loadDraftOwnerKey(adminAccessToken, "admin")
             userLoggedIn && role == UserRole.COMPANY -> loadDraftOwnerKey(userAccessToken, "company")
             else -> ""
+        }
+    }
+
+    // Refresh the public hall when an approved driver opens it and keep it current
+    // while visible, so newly published loads appear without a manual refresh.
+    LaunchedEffect(showPublicHall, userLoggedIn, role, userStatus, userAccessToken, adminLoggedIn, adminAccessToken) {
+        if (showPublicHall && (adminLoggedIn || (userLoggedIn && role == UserRole.DRIVER && userStatus == "approved"))) {
+            while (true) {
+                publicHallLoading = true
+                val hallToken = if (adminLoggedIn) adminAccessToken else userAccessToken
+                val result = withContext(Dispatchers.IO) { fetchPublicHallLoads(hallToken) }
+                publicHallMessage = result.first
+                publicHallLoads = result.second
+                publicHallLoading = false
+                delay(30_000)
+            }
         }
     }
     var adminProfilePhotoUrl by remember { mutableStateOf("") }
@@ -1053,20 +1069,22 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Spacer(Modifier.height(12.dp))
-                Surface(
-                    shape = MaterialTheme.shapes.extraLarge,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(88.dp)
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_app_logo),
-                        contentDescription = "نشان اعلام بار مبل",
-                        modifier = Modifier.fillMaxSize().padding(8.dp)
-                    )
+                if (!(userLoggedIn && role == UserRole.COMPANY && !showProfile && !showPublicHall)) {
+                    Spacer(Modifier.height(12.dp))
+                    Surface(
+                        shape = MaterialTheme.shapes.extraLarge,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.size(88.dp)
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_app_logo),
+                            contentDescription = "نشان اعلام بار مبل",
+                            modifier = Modifier.fillMaxSize().padding(8.dp)
+                        )
+                    }
+                    Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
+                    Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
                 }
-                Text("اعلام بار مبل", fontSize = 30.sp, color = MaterialTheme.colorScheme.primary)
-                Text("سامانه ارتباط شرکت‌های باربری و رانندگان", textAlign = TextAlign.Center)
                 if (showPublicHall && (adminLoggedIn || (userLoggedIn && role == UserRole.DRIVER && userStatus == "approved"))) {
                     PublicLoadHallScreen(
                         loads = publicHallLoads,
@@ -1506,12 +1524,12 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         options = listOf("مبل", "سرویس خواب", "نهارخوری", "اثاث منزل", "لوازم اداری", "سایر"),
                                         onSelected = { loadCargoType = it }
                                     )
-                                    Text("نوع ماشین", style = MaterialTheme.typography.titleSmall)
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        listOf("وانت مبلی", "کامیونت مبلی", "کامیون ۶ متری", "کامیون دربستی کار", "خاور مبلی پتو دار").forEach { v ->
-                                            FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
-                                        }
-                                    }
+                                    LoadChoiceDropdown(
+                                        label = "نوع ماشین",
+                                        selected = loadVehicleType,
+                                        options = listOf("وانت مبلی", "کامیونت مبلی", "کامیون ۶ متری", "کامیون دربستی کار", "خاور مبلی پتو دار"),
+                                        onSelected = { loadVehicleType = it }
+                                    )
                                     LoadChoiceDropdown(
                                         label = "نوع اعلام بار",
                                         selected = loadLoadingType,
@@ -1801,17 +1819,19 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                     HorizontalDivider()
                     Text(if (role == UserRole.DRIVER) "پنل راننده" else "پنل شرکت باربری", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
                     Text("خوش آمدید، $userDisplayName", textAlign = TextAlign.Center)
-                    if (profilePhotoUrl.isNotBlank()) {
-                        AsyncImage(model = profilePhotoUrl, contentDescription = "عکس پروفایل", modifier = Modifier.size(104.dp).clip(CircleShape))
-                    } else {
-                        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(104.dp)) {
-                            Box(contentAlignment = Alignment.Center) { Text("عکس پروفایل") }
+                    if (role != UserRole.COMPANY) {
+                        if (profilePhotoUrl.isNotBlank()) {
+                            AsyncImage(model = profilePhotoUrl, contentDescription = "عکس پروفایل", modifier = Modifier.size(104.dp).clip(CircleShape))
+                        } else {
+                            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(104.dp)) {
+                                Box(contentAlignment = Alignment.Center) { Text("عکس پروفایل") }
+                            }
                         }
+                        OutlinedButton(enabled = !profilePhotoUploading, onClick = { photoPicker.launch("image/*") }) {
+                            Text(if (profilePhotoUploading) "در حال بارگذاری..." else "انتخاب عکس پروفایل")
+                        }
+                        if (profilePhotoMessage.isNotBlank()) Text(profilePhotoMessage, style = MaterialTheme.typography.bodySmall)
                     }
-                    OutlinedButton(enabled = !profilePhotoUploading, onClick = { photoPicker.launch("image/*") }) {
-                        Text(if (profilePhotoUploading) "در حال بارگذاری..." else "انتخاب عکس پروفایل")
-                    }
-                    if (profilePhotoMessage.isNotBlank()) Text(profilePhotoMessage, style = MaterialTheme.typography.bodySmall)
                     if (role == UserRole.COMPANY && userStatus != "approved") {
                         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
                             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1878,16 +1898,16 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                                 ),
                                                 shape = MaterialTheme.shapes.extraLarge
                                             )
-                                            .padding(16.dp)
+                                            .padding(12.dp)
                                     ) {
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                                 Image(
                                                     painter = painterResource(id = R.drawable.ic_app_logo),
                                                     contentDescription = "نشان کامیون اعلام بار مبل",
-                                                    modifier = Modifier.size(72.dp)
+                                                    modifier = Modifier.size(48.dp)
                                                 )
-                                                Spacer(Modifier.width(10.dp))
+                                                Spacer(Modifier.width(8.dp))
                                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                                     Text("ثبت بار جدید", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                                                     Text("فرم ثبت بار شرکت؛ پس از انتشار، بار به سالن اعلام بار منتقل می‌شود.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
