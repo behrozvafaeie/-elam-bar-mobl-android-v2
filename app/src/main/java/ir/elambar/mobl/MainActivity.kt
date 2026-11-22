@@ -148,7 +148,12 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         val pendingId = updateDownloadId
-        if (pendingId > 0L) installDownloadedUpdate(pendingId)
+        if (pendingId > 0L) {
+            val permissionPending = getSharedPreferences("elambar_update", MODE_PRIVATE).getBoolean("install_permission_pending", false)
+            if (!permissionPending || Build.VERSION.SDK_INT < 26 || packageManager.canRequestPackageInstalls()) {
+                installDownloadedUpdate(pendingId)
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -182,14 +187,23 @@ class MainActivity : ComponentActivity() {
         cursor.use {
             if (!it.moveToFirst()) return
             val statusIndex = it.getColumnIndex(DownloadManager.COLUMN_STATUS)
-            if (statusIndex < 0 || it.getInt(statusIndex) != DownloadManager.STATUS_SUCCESSFUL) return
+            if (statusIndex < 0) return
+            val status = it.getInt(statusIndex)
+            if (status == DownloadManager.STATUS_FAILED) {
+                updateDownloadId = -1L
+                android.widget.Toast.makeText(this, "دریافت به‌روزرسانی ناموفق بود؛ اینترنت را بررسی کنید.", android.widget.Toast.LENGTH_LONG).show()
+                return
+            }
+            if (status != DownloadManager.STATUS_SUCCESSFUL) return
         }
         val apkUri = manager.getUriForDownloadedFile(downloadId) ?: return
         if (Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()) {
+            getSharedPreferences("elambar_update", MODE_PRIVATE).edit().putBoolean("install_permission_pending", true).apply()
             val settingsIntent = Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))
             startActivity(settingsIntent)
             return
         }
+        getSharedPreferences("elambar_update", MODE_PRIVATE).edit().putBoolean("install_permission_pending", false).apply()
         val installIntent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(apkUri, "application/vnd.android.package-archive")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
