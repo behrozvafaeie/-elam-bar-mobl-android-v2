@@ -10,7 +10,7 @@ on:
       - "settings.gradle.kts"
       - ".github/workflows/android-apk.yml"
   pull_request:
-    branches: [ "fix/load-status-edit-delete-logout-v1" ]
+    branches: [ "fix/load-status-edit-delete-logout-v1", "diagnostic/startup-crash-log-v1" ]
     paths:
       - "app/**"
       - "supabase/**"
