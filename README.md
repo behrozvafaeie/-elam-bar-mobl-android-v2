@@ -1,13 +1,13 @@
-# اعلام بار مبل — نسخه آزمایشی 1.6.0
+# اعلام بار مبل — نسخه 1.6.4
 
 برنامه بومی Android با Kotlin و Jetpack Compose است. خروجی پروژه فقط APK اندروید است؛ PWA و وب‌اپ در محدوده نیستند.
 
 ## مشخصات
-- نسخه هدف: `1.6.0`
-- `versionCode`: `36`
+- نسخه فعلی سورس: `1.6.4`
+- `versionCode`: `40`
 - شناسه بسته: `ir.elambar.mobl`
 - حداقل Android: API 24
-- شاخه توسعه: `fix/load-status-edit-delete-logout-v1`
+- شاخه توسعه: `diagnostic/startup-crash-log-v1`
 - خروجی فعلی CI از نوع Debug است؛ برای انتشار عمومی باید امضای Release امن تنظیم شود.
 
 ## امکانات موجود در سورس
@@ -49,6 +49,14 @@
 
 ## ساخت APK
 - Workflow: `.github/workflows/android-apk.yml`
-- Artifact نسخه هدف: `elam-bar-mobl-v1.6.0-debug-apk`
+- Artifact نسخه هدف: `elam-bar-mobl-v1.6.4-debug-apk`
 - Build، بررسی شناسه بسته، نسخه و امضای APK الزامی است.
 - آزمون شبیه‌ساز مرحله جداگانه و غیرمسدودکننده است؛ نتیجه آن باید مستقل از Build گزارش شود.
+
+
+## وضعیت بررسی نسخه 1.6.4
+- `versionCode`: `40` و `versionName`: `1.6.4`.
+- آخرین بررسی CI: ساخت APK و آزمون نصب/اجرای شبیه‌ساز Android 13 موفق بوده است.
+- انتشار به‌روزرسانی عمومی فقط با اجرای دستی Workflow روی شاخه `diagnostic/startup-crash-log-v1` انجام می‌شود؛ هر push عادی صرفاً build و آزمون را اجرا می‌کند.
+- نام Artifactها با نسخه 1.6.4 هماهنگ شده‌اند.
+- امضای CI باید با گواهی نسخه نصب‌شده قبلی تطبیق داده شود؛ تغییر cache کلید امضا ممنوع است.
