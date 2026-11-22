@@ -93,7 +93,7 @@ Deno.serve(async(req:Request)=>{
   }
   if(action==="recovery_send" || action==="recovery_confirm"){
    const bearer=req.headers.get("authorization")??"";
-   const token=bearer.replace(/^Bearer\\s+/i,"").trim();
+   const token=bearer.replace(/^Bearer\s+/i,"").trim();
    if(!token)return out({error:"برای بازیابی رمز ابتدا وارد حساب شوید."},401,origin);
    const {data:verified,error:verifyError}=await auth.auth.getUser(token);
    const currentUser=verified.user;
@@ -142,9 +142,9 @@ Deno.serve(async(req:Request)=>{
     }
     return out({message:"کد بازیابی به شماره موبایل ثبت‌شده ارسال شد؛ پنج دقیقه اعتبار دارد."},200,origin);
    }
-   const otp=String(b.code??"").replace(/[۰-۹]/g,(c)=>String("۰۱۲۳۴۵۶۷۸۹".indexOf(c))).replace(/[٠-٩]/g,(c)=>String("٠١٢٣٤٥٦٧٨٩".indexOf(c))).replace(/\\D/g,"");
+   const otp=String(b.code??"").replace(/[۰-۹]/g,(c)=>String("۰۱۲۳۴۵۶۷۸۹".indexOf(c))).replace(/[٠-٩]/g,(c)=>String("٠١٢٣٤٥٦٧٨٩".indexOf(c))).replace(/\D/g,"");
    const newPassword=String(b.new_password??"");
-   if(!/^\\d{6}$/.test(otp))return out({error:"کد پیامکی باید ۶ رقم باشد."},400,origin);
+   if(!/^\d{6}$/.test(otp))return out({error:"کد پیامکی باید ۶ رقم باشد."},400,origin);
    if(newPassword.length<8||newPassword.length>72)return out({error:"رمز جدید باید حداقل ۸ نویسه باشد."},400,origin);
    const {data:row,error:rowError}=await admin.from("account_password_recovery_otps").select("id,otp_hash,otp_salt,attempts,expires_at,consumed_at").eq("user_id",currentUser.id).is("consumed_at",null).order("created_at",{ascending:false}).limit(1).maybeSingle();
    if(rowError||!row||row.consumed_at||new Date(row.expires_at).getTime()<=Date.now()||Number(row.attempts)>=5)return out({error:"کد بازیابی معتبر نیست یا منقضی شده است؛ کد تازه بگیرید."},400,origin);
