@@ -132,6 +132,13 @@ jobs:
         run: |
           set -euo pipefail
           APK=app/build/outputs/apk/debug/app-debug.apk
+          ARCHIVE=app/build/outputs/apk/debug/app-release.zip
+          zip -9 -j "$ARCHIVE" "$APK"
+          ARCHIVE_SIZE=$(stat -c%s "$ARCHIVE")
+          if [ "$ARCHIVE_SIZE" -ge 50000000 ]; then
+            echo "Compressed release archive exceeds the Supabase Free file upload limit."
+            exit 1
+          fi
           get_oidc_token() {
             local token_json
             token_json=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=elambar-release-upload")
@@ -148,13 +155,14 @@ jobs:
           test -n "$SIGNED_URL" && test "$SIGNED_URL" != "null"
 
           curl -fsS -X PUT "$SIGNED_URL" \
-            -H "Content-Type: application/vnd.android.package-archive" \
+            -H "Content-Type: application/zip" \
             -H "x-upsert: true" \
-            --data-binary "@$APK"
+            --data-binary "@$ARCHIVE"
 
+          ARCHIVE_SHA256=$(sha256sum "$ARCHIVE" | awk '{print $1}')
           APK_SHA256=$(sha256sum "$APK" | awk '{print $1}')
           OIDC_TOKEN=$(get_oidc_token)
-          FINALIZE_JSON=$(jq -n --arg sha256 "$APK_SHA256" '{action:"finalize",versionCode:35,versionName:"1.5.9",sha256:$sha256}')
+          FINALIZE_JSON=$(jq -n --arg archiveSha256 "$ARCHIVE_SHA256" --arg apkSha256 "$APK_SHA256" '{action:"finalize",versionCode:35,versionName:"1.5.9",archiveSha256:$archiveSha256,apkSha256:$apkSha256}')
           curl -fsS -X POST "https://sckcxtceybwtiecyxqsy.supabase.co/functions/v1/app-release-upload" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
