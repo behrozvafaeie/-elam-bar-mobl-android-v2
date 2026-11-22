@@ -129,9 +129,6 @@ jobs:
 
       - name: Publish APK to public update storage using GitHub OIDC
         shell: bash
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
         run: |
           set -euo pipefail
           APK=app/build/outputs/apk/debug/app-debug.apk
