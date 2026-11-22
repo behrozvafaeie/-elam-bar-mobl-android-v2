@@ -132,7 +132,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: elam-bar-mobl-v1.6.3-debug-apk
+          name: elam-bar-mobl-v1.6.4-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 90
@@ -142,21 +142,21 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          git archive --format=zip --output=artifacts/elam-bar-mobl-v1.6.3-source.zip HEAD
-          test -s artifacts/elam-bar-mobl-v1.6.3-source.zip
-          unzip -t artifacts/elam-bar-mobl-v1.6.3-source.zip
+          git archive --format=zip --output=artifacts/elam-bar-mobl-v1.6.4-source.zip HEAD
+          test -s artifacts/elam-bar-mobl-v1.6.4-source.zip
+          unzip -t artifacts/elam-bar-mobl-v1.6.4-source.zip
 
       - name: Upload complete source ZIP artifact
         uses: actions/upload-artifact@v4
         with:
-          name: elam-bar-mobl-v1.6.3-source
-          path: artifacts/elam-bar-mobl-v1.6.3-source.zip
+          name: elam-bar-mobl-v1.6.4-source
+          path: artifacts/elam-bar-mobl-v1.6.4-source.zip
           if-no-files-found: error
           retention-days: 90
 
       - name: Publish APK to public update storage using GitHub OIDC
         # PR validation builds must never publish to the public update channel.
-        if: github.event_name == 'push' && github.ref == 'refs/heads/fix/load-status-edit-delete-logout-v1'
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/diagnostic/startup-crash-log-v1'
         shell: bash
         run: |
           set -euo pipefail
@@ -209,7 +209,7 @@ jobs:
       - name: Download built APK
         uses: actions/download-artifact@v4
         with:
-          name: elam-bar-mobl-v1.6.3-debug-apk
+          name: elam-bar-mobl-v1.6.4-debug-apk
           path: artifacts
 
       - name: Install and launch APK on Android 13 emulator
