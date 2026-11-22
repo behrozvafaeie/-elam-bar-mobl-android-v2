@@ -35,46 +35,46 @@ Deno.serve(async (req: Request) => {
       !["push", "workflow_dispatch"].includes(String(payload.event_name ?? ""))
     ) return json({ error: "Workflow identity is not authorized" }, 403);
 
-    const url = new URL(req.url);
-    const versionCode = Number(url.searchParams.get("versionCode") ?? 0);
-    const versionName = String(url.searchParams.get("versionName") ?? "");
-    if (!Number.isSafeInteger(versionCode) || versionCode < 1 || !/^\d+\\.\d+\\.\d+$/.test(versionName)) {
+    const body = await req.json();
+    const action = String(body.action ?? "");
+    const versionCode = Number(body.versionCode ?? 0);
+    const versionName = String(body.versionName ?? "");
+    if (!Number.isSafeInteger(versionCode) || versionCode < 1 || !/^\d+\.\d+\.\d+$/.test(versionName)) {
       return json({ error: "Invalid app version" }, 400);
     }
-    if (!req.headers.get("content-type")?.toLowerCase().includes("application/vnd.android.package-archive")) {
-      return json({ error: "APK content type required" }, 415);
-    }
-
-    const bytes = new Uint8Array(await req.arrayBuffer());
-    if (bytes.length < 1024 || bytes.length > 100 * 1024 * 1024) return json({ error: "APK size is outside allowed range" }, 413);
-    const digest = await crypto.subtle.digest("SHA-256", bytes);
-    const sha256 = Array.from(new Uint8Array(digest)).map((v) => v.toString(16).padStart(2, "0")).join("");
 
     const apkPath = "elam-bar-mobl-latest.apk";
-    const apkBlob = new Blob([bytes], { type: "application/vnd.android.package-archive" });
-    const { error: apkError } = await admin.storage.from("app-releases").upload(apkPath, apkBlob, {
-      contentType: "application/vnd.android.package-archive",
-      cacheControl: "300",
-      upsert: true,
-    });
-    if (apkError) return json({ error: "APK upload failed" }, 500);
+    if (action === "prepare") {
+      const { data, error } = await admin.storage.from("app-releases").createSignedUploadUrl(apkPath, { upsert: true });
+      if (error || !data?.signedUrl || !data?.token) return json({ error: "Could not create signed APK upload URL" }, 500);
+      return json({ signedUrl: data.signedUrl, path: apkPath, expiresIn: 7200 });
+    }
 
-    const manifest = {
-      versionCode,
-      versionName,
-      apkUrl: projectUrl + "/storage/v1/object/public/app-releases/" + apkPath,
-      sha256,
-      mandatory: false,
-      releaseNotes: "به‌روزرسانی برنامه اعلام بار مبل",
-    };
-    const manifestBlob = new Blob([JSON.stringify(manifest)], { type: "application/json" });
-    const { error: manifestError } = await admin.storage.from("app-releases").upload(
-      "manifest.json",
-      manifestBlob,
-      { contentType: "application/json; charset=utf-8", cacheControl: "0", upsert: true },
-    );
-    if (manifestError) return json({ error: "Manifest publication failed" }, 500);
-    return json({ ok: true, versionCode, versionName, sha256 });
+    if (action === "finalize") {
+      const sha256 = String(body.sha256 ?? "").toLowerCase();
+      if (!/^[a-f0-9]{64}$/.test(sha256)) return json({ error: "Invalid APK checksum" }, 400);
+      const { data: objects, error: listError } = await admin.storage.from("app-releases").list("", { search: apkPath, limit: 10 });
+      if (listError || !objects?.some((item) => item.name === apkPath)) return json({ error: "Uploaded APK was not found" }, 409);
+
+      const manifest = {
+        versionCode,
+        versionName,
+        apkUrl: projectUrl + "/storage/v1/object/public/app-releases/" + apkPath,
+        sha256,
+        mandatory: false,
+        releaseNotes: "به‌روزرسانی برنامه اعلام بار مبل",
+      };
+      const manifestBlob = new Blob([JSON.stringify(manifest)], { type: "application/json" });
+      const { error: manifestError } = await admin.storage.from("app-releases").upload(
+        "manifest.json",
+        manifestBlob,
+        { contentType: "application/json; charset=utf-8", cacheControl: "0", upsert: true },
+      );
+      if (manifestError) return json({ error: "Manifest publication failed" }, 500);
+      return json({ ok: true, versionCode, versionName, sha256 });
+    }
+
+    return json({ error: "Unknown action" }, 400);
   } catch (_error) {
     return json({ error: "Release upload was rejected or could not be completed" }, 401);
   }
