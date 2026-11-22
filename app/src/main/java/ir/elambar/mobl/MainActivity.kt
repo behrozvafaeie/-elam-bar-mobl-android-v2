@@ -303,7 +303,7 @@ class MainActivity : ComponentActivity() {
         updateDownloadId = -1L
         prefs.edit().remove("expected_archive_sha256").remove("expected_apk_sha256").apply()
     }
-}}
+}
 
 private fun fetchAppUpdateManifest(): JSONObject? {
     var connection: HttpURLConnection? = null
