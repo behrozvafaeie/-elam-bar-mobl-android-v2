@@ -79,7 +79,7 @@ install_and_verify() {
 
 install_and_verify "$PREVIOUS_APK" 40 "baseline 1.6.4 APK"
 echo "Writing a private app-data marker before update..."
-adb shell "run-as $PACKAGE sh -c 'mkdir -p files && printf \"keep-data-across-update-1.6.4-to-1.6.6\" > files/update_marker.txt'"
+adb shell "run-as $PACKAGE sh -c 'mkdir -p files && printf \\"keep-data-across-update-1.6.4-to-1.6.6\\" > files/update_marker.txt'"
 adb shell am force-stop "$PACKAGE" || true
 
 echo "Installing 1.6.6 over the existing 1.6.4 app..."
@@ -88,7 +88,11 @@ echo "In-place update installation completed and package version verified."
 adb shell run-as "$PACKAGE" cat files/update_marker.txt | grep -Fx "keep-data-across-update-1.6.4-to-1.6.6"
 echo "Existing app data survived the in-place update."
 
-adb logcat -c
+# Logcat buffer clearing is diagnostic housekeeping, not an app test.
+# Some emulator images return a non-zero exit even after a successful install/update.
+if ! adb logcat -c; then
+  echo "WARNING: Could not clear logcat buffer; continuing with existing logs."
+fi
 echo "Starting app explicitly..."
 set +e
 timeout 90s adb shell am start -W -n "$ACTIVITY"
