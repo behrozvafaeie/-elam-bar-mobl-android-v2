@@ -31,6 +31,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -111,7 +114,11 @@ class MainActivity : ComponentActivity() {
                 if (androidx.compose.foundation.isSystemInDarkTheme()) schemes[3] else schemes[0]
             } else schemes[palette]
             MaterialTheme(colorScheme = activeScheme) {
-                ElaanBarApp(palette, updateCheckMessage, updateCheckInProgress, onCheckForUpdates = { checkForAppUpdates() }) {
+                ElaanBarApp(
+                    palette, updateCheckMessage, updateCheckInProgress,
+                    onCheckForUpdates = { checkForAppUpdates() },
+                    onBiometricAuth = { callback -> authenticateBiometric(callback) }
+                ) {
                     palette = (palette + 1) % 5
                     getSharedPreferences("elambar_ui", MODE_PRIVATE).edit().putInt("palette", palette).apply()
                 }
@@ -146,6 +153,33 @@ class MainActivity : ComponentActivity() {
             }
         }
         checkForAppUpdates()
+    }
+
+    private fun authenticateBiometric(onResult: (Boolean) -> Unit) {
+        val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG
+        if (BiometricManager.from(this).canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
+            onResult(false)
+            return
+        }
+        val prompt = BiometricPrompt(
+            this,
+            ContextCompat.getMainExecutor(this),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    onResult(true)
+                }
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    onResult(false)
+                }
+            }
+        )
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("ورود امن به اعلام بار مبل")
+            .setSubtitle("برای بازیابی نشست قبلی، اثر انگشت خود را تأیید کنید.")
+            .setNegativeButtonText("لغو")
+            .setAllowedAuthenticators(authenticators)
+            .build()
+        prompt.authenticate(info)
     }
 
     private fun checkForAppUpdates() {
@@ -492,6 +526,7 @@ private fun ElaanBarApp(
     updateCheckMessage: String,
     updateCheckInProgress: Boolean,
     onCheckForUpdates: () -> Unit,
+    onBiometricAuth: ((Boolean) -> Unit) -> Unit,
     onNextPalette: () -> Unit
 ) {
     var role by remember { mutableStateOf(UserRole.DRIVER) }
@@ -632,7 +667,19 @@ private fun ElaanBarApp(
     var adminMenuVisibleToOtherAdmins by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var biometricEnabled by remember { mutableStateOf(context.getSharedPreferences("elambar_security", Context.MODE_PRIVATE).getBoolean("biometric_enabled", false)) }
+    var biometricGatePassed by remember { mutableStateOf(!biometricEnabled) }
+    var biometricMessage by remember { mutableStateOf("") }
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+
+    LaunchedEffect(Unit) {
+        if (biometricEnabled) {
+            onBiometricAuth { success ->
+                biometricGatePassed = success
+                biometricMessage = if (success) "اثر انگشت تأیید شد." else "اثر انگشت تأیید نشد؛ می‌توانید با روش ورود قبلی وارد شوید."
+            }
+        }
+    }
 
     LaunchedEffect(activeDraftOwner) {
         loadedDraftOwner = ""
@@ -796,7 +843,8 @@ private fun ElaanBarApp(
     var textScale by remember { mutableFloatStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getFloat("text_scale", 1.15f).coerceIn(0.9f, 1.35f)) }
     val currentDensity = androidx.compose.ui.platform.LocalDensity.current
     val scaledDensity = androidx.compose.ui.unit.Density(density = currentDensity.density, fontScale = textScale)
-    LaunchedEffect(Unit) {
+    LaunchedEffect(biometricGatePassed) {
+        if (!biometricGatePassed) return@LaunchedEffect
         val saved = DeviceSessionStore.load(context)
         if (saved != null) {
             val savedRole = when (saved.second) { "COMPANY" -> UserRole.COMPANY; "ADMIN" -> UserRole.ADMIN; else -> UserRole.DRIVER }
@@ -1134,6 +1182,9 @@ private fun ElaanBarApp(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                if (biometricEnabled && !biometricGatePassed && !userLoggedIn && !adminLoggedIn && biometricMessage.isNotBlank()) {
+                    Text(biometricMessage, color = MaterialTheme.colorScheme.secondary, textAlign = TextAlign.Center)
+                }
                 if (!(userLoggedIn && role == UserRole.COMPANY && !showProfile && !showPublicHall)) {
                     Spacer(Modifier.height(12.dp))
                     Surface(
@@ -1202,6 +1253,35 @@ private fun ElaanBarApp(
                             TextButton(onClick = onNextPalette, modifier = Modifier.fillMaxWidth()) {
                                 Text("پوسته فعلی: " + listOf("روشن", "سبز", "آبی", "تیره", "خودکار")[palette] + "  |  تغییر پوسته")
                             }
+                            HorizontalDivider()
+                            Text("قفل اثر انگشت", style = MaterialTheme.typography.titleMedium)
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(if (biometricEnabled) "ورود با اثر انگشت روشن" else "ورود با اثر انگشت خاموش")
+                                Switch(
+                                    checked = biometricEnabled,
+                                    onCheckedChange = { enabled ->
+                                        if (enabled) {
+                                            biometricMessage = "اثر انگشت را برای فعال‌سازی تأیید کنید."
+                                            onBiometricAuth { success ->
+                                                if (success) {
+                                                    biometricEnabled = true
+                                                    biometricGatePassed = true
+                                                    context.getSharedPreferences("elambar_security", Context.MODE_PRIVATE).edit().putBoolean("biometric_enabled", true).apply()
+                                                    biometricMessage = "قفل اثر انگشت فعال شد."
+                                                } else {
+                                                    biometricMessage = "فعال‌سازی انجام نشد؛ حسگر و اثر انگشت ثبت‌شده را بررسی کنید."
+                                                }
+                                            }
+                                        } else {
+                                            biometricEnabled = false
+                                            biometricGatePassed = true
+                                            context.getSharedPreferences("elambar_security", Context.MODE_PRIVATE).edit().putBoolean("biometric_enabled", false).apply()
+                                            biometricMessage = "ورود با اثر انگشت غیرفعال شد."
+                                        }
+                                    }
+                                )
+                            }
+                            if (biometricMessage.isNotBlank()) Text(biometricMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                             HorizontalDivider()
                             Text("اعلان و صدا", style = MaterialTheme.typography.titleMedium)
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
