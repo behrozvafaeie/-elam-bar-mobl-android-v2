@@ -164,11 +164,11 @@ jobs:
     name: Android ${{ matrix.api-level }} compatibility and update test
     needs: build
     runs-on: ubuntu-24.04
-    timeout-minutes: 42
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        api-level: [24, 28, 33, 35]
+        api-level: [24, 25, 28, 33, 35]
     steps:
       - name: Checkout diagnostic source and smoke-test script
         uses: actions/checkout@v4
@@ -189,7 +189,7 @@ jobs:
           path: previous
 
       - name: Install and launch APK on Android ${{ matrix.api-level }} emulator
-        timeout-minutes: 35
+        timeout-minutes: 50
         env:
           ANDROID_I_WANT_MY_TCG: "yes"
         uses: reactivecircus/android-emulator-runner@v2
@@ -199,7 +199,7 @@ jobs:
           arch: x86_64
           profile: pixel_2
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -memory 4096 -cores 2 -no-snapshot -no-metrics
-          emulator-boot-timeout: 900
+          emulator-boot-timeout: 1200
           disable-animations: false
           script: bash .github/scripts/android-emulator-smoke-test.sh
 
