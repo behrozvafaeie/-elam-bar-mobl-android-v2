@@ -60,10 +60,10 @@ if ! timeout 600s adb install -r "$PREVIOUS_APK" 2>&1 | tee "$INSTALL_LOG"; then
 fi
 adb shell dumpsys package "$PACKAGE" | grep -F "versionCode=40"
 echo "Writing a private app-data marker before update..."
-adb shell "run-as $PACKAGE sh -c 'mkdir -p files && printf \"keep-data-across-update-1.6.4-to-1.6.5\" > files/update_marker.txt'"
+adb shell "run-as $PACKAGE sh -c 'mkdir -p files && printf \"keep-data-across-update-1.6.4-to-1.6.6\" > files/update_marker.txt'"
 adb shell am force-stop "$PACKAGE" || true
 
-echo "Installing 1.6.5 over the existing 1.6.4 app (up to 600 seconds)..."
+echo "Installing 1.6.6 over the existing 1.6.4 app (up to 600 seconds)..."
 if timeout 600s adb install -r "$APK" 2>&1 | tee "$INSTALL_LOG"; then
   echo "In-place update installation completed."
 else
@@ -72,8 +72,8 @@ else
   dump_diagnostics
   exit 1
 fi
-adb shell dumpsys package "$PACKAGE" | grep -F "versionCode=41"
-adb shell run-as "$PACKAGE" cat files/update_marker.txt | grep -Fx "keep-data-across-update-1.6.4-to-1.6.5"
+adb shell dumpsys package "$PACKAGE" | grep -F "versionCode=42"
+adb shell run-as "$PACKAGE" cat files/update_marker.txt | grep -Fx "keep-data-across-update-1.6.4-to-1.6.6"
 echo "Existing app data survived the in-place update."
 
 adb logcat -c
