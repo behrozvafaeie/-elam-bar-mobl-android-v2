@@ -1,6 +1,6 @@
 name: Android APK
 # Build dependency resolution uses the Google-hosted Maven Central mirror in settings.gradle.kts.
-# Trigger validation after fixing emulator marker command quoting.
+# Build a same-source lower-version baseline so update tests never depend on expired historical artifacts.
 on:
   push:
     branches: [ "main", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25", "fix/source-343-stabilization", "stable/source-343-baseline", "fix/post-merge-ci-stabilization", "feature/v1.5.1-load-draft-autosave", "release/v1.5.1-clean-candidate", "fix/load-status-edit-delete-logout-v1", "feature/company-panel-v2-isolated", "feature/company-panel-v2-install-safe", "diagnostic/startup-crash-log-v1", "work/1.6.3-isolated-company-hall", "work/628-safe-changes" ]
@@ -94,13 +94,39 @@ jobs:
           awk '/^[[:space:]]*FINALIZE_JSON=/ && /versionCode:42,versionName:"1.6.6"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
           ! grep -E 'ELAM_TURN_(URL|USERNAME|PASSWORD)' .github/workflows/android-apk.yml
 
+      - name: Build 1.6.4-compatible baseline for in-place update test
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/previous
+          cp app/build.gradle.kts /tmp/app-build.gradle.kts.current
+          restore_gradle() { cp /tmp/app-build.gradle.kts.current app/build.gradle.kts; }
+          trap restore_gradle EXIT
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("app/build.gradle.kts")
+          s = p.read_text()
+          s = s.replace('versionCode = 42', 'versionCode = 40', 1)
+          s = s.replace('versionName = "1.6.6"', 'versionName = "1.6.4"', 1)
+          if 'versionCode = 40' not in s or 'versionName = "1.6.4"' not in s:
+              raise SystemExit("Could not create the test baseline version metadata")
+          p.write_text(s)
+          PY
+          gradle --no-daemon --max-workers=2 clean assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk artifacts/previous/app-debug.apk
+          restore_gradle
+          trap - EXIT
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging artifacts/previous/app-debug.apk | grep -F "package: name='ir.elambar.mobl' versionCode='40' versionName='1.6.4'"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs artifacts/previous/app-debug.apk
+          echo "Baseline is built from this exact source tree and signed by the same persistent CI key."
+
       - name: Build debug APK (retry transient Maven errors)
         shell: bash
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
             echo "Gradle build attempt ${attempt}/3"
-            if gradle --no-daemon --max-workers=2 assembleDebug; then
+            if gradle --no-daemon --max-workers=2 clean assembleDebug; then
               exit 0
             fi
             if [ "$attempt" -lt 3 ]; then
@@ -146,6 +172,14 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Upload baseline APK for update tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: elam-bar-mobl-v1.6.4-debug-apk
+          path: artifacts/previous/app-debug.apk
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Package complete source archive
         shell: bash
         run: |
@@ -186,9 +220,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: elam-bar-mobl-v1.6.4-debug-apk
-          repository: ${{ github.repository }}
-          run-id: 45060802242
-          github-token: ${{ github.token }}
           path: previous
 
       - name: Install and launch APK on Android ${{ matrix.api-level }} emulator
