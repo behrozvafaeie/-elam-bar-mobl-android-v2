@@ -1,5 +1,6 @@
 package ir.elambar.mobl
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -56,7 +57,7 @@ internal fun CompanyPanelV2(
     var driverSearchMessage by remember { mutableStateOf("برای جست‌وجو، مقصد را وارد کنید.") }
 
     Column(
-        modifier = Modifier.fillMaxWidth().padding(8.dp),
+        modifier = Modifier.fillMaxWidth().animateContentSize().padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Card(
