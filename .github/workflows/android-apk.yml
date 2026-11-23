@@ -204,6 +204,7 @@ jobs:
     timeout-minutes: 75
     strategy:
       fail-fast: false
+      max-parallel: 3
       matrix:
         api-level: [24, 25, 26, 28, 29, 30, 31, 32, 33, 34, 35, 36]
     steps:
@@ -229,9 +230,10 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
-          # API 34's Google APIs image stalls during Zygote preload on some hosted runners.
-          # The app uses no Google Play services in this smoke test, so use the lean AOSP image there.
-          target: ${{ matrix.api-level == 34 && 'default' || 'google_apis' }}
+          # Google Play services are not required by this startup/update smoke test.
+          # Use lean AOSP images on every API level to avoid Google background-service
+          # memory pressure and Package Manager stalls on hosted runners.
+          target: default
           arch: x86_64
           profile: pixel_2
           # Leave more host memory available to the software-rendered emulator.
