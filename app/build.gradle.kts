@@ -8,7 +8,7 @@ android {
     compileSdk = 35
     defaultConfig {
         applicationId = "ir.elambar.mobl"
-        minSdk = 26
+        minSdk = 24
         targetSdk = 35
         versionCode = 42
         versionName = "1.6.6"
