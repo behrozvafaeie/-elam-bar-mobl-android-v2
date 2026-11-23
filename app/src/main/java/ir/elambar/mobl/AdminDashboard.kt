@@ -74,7 +74,7 @@ internal fun AdminDashboard(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Column(Modifier.fillMaxWidth(0.48f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text("داشبورد مدیر ارشد", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
                     Text("آمار زنده سامانه • زمان محاسبه: تهران", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
