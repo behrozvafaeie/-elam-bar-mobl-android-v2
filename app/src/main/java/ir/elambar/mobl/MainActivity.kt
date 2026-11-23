@@ -29,7 +29,7 @@ import javax.crypto.spec.GCMParameterSpec
 import java.security.KeyStore
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
@@ -75,7 +75,7 @@ import java.net.URLEncoder
 private const val SUPABASE_URL = "https://sckcxtceybwtiecyxqsy.supabase.co"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_rcJe7tZqCkHPgnAXZffzUg_f9ixVbwg"
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private var updateInfo by mutableStateOf<JSONObject?>(null)
     private var updateCheckMessage by mutableStateOf("")
     private var updateCheckInProgress by mutableStateOf(false)
