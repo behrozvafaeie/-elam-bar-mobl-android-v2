@@ -1385,6 +1385,21 @@ private fun ElaanBarApp(
                     Text("پنل مدیریت", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
                     Text("خوش آمدید؛ سطح دسترسی: " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }, textAlign = TextAlign.Center)
                     if (selectedPanel == null) {
+                        if (adminRole == "super_admin") {
+                            AdminDashboard(accessToken = adminAccessToken) { panel ->
+                                selectedPanel = panel
+                                adminPanelData = ""
+                                adminActionMessage = ""
+                                adminPanelLoading = true
+                                scope.launch {
+                                    adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, panel) }
+                                    if (panel == "مدیریت رانندگان" || panel == "مدیریت شرکت‌ها" || panel == "مدیریت مدارک") {
+                                        adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, panel) }
+                                    }
+                                    adminPanelLoading = false
+                                }
+                            }
+                        }
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
@@ -2910,7 +2925,7 @@ private data class AdminAccount(
     val isBlocked: Boolean = false
 )
 
-private fun adminRpc(accessToken: String, functionName: String, body: JSONObject): Pair<Int, String> {
+internal fun adminRpc(accessToken: String, functionName: String, body: JSONObject): Pair<Int, String> {
     var connection: HttpURLConnection? = null
     return try {
         connection = (URL("$SUPABASE_URL/rest/v1/rpc/$functionName").openConnection() as HttpURLConnection).apply {
