@@ -118,7 +118,7 @@ install_and_verify() {
 
 install_and_verify "$PREVIOUS_APK" 40 "baseline 1.6.4 APK"
 echo "Writing a private app-data marker before update..."
-adb shell run-as "$PACKAGE" mkdir -p files
+adb shell run-as "$PACKAGE" mkdir -p files shared_prefs
 printf '%s' 'keep-data-across-update-1.6.4-to-1.6.6' | adb shell run-as "$PACKAGE" tee files/update_marker.txt >/dev/null
 printf '%s' '<?xml version="1.0" encoding="utf-8" standalone="yes" ?><map><string name="update_marker">keep-shared-preferences-across-update</string></map>' | adb shell run-as "$PACKAGE" tee shared_prefs/update_test.xml >/dev/null
 adb shell am force-stop "$PACKAGE" || true
