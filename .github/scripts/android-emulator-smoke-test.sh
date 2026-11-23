@@ -135,9 +135,9 @@ echo "Private files and shared-preferences data survived the in-place update."
 if ! adb logcat -c; then
   echo "WARNING: Could not clear logcat buffer; continuing with existing logs."
 fi
-echo "Starting app explicitly..."
+echo "Starting app explicitly (without waiting for ActivityManager full-draw acknowledgement)..."
 set +e
-timeout 90s adb shell am start -W -n "$ACTIVITY"
+timeout 90s adb shell am start -n "$ACTIVITY"
 launch_rc=$?
 set -e
 echo "Activity launch exit code: $launch_rc"
