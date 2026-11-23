@@ -201,7 +201,7 @@ jobs:
     name: Android ${{ matrix.api-level }} compatibility and update test
     needs: build
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
@@ -223,17 +223,20 @@ jobs:
           path: previous
 
       - name: Install and launch APK on Android ${{ matrix.api-level }} emulator
-        timeout-minutes: 50
+        timeout-minutes: 65
         env:
           ANDROID_I_WANT_MY_TCG: "yes"
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
-          target: google_apis
+          # API 34's Google APIs image stalls during Zygote preload on some hosted runners.
+          # The app uses no Google Play services in this smoke test, so use the lean AOSP image there.
+          target: ${{ matrix.api-level == 34 && 'default' || 'google_apis' }}
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -memory 4096 -cores 2 -no-snapshot -no-metrics
-          emulator-boot-timeout: 1200
+          # Leave more host memory available to the software-rendered emulator.
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -memory 3072 -cores 2 -no-snapshot -no-metrics
+          emulator-boot-timeout: 1800
           disable-animations: false
           script: bash .github/scripts/android-emulator-smoke-test.sh
 
