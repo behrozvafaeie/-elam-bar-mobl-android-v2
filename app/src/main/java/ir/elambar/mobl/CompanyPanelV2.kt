@@ -78,14 +78,19 @@ internal fun CompanyPanelV2(
             Text("بازگشت به پنل فعلی")
         }
 
+        Button(
+            onClick = {
+                actionMessage = ""
+                page = if (page == "publish") "home" else "publish"
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = CompanyPanelBlue)
+        ) {
+            Text(if (page == "publish") "بستن فرم اعلام بار ▲" else "اعلام بار جدید ▼", fontSize = 17.sp)
+        }
+
         when (page) {
             "home" -> {
-                CompanyPanelActionCard(
-                    title = "ثبت بار جدید",
-                    description = "ثبت یک یا چند مقصد در یک مرحله؛ بدون محدودیت تعداد بار.",
-                    buttonText = "ورود به فرم ثبت بار",
-                    onClick = { actionMessage = ""; page = "publish" }
-                )
                 CompanyPanelActionCard(
                     title = "سوابق و مدیریت بارها",
                     description = "مشاهده بارهای همین شرکت، بروزرسانی، ویرایش و لغو بارهای مجاز.",
