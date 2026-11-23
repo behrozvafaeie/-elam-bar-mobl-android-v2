@@ -531,6 +531,7 @@ private fun ElaanBarApp(
     var recoveryMessage by remember { mutableStateOf("") }
     var editProfileBirthDate by remember { mutableStateOf("") }
     var showProfile by remember { mutableStateOf(false) }
+    var showContacts by remember { mutableStateOf(false) }
     var showCommunication by remember { mutableStateOf(false) }
     var showChatRooms by remember { mutableStateOf(false) }
     var showStories by remember { mutableStateOf(false) }
@@ -720,13 +721,14 @@ private fun ElaanBarApp(
         "مدیریت مدارک", "گفتگوها", "شکایات", "گزارش‌ها", "تنظیمات کل برنامه"
     )
     BackHandler(
-        enabled = showStories || showChatRooms || showCommunication || showProfile || showSettings || showPublicHall || selectedPanel != null || companyLoadPanelExpanded || companyHallExpanded || drawerState.isOpen
+        enabled = showStories || showChatRooms || showCommunication || showProfile || showContacts || showSettings || showPublicHall || selectedPanel != null || companyLoadPanelExpanded || companyHallExpanded || drawerState.isOpen
     ) {
         when {
             showStories -> showStories = false
             showChatRooms -> showChatRooms = false
             showCommunication -> showCommunication = false
             showProfile -> showProfile = false
+            showContacts -> showContacts = false
             showSettings -> showSettings = false
             showPublicHall -> showPublicHall = false
             selectedPanel != null -> selectedPanel = null
@@ -910,6 +912,24 @@ private fun ElaanBarApp(
                             onClick = { showPublicHall = false; showProfile = true; scope.launch { drawerState.close() } },
                             modifier = Modifier.fillMaxWidth()
                         )
+                        NavigationDrawerItem(
+                            label = { Text("مخاطبین") },
+                            selected = showContacts,
+                            onClick = {
+                                showContacts = true
+                                showProfile = false
+                                showSettings = false
+                                showPublicHall = false
+                                showStories = false
+                                showChatRooms = false
+                                showCommunication = false
+                                selectedPanel = null
+                                companyLoadPanelExpanded = false
+                                companyHallExpanded = false
+                                scope.launch { drawerState.close() }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                     if ((userLoggedIn && role == UserRole.DRIVER && userStatus == "approved") || adminLoggedIn) {
                         NavigationDrawerItem(
@@ -1083,10 +1103,11 @@ private fun ElaanBarApp(
                         }
                     },
                     navigationIcon = {
-                        if (showProfile || showSettings || showPublicHall || selectedPanel != null || companyLoadPanelExpanded || companyHallExpanded) {
+                        if (showProfile || showContacts || showSettings || showPublicHall || selectedPanel != null || companyLoadPanelExpanded || companyHallExpanded) {
                             IconButton(onClick = {
                                 when {
                                     showProfile -> showProfile = false
+                                    showContacts -> showContacts = false
                                     showSettings -> showSettings = false
                                     showPublicHall -> showPublicHall = false
                                     selectedPanel != null -> selectedPanel = null
@@ -1157,6 +1178,12 @@ private fun ElaanBarApp(
                                 acceptingLoadId = ""
                             }
                         }
+                    )
+                } else if (showContacts && (userLoggedIn || adminLoggedIn)) {
+                    ContactsScreen(
+                        accessToken = if (adminLoggedIn) adminAccessToken else userAccessToken,
+                        role = if (adminLoggedIn) adminRole else role.name,
+                        onBack = { showContacts = false }
                     )
                 } else if (showSettings) {
                     HorizontalDivider()
