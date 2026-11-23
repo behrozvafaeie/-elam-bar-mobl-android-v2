@@ -240,14 +240,14 @@ private fun fetchRoleDirectory(token: String, role: String): DirectoryResult {
             for (i in 0 until rows.length()) {
                 val row = rows.getJSONObject(i)
                 if (rpcName == "list_driver_directory_v2") {
-                    val first = row.optString("first_name").trim()
-                    val last = row.optString("last_name").trim()
-                    val name = (first + " " + last).trim().ifBlank { "راننده" }
+                    // Match the actual list_driver_directory_v2 RPC contract:
+                    // id + full_name (not driver_id / first_name / last_name).
+                    val name = row.optString("full_name").trim().ifBlank { "راننده" }
                     val destinations = row.optJSONArray("destinations") ?: JSONArray()
                     val destinationText = (0 until destinations.length()).map { destinations.optString(it) }.filter { it.isNotBlank() }.joinToString("، ")
                     val photo = publicProfilePhotoUrl(row.optString("profile_photo_path"))
                     result += DirectoryContact(
-                        row.optString("driver_id"), name, "راننده", row.optString("vehicle_type"),
+                        row.optString("id"), name, "راننده", row.optString("vehicle_type"),
                         "حساب تأییدشده", photo,
                         listOf(
                             "نوع خودرو" to row.optString("vehicle_type"),
