@@ -29,18 +29,41 @@ dump_diagnostics() {
 echo "Waiting for Android device..."
 adb wait-for-device
 
-echo "Waiting for Android package manager..."
+# adb wait-for-device only means adbd is reachable. It does NOT mean Android
+# framework/system_server or Package Manager has finished booting.
+echo "Waiting for Android framework, boot completion, and Package Manager..."
 ready=0
-for i in $(seq 1 60); do
-  if timeout 20s adb shell pm list packages >/dev/null 2>&1; then
-    ready=1
-    break
+for i in $(seq 1 240); do
+  adb_state="$(adb get-state 2>/dev/null || true)"
+  if [ "$adb_state" = "device" ]; then
+    boot_completed="$(timeout 10s adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+    boot_animation="$(timeout 10s adb shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r' || true)"
+    if [ "$boot_completed" = "1" ] && [ "$boot_animation" = "stopped" ]; then
+      # Probe Package Manager only after the framework reports boot complete.
+      if timeout 20s adb shell pm list packages >/dev/null 2>&1; then
+        ready=1
+        echo "Android boot and Package Manager are ready (attempt $i/240)."
+        break
+      fi
+      echo "Boot is complete, but Package Manager is not responding ($i/240)."
+    else
+      echo "Android framework is still booting (boot_completed='$boot_completed', bootanim='$boot_animation'; $i/240)."
+    fi
+  else
+    echo "ADB is not in device state (state='$adb_state'; $i/240)."
   fi
-  echo "Package manager not ready ($i/60)"
   sleep 5
 done
 if [ "$ready" -ne 1 ]; then
-  echo "Android package manager did not become ready."
+  echo "Android framework and Package Manager did not become ready within 20 minutes."
+  dump_diagnostics
+  exit 1
+fi
+
+# Allow late boot services to settle before attempting any package operation.
+sleep 10
+if ! timeout 30s adb shell pm list packages >/dev/null; then
+  echo "Package Manager stopped responding after boot completion."
   dump_diagnostics
   exit 1
 fi
