@@ -79,7 +79,8 @@ install_and_verify() {
 
 install_and_verify "$PREVIOUS_APK" 40 "baseline 1.6.4 APK"
 echo "Writing a private app-data marker before update..."
-adb shell run-as "$PACKAGE" sh -c "mkdir -p files && printf '%s' 'keep-data-across-update-1.6.4-to-1.6.6' > files/update_marker.txt"
+adb shell run-as "$PACKAGE" mkdir -p files
+printf '%s' 'keep-data-across-update-1.6.4-to-1.6.6' | adb shell run-as "$PACKAGE" tee files/update_marker.txt >/dev/null
 adb shell am force-stop "$PACKAGE" || true
 
 echo "Installing 1.6.6 over the existing 1.6.4 app..."
