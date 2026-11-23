@@ -75,6 +75,22 @@ if [ ! -s "$PREVIOUS_APK" ]; then
   echo "Previous 1.6.4 APK artifact is missing."
   exit 1
 fi
+
+# The synthetic lower-version baseline exercises Android's in-place update path.
+# It is not a substitute for comparing against the historical APK installed by a user.
+APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+signer_fingerprint() {
+  "$APKSIGNER" verify --print-certs "$1" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ { print tolower($2); exit }'
+}
+BASELINE_SIGNER="$(signer_fingerprint "$PREVIOUS_APK")"
+UPDATE_SIGNER="$(signer_fingerprint "$APK")"
+if [ -z "$BASELINE_SIGNER" ] || [ -z "$UPDATE_SIGNER" ] || [ "$BASELINE_SIGNER" != "$UPDATE_SIGNER" ]; then
+  echo "APK signing certificate mismatch; refusing to run the in-place update test."
+  echo "Baseline signer: $BASELINE_SIGNER"
+  echo "Update signer:   $UPDATE_SIGNER"
+  exit 1
+fi
+echo "Baseline and update APK signing certificates match: $UPDATE_SIGNER"
 install_and_verify() {
   local apk_path="$1"
   local expected_version="$2"
@@ -104,13 +120,15 @@ install_and_verify "$PREVIOUS_APK" 40 "baseline 1.6.4 APK"
 echo "Writing a private app-data marker before update..."
 adb shell run-as "$PACKAGE" mkdir -p files
 printf '%s' 'keep-data-across-update-1.6.4-to-1.6.6' | adb shell run-as "$PACKAGE" tee files/update_marker.txt >/dev/null
+printf '%s' '<?xml version="1.0" encoding="utf-8" standalone="yes" ?><map><string name="update_marker">keep-shared-preferences-across-update</string></map>' | adb shell run-as "$PACKAGE" tee shared_prefs/update_test.xml >/dev/null
 adb shell am force-stop "$PACKAGE" || true
 
 echo "Installing 1.6.6 over the existing 1.6.4 app..."
 install_and_verify "$APK" 42 "in-place 1.6.6 update"
 echo "In-place update installation completed and package version verified."
 adb shell run-as "$PACKAGE" cat files/update_marker.txt | grep -Fx "keep-data-across-update-1.6.4-to-1.6.6"
-echo "Existing app data survived the in-place update."
+adb shell run-as "$PACKAGE" cat shared_prefs/update_test.xml | grep -F "keep-shared-preferences-across-update"
+echo "Private files and shared-preferences data survived the in-place update."
 
 # Logcat buffer clearing is diagnostic housekeeping, not an app test.
 # Some emulator images return a non-zero exit even after a successful install/update.
