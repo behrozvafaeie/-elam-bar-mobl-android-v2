@@ -1,6 +1,12 @@
 package ir.elambar.mobl
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -90,7 +96,15 @@ internal fun CompanyPanelV2(
             Text(if (page == "publish") "بستن فرم اعلام بار ▲" else "اعلام بار جدید ▼", fontSize = 17.sp)
         }
 
-        when (page) {
+        AnimatedContent(
+            targetState = page,
+            transitionSpec = {
+                (slideInVertically(initialOffsetY = { -it }) + fadeIn()) togetherWith
+                    (slideOutVertically(targetOffsetY = { -it }) + fadeOut())
+            },
+            label = "company-panel-dropdown"
+        ) { visiblePage ->
+            when (visiblePage) {
             "home" -> {
                 CompanyPanelActionCard(
                     title = "سوابق و مدیریت بارها",
@@ -258,6 +272,7 @@ internal fun CompanyPanelV2(
                 OutlinedButton(onClick = { page = "home" }, modifier = Modifier.fillMaxWidth()) {
                     Text("بازگشت به صفحه پنل جدید")
                 }
+            }
             }
         }
     }
