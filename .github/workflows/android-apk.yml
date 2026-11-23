@@ -85,10 +85,10 @@ jobs:
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 41' app/build.gradle.kts
-          grep -F 'versionName = "1.6.5"' app/build.gradle.kts
-          awk '/^[[:space:]]*PREPARE_JSON=/ && /versionCode:41,versionName:"1.6.5"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
-          awk '/^[[:space:]]*FINALIZE_JSON=/ && /versionCode:41,versionName:"1.6.5"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
+          grep -F 'versionCode = 42' app/build.gradle.kts
+          grep -F 'versionName = "1.6.6"' app/build.gradle.kts
+          awk '/^[[:space:]]*PREPARE_JSON=/ && /versionCode:42,versionName:"1.6.6"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
+          awk '/^[[:space:]]*FINALIZE_JSON=/ && /versionCode:42,versionName:"1.6.6"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
           ! grep -E 'ELAM_TURN_(URL|USERNAME|PASSWORD)' .github/workflows/android-apk.yml
 
       - name: Build debug APK (retry transient Maven errors)
@@ -129,7 +129,7 @@ jobs:
         shell: bash
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='41' versionName='1.6.5'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='42' versionName='1.6.6'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs --verbose "$APK"
           keytool -list -v -keystore /home/runner/.android/debug.keystore -storepass android -alias androiddebugkey | grep -E "SHA256:"
           sha256sum "$APK"
@@ -138,7 +138,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: elam-bar-mobl-v1.6.5-debug-apk
+          name: elam-bar-mobl-v1.6.6-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 90
@@ -148,15 +148,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          git archive --format=zip --output=artifacts/elam-bar-mobl-v1.6.5-source.zip HEAD
-          test -s artifacts/elam-bar-mobl-v1.6.5-source.zip
-          unzip -t artifacts/elam-bar-mobl-v1.6.5-source.zip
+          git archive --format=zip --output=artifacts/elam-bar-mobl-v1.6.6-source.zip HEAD
+          test -s artifacts/elam-bar-mobl-v1.6.6-source.zip
+          unzip -t artifacts/elam-bar-mobl-v1.6.6-source.zip
 
       - name: Upload complete source ZIP artifact
         uses: actions/upload-artifact@v4
         with:
-          name: elam-bar-mobl-v1.6.5-source
-          path: artifacts/elam-bar-mobl-v1.6.5-source.zip
+          name: elam-bar-mobl-v1.6.6-source
+          path: artifacts/elam-bar-mobl-v1.6.6-source.zip
           if-no-files-found: error
           retention-days: 90
 
@@ -176,7 +176,7 @@ jobs:
       - name: Download built APK
         uses: actions/download-artifact@v4
         with:
-          name: elam-bar-mobl-v1.6.5-debug-apk
+          name: elam-bar-mobl-v1.6.6-debug-apk
           path: artifacts
 
       - name: Download 1.6.4 baseline APK for in-place update test
@@ -212,7 +212,7 @@ jobs:
       - name: Download tested APK
         uses: actions/download-artifact@v4
         with:
-          name: elam-bar-mobl-v1.6.5-debug-apk
+          name: elam-bar-mobl-v1.6.6-debug-apk
           path: artifacts
 
       - name: Publish tested APK to public update storage using GitHub OIDC
@@ -234,7 +234,7 @@ jobs:
           }
 
           OIDC_TOKEN=$(get_oidc_token)
-          PREPARE_JSON=$(jq -n '{action:"prepare",versionCode:41,versionName:"1.6.5"}')
+          PREPARE_JSON=$(jq -n '{action:"prepare",versionCode:42,versionName:"1.6.6"}')
           PREPARE_RESULT=$(curl -fsS -X POST "https://sckcxtceybwtiecyxqsy.supabase.co/functions/v1/app-release-upload" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
@@ -249,7 +249,7 @@ jobs:
           ARCHIVE_SHA256=$(sha256sum "$ARCHIVE" | awk '{print $1}')
           APK_SHA256=$(sha256sum "$APK" | awk '{print $1}')
           OIDC_TOKEN=$(get_oidc_token)
-          FINALIZE_JSON=$(jq -n --arg archiveSha256 "$ARCHIVE_SHA256" --arg apkSha256 "$APK_SHA256" '{action:"finalize",versionCode:41,versionName:"1.6.5",archiveSha256:$archiveSha256,apkSha256:$apkSha256}')
+          FINALIZE_JSON=$(jq -n --arg archiveSha256 "$ARCHIVE_SHA256" --arg apkSha256 "$APK_SHA256" '{action:"finalize",versionCode:42,versionName:"1.6.6",archiveSha256:$archiveSha256,apkSha256:$apkSha256}')
           curl -fsS -X POST "https://sckcxtceybwtiecyxqsy.supabase.co/functions/v1/app-release-upload" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
