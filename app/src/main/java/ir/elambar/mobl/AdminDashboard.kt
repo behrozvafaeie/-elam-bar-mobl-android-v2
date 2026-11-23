@@ -102,7 +102,7 @@ internal fun AdminDashboard(
                         DashboardMetric("رانندگان در انتظار", value.driversPending, Modifier.weight(1f))
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        DashboardMetric("مدارک در انتظار", value.documentsPending, Modifier.weight(1f))
+                        DashboardMetric("مدارک رانندگان در انتظار", value.documentsPending, Modifier.weight(1f))
                         DashboardMetric("بارهای منتشرشده", value.loadsPublished, Modifier.weight(1f))
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
