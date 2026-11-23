@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -56,10 +55,16 @@ internal fun AdminDashboard(
         if (loading) return
         loading = true
         scope.launch {
-            val result = withContext(Dispatchers.IO) { fetchAdminDashboardStats(accessToken) }
-            stats = result.first
-            message = result.second
-            loading = false
+            try {
+                val result = withContext(Dispatchers.IO) { fetchAdminDashboardStats(accessToken) }
+                stats = result.first
+                message = result.second
+            } catch (_: Exception) {
+                stats = null
+                message = "دریافت آمار با خطا روبرو شد؛ اتصال را بررسی و دوباره تلاش کنید."
+            } finally {
+                loading = false
+            }
         }
     }
 
@@ -144,9 +149,16 @@ private fun fetchAdminDashboardStats(accessToken: String): Pair<AdminDashboardSt
     val (code, body) = adminRpc(accessToken, "admin_get_dashboard_stats", JSONObject())
     if (code !in 200..299) return null to "دریافت آمار انجام نشد؛ سطح دسترسی یا اتصال سامانه را بررسی کنید."
     return runCatching {
-        val rows = JSONArray(body)
-        if (rows.length() == 0) return null to "هنوز آمار داشبورد از سرور دریافت نشده است."
-        val row = rows.getJSONObject(0)
+        val normalizedBody = body.trim()
+        val row = when {
+            normalizedBody.startsWith("[") -> {
+                val rows = JSONArray(normalizedBody)
+                if (rows.length() == 0) return null to "هنوز آمار داشبورد از سرور دریافت نشده است."
+                rows.getJSONObject(0)
+            }
+            normalizedBody.startsWith("{") -> JSONObject(normalizedBody)
+            else -> return null to "ساختار پاسخ آماری سرور معتبر نیست."
+        }
         AdminDashboardStats(
             companiesTotal = row.optLong("companies_total"),
             companiesPending = row.optLong("companies_pending"),
