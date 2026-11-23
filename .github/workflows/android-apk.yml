@@ -1,4 +1,5 @@
 name: Android APK
+# Build dependency resolution uses the Google-hosted Maven Central mirror in settings.gradle.kts.
 # Trigger validation after fixing emulator marker command quoting.
 on:
   push:
