@@ -52,27 +52,39 @@ if [ ! -s "$PREVIOUS_APK" ]; then
   echo "Previous 1.6.4 APK artifact is missing."
   exit 1
 fi
-echo "Installing baseline 1.6.4 APK..."
-if ! timeout 600s adb install -r "$PREVIOUS_APK" 2>&1 | tee "$INSTALL_LOG"; then
-  echo "Baseline APK install failed."
-  dump_diagnostics
-  exit 1
-fi
-adb shell dumpsys package "$PACKAGE" | grep -F "versionCode=40"
+install_and_verify() {
+  local apk_path="$1"
+  local expected_version="$2"
+  local label="$3"
+  echo "Installing $label (up to 1200 seconds)..."
+  set +e
+  timeout 1200s adb install -r "$apk_path" 2>&1 | tee "$INSTALL_LOG"
+  local install_rc=${PIPESTATUS[0]}
+  set -e
+  if [ "$install_rc" -ne 0 ]; then
+    echo "adb install returned $install_rc; checking whether Package Manager completed installation anyway..."
+    if ! timeout 60s adb shell dumpsys package "$PACKAGE" | grep -F "versionCode=$expected_version"; then
+      echo "$label installation did not complete."
+      dump_diagnostics
+      return 1
+    fi
+    echo "$label is installed despite the adb client timeout/exit."
+  fi
+  timeout 60s adb shell dumpsys package "$PACKAGE" | grep -F "versionCode=$expected_version" || {
+    echo "Installed package version does not match $expected_version."
+    dump_diagnostics
+    return 1
+  }
+}
+
+install_and_verify "$PREVIOUS_APK" 40 "baseline 1.6.4 APK"
 echo "Writing a private app-data marker before update..."
 adb shell "run-as $PACKAGE sh -c 'mkdir -p files && printf \"keep-data-across-update-1.6.4-to-1.6.6\" > files/update_marker.txt'"
 adb shell am force-stop "$PACKAGE" || true
 
-echo "Installing 1.6.6 over the existing 1.6.4 app (up to 600 seconds)..."
-if timeout 600s adb install -r "$APK" 2>&1 | tee "$INSTALL_LOG"; then
-  echo "In-place update installation completed."
-else
-  install_rc=$?
-  echo "In-place update failed or timed out (exit code: $install_rc)."
-  dump_diagnostics
-  exit 1
-fi
-adb shell dumpsys package "$PACKAGE" | grep -F "versionCode=42"
+echo "Installing 1.6.6 over the existing 1.6.4 app..."
+install_and_verify "$APK" 42 "in-place 1.6.6 update"
+echo "In-place update installation completed and package version verified."
 adb shell run-as "$PACKAGE" cat files/update_marker.txt | grep -Fx "keep-data-across-update-1.6.4-to-1.6.6"
 echo "Existing app data survived the in-place update."
 
