@@ -1,4 +1,5 @@
 name: Android APK
+# Rebuild validation for the complete v1.6.8 source snapshot.
 # Build dependency resolution uses the Google-hosted Maven Central mirror in settings.gradle.kts.
 # v1.6.8: package version and emulator update smoke test must stay in sync.
 # Build a same-source lower-version baseline so update tests never depend on expired historical artifacts.
