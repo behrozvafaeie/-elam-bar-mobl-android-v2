@@ -119,14 +119,14 @@ install_and_verify() {
 install_and_verify "$PREVIOUS_APK" 40 "baseline 1.6.4 APK"
 echo "Writing a private app-data marker before update..."
 adb shell run-as "$PACKAGE" mkdir -p files shared_prefs
-printf '%s' 'keep-data-across-update-1.6.4-to-1.6.8' | adb shell run-as "$PACKAGE" tee files/update_marker.txt >/dev/null
+printf '%s' 'keep-data-across-update-1.6.4-to-1.6.9' | adb shell run-as "$PACKAGE" tee files/update_marker.txt >/dev/null
 printf '%s' '<?xml version="1.0" encoding="utf-8" standalone="yes" ?><map><string name="update_marker">keep-shared-preferences-across-update</string></map>' | adb shell run-as "$PACKAGE" tee shared_prefs/update_test.xml >/dev/null
 adb shell am force-stop "$PACKAGE" || true
 
 echo "Installing 1.6.8 over the synthetic 1.6.4 baseline..."
-install_and_verify "$APK" 44 "in-place 1.6.8 update"
+install_and_verify "$APK" 45 "in-place 1.6.9 update"
 echo "In-place update installation completed and package version verified."
-adb shell run-as "$PACKAGE" cat files/update_marker.txt | grep -Fx "keep-data-across-update-1.6.4-to-1.6.8"
+adb shell run-as "$PACKAGE" cat files/update_marker.txt | grep -Fx "keep-data-across-update-1.6.4-to-1.6.9"
 adb shell run-as "$PACKAGE" cat shared_prefs/update_test.xml | grep -F "keep-shared-preferences-across-update"
 echo "Private files and shared-preferences data survived the in-place update."
 
@@ -159,6 +159,15 @@ adb logcat -d -v threadtime | grep -E -A 60 -B 12 "FATAL EXCEPTION|AndroidRuntim
 
 echo "===== RECENT APP LOGCAT ====="
 adb logcat -d -v threadtime | grep -F "$PACKAGE" | tail -n 300 || true
+
+# A process that restarts after a fatal exception must not be counted as a
+# successful launch merely because pidof finds the restarted process.
+if adb logcat -d -v threadtime | grep -E "FATAL EXCEPTION|Process: $PACKAGE|Caused by:.*(ClassNotFoundException|NoClassDefFoundError)|at ir\\.elambar\\.mobl\\."; then
+  echo "A fatal app exception was recorded during startup."
+  echo "STARTUP_SMOKE_TEST_FAILED"
+  dump_diagnostics
+  exit 1
+fi
 
 if [ "$launch_rc" -ne 0 ] || [ "$process_rc" -ne 0 ]; then
   echo "STARTUP_SMOKE_TEST_FAILED"
