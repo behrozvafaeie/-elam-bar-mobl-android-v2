@@ -1,6 +1,7 @@
 name: Android APK
 # Build dependency resolution uses the Google-hosted Maven Central mirror in settings.gradle.kts.
 # v1.7.0: package version and emulator update smoke test must stay in sync.
+# Admin document signed URLs are normalized before download; validate this fix in CI.
 # CI validation temporarily targets the branch that owns the existing signing-key cache.
 # Build a same-source lower-version baseline so update tests never depend on expired historical artifacts.
 on:
