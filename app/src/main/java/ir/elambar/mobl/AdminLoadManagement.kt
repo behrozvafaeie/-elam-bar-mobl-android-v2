@@ -96,7 +96,7 @@ private class AdminLoadRepository(private val token: String) {
 
     fun list(offset: Int = 0): Pair<String?, List<AdminLoadItem>> {
         if (token.isBlank()) return "نشست مدیر معتبر نیست؛ دوباره وارد شوید." to emptyList()
-        val query = "loads?select=id,origin,destination,cargo_type,vehicle_type,loading_type,freight_amount,description,status,assigned_driver_id,publisher_type&order=created_at.desc&limit=$ADMIN_LOAD_PAGE_SIZE&offset=${offset.coerceAtLeast(0)}"
+        val query = "loads?select=id,origin,destination,cargo_type,vehicle_type,loading_type,freight_amount,description,status,assigned_driver_id,publisher_type&order=created_at.desc,id.desc&limit=$ADMIN_LOAD_PAGE_SIZE&offset=${offset.coerceAtLeast(0)}"
         val (code, body) = request("GET", query)
         if (code !in 200..299) return "دریافت فهرست بارها ناموفق بود (کد $code). مجوز مشاهده بارها را بررسی کنید." to emptyList()
         return runCatching {
