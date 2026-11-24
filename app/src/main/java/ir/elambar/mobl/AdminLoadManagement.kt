@@ -39,6 +39,7 @@ import java.net.URLEncoder
 
 private const val ADMIN_LOADS_API = "https://sckcxtceybwtiecyxqsy.supabase.co"
 private const val ADMIN_LOADS_KEY = "sb_publishable_rcJe7tZqCkHPgnAXZffzUg_f9ixVbwg"
+private const val ADMIN_LOAD_PAGE_SIZE = 200
 
 private data class AdminLoadItem(
     val id: String,
@@ -93,9 +94,9 @@ private class AdminLoadRepository(private val token: String) {
         }
     }
 
-    fun list(): Pair<String?, List<AdminLoadItem>> {
+    fun list(offset: Int = 0): Pair<String?, List<AdminLoadItem>> {
         if (token.isBlank()) return "نشست مدیر معتبر نیست؛ دوباره وارد شوید." to emptyList()
-        val query = "loads?select=id,origin,destination,cargo_type,vehicle_type,loading_type,freight_amount,description,status,assigned_driver_id,publisher_type&order=created_at.desc&limit=200"
+        val query = "loads?select=id,origin,destination,cargo_type,vehicle_type,loading_type,freight_amount,description,status,assigned_driver_id,publisher_type&order=created_at.desc&limit=$ADMIN_LOAD_PAGE_SIZE&offset=${offset.coerceAtLeast(0)}"
         val (code, body) = request("GET", query)
         if (code !in 200..299) return "دریافت فهرست بارها ناموفق بود (کد $code). مجوز مشاهده بارها را بررسی کنید." to emptyList()
         return runCatching {
@@ -186,6 +187,8 @@ internal fun AdminLoadManagement(accessToken: String) {
     var items by remember { mutableStateOf<List<AdminLoadItem>>(emptyList()) }
     var message by remember { mutableStateOf("در حال دریافت بارها...") }
     var busy by remember { mutableStateOf(false) }
+    var pageOffset by remember { mutableStateOf(0) }
+    var hasMorePages by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<AdminLoadItem?>(null) }
     var draft by remember { mutableStateOf(AdminLoadDraft("", "", "", "روباری", "", "")) }
     var statusItem by remember { mutableStateOf<AdminLoadItem?>(null) }
@@ -198,10 +201,32 @@ internal fun AdminLoadManagement(accessToken: String) {
         scope.launch {
             val result = withContext(Dispatchers.IO) { repository.list() }
             items = result.second
+                        pageOffset = 0
+                        hasMorePages = result.second.size == ADMIN_LOAD_PAGE_SIZE
+            pageOffset = 0
+            hasMorePages = result.second.size == ADMIN_LOAD_PAGE_SIZE
             message = result.first ?: if (result.second.isEmpty()) "هنوز باری ثبت نشده است." else "بارها به‌روز هستند."
             busy = false
         }
     }
+    fun loadNextPage() {
+        if (busy || !hasMorePages) return
+        busy = true
+        scope.launch {
+            val nextOffset = pageOffset + ADMIN_LOAD_PAGE_SIZE
+            val result = withContext(Dispatchers.IO) { repository.list(nextOffset) }
+            if (result.first == null) {
+                items = items + result.second
+                pageOffset = nextOffset
+                hasMorePages = result.second.size == ADMIN_LOAD_PAGE_SIZE
+                message = "تعداد بارهای بارگذاری‌شده: " + items.size
+            } else {
+                message = result.first.orEmpty()
+            }
+            busy = false
+        }
+    }
+
     LaunchedEffect(accessToken) { refresh() }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -237,6 +262,11 @@ internal fun AdminLoadManagement(accessToken: String) {
                 }
             }
         }
+        if (hasMorePages) {
+            Button(enabled = !busy, onClick = { loadNextPage() }, modifier = Modifier.fillMaxWidth()) {
+                Text("نمایش ۲۰۰ بار بعدی")
+            }
+        }
         Text(message, color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodySmall)
     }
 
@@ -262,6 +292,8 @@ internal fun AdminLoadManagement(accessToken: String) {
                         editing = null
                         val result = withContext(Dispatchers.IO) { repository.list() }
                         items = result.second
+                        pageOffset = 0
+                        hasMorePages = result.second.size == ADMIN_LOAD_PAGE_SIZE
                         if (result.first != null) message += " " + result.first
                         busy = false
                     }
@@ -284,6 +316,8 @@ internal fun AdminLoadManagement(accessToken: String) {
                         deleting = null
                         val result = withContext(Dispatchers.IO) { repository.list() }
                         items = result.second
+                        pageOffset = 0
+                        hasMorePages = result.second.size == ADMIN_LOAD_PAGE_SIZE
                         if (result.first != null) message += " " + result.first
                         busy = false
                     }
@@ -329,6 +363,8 @@ internal fun AdminLoadManagement(accessToken: String) {
                         statusItem = null
                         val result = withContext(Dispatchers.IO) { repository.list() }
                         items = result.second
+                        pageOffset = 0
+                        hasMorePages = result.second.size == ADMIN_LOAD_PAGE_SIZE
                         if (result.first != null) message += " " + result.first
                         busy = false
                     }
