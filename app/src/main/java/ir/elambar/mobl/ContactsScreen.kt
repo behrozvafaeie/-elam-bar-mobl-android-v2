@@ -239,6 +239,10 @@ private fun fetchRoleDirectory(token: String, role: String): DirectoryResult {
                 continue
             }
             val rows = JSONArray(raw)
+            val photoUrls = createProfilePhotoSignedUrls(
+                (0 until rows.length()).map { rows.getJSONObject(it).optString("profile_photo_path") },
+                token
+            )
             for (i in 0 until rows.length()) {
                 val row = rows.getJSONObject(i)
                 if (rpcName == "list_driver_directory_v2") {
@@ -247,7 +251,7 @@ private fun fetchRoleDirectory(token: String, role: String): DirectoryResult {
                     val name = row.optString("full_name").trim().ifBlank { "راننده" }
                     val destinations = row.optJSONArray("destinations") ?: JSONArray()
                     val destinationText = (0 until destinations.length()).map { destinations.optString(it) }.filter { it.isNotBlank() }.joinToString("، ")
-                    val photo = createProfilePhotoSignedUrl(row.optString("profile_photo_path"), token)
+                    val photo = photoUrls[profilePhotoStoragePath(row.optString("profile_photo_path"))].orEmpty()
                     result += DirectoryContact(
                         row.optString("id"), name, "راننده", row.optString("vehicle_type"),
                         "حساب تأییدشده", photo,
