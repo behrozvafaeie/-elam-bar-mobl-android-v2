@@ -1788,7 +1788,7 @@ private fun ElaanBarApp(
                                                 Text(record.title, style = MaterialTheme.typography.titleSmall)
                                                 Text(record.detail, style = MaterialTheme.typography.bodySmall)
                                                 Text("وضعیت: ${record.status}")
-                                                if (selectedPanel == "مدیریت مدارک" && record.mediaUrl.isNotBlank()) {
+                                                if (selectedPanel == "مدیریت مدارک" && adminLoggedIn && adminRole == "super_admin" && record.mediaUrl.isNotBlank()) {
                                                     val lowerUrl = record.mediaUrl.substringBefore("?").lowercase()
                                                     if (lowerUrl.endsWith(".jpg") || lowerUrl.endsWith(".jpeg") || lowerUrl.endsWith(".png") || lowerUrl.endsWith(".webp")) {
                                                         AsyncImage(model = record.mediaUrl, contentDescription = "مدرک راننده", modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp))
