@@ -658,6 +658,7 @@ private fun ElaanBarApp(
     var adminRecords by remember { mutableStateOf<List<AdminRecord>>(emptyList()) }
     var adminActionMessage by remember { mutableStateOf("") }
     var adminStatusReason by remember { mutableStateOf("") }
+    var adminRecordSearch by remember { mutableStateOf("") }
     var adminPanelLoading by remember { mutableStateOf(false) }
     var adminSearchQuery by remember { mutableStateOf("") }
     var adminSearchResults by remember { mutableStateOf<List<AdminAccount>>(emptyList()) }
@@ -1781,8 +1782,14 @@ private fun ElaanBarApp(
                                 if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها" || selectedPanel == "مدیریت مدارک") {
                                     if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها") {
                                         OutlinedTextField(value = adminStatusReason, onValueChange = { adminStatusReason = it.take(500) }, label = { Text("دلیل رد یا مسدودسازی (برای مسدودسازی الزامی است)") }, modifier = Modifier.fillMaxWidth(), maxLines = 3)
+                                        OutlinedTextField(value = adminRecordSearch, onValueChange = { adminRecordSearch = it.take(120) }, label = { Text("جستجو در نام، نام کاربری، موبایل یا وضعیت") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                                     }
-                                    adminRecords.forEach { record ->
+                                    adminRecords.filter { record ->
+                                        if (selectedPanel == "مدیریت مدارک") true else {
+                                            val query = adminRecordSearch.trim()
+                                            query.isBlank() || listOf(record.title, record.detail, record.username, record.status).any { it.contains(query, ignoreCase = true) }
+                                        }
+                                    }.forEach { record ->
                                         Card(Modifier.fillMaxWidth()) {
                                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                                 Text(record.title, style = MaterialTheme.typography.titleSmall)
@@ -4027,17 +4034,25 @@ private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRec
     return try {
         val select = if (table == "drivers") "id,first_name,last_name,full_name,mobile,vehicle_type,primary_destination,status"
             else "id,first_name,last_name,company_name,manager_name,mobile,status"
-        val url = "$SUPABASE_URL/rest/v1/$table?select=$select&order=created_at.desc&limit=100"
-        connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = 15000
-            readTimeout = 20000
-            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
-            setRequestProperty("Authorization", "Bearer $accessToken")
-            setRequestProperty("Accept", "application/json")
+        val rows = JSONArray()
+        var offset = 0
+        while (true) {
+            connection = (URL("$SUPABASE_URL/rest/v1/$table?select=$select&order=created_at.asc&limit=1000&offset=$offset").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 15000
+                readTimeout = 20000
+                setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+                setRequestProperty("Authorization", "Bearer $accessToken")
+                setRequestProperty("Accept", "application/json")
+            }
+            if (connection.responseCode !in 200..299) return emptyList()
+            val page = JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
+            for (i in 0 until page.length()) rows.put(page.getJSONObject(i))
+            connection.disconnect()
+            connection = null
+            if (page.length() < 1000) break
+            offset += page.length()
         }
-        if (connection.responseCode !in 200..299) return emptyList()
-        val rows = JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
         (0 until rows.length()).map { i ->
             val item = rows.getJSONObject(i)
             val title = if (table == "drivers")
