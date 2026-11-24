@@ -201,8 +201,6 @@ internal fun AdminLoadManagement(accessToken: String) {
         scope.launch {
             val result = withContext(Dispatchers.IO) { repository.list() }
             items = result.second
-                        pageOffset = 0
-                        hasMorePages = result.second.size == ADMIN_LOAD_PAGE_SIZE
             pageOffset = 0
             hasMorePages = result.second.size == ADMIN_LOAD_PAGE_SIZE
             message = result.first ?: if (result.second.isEmpty()) "هنوز باری ثبت نشده است." else "بارها به‌روز هستند."
