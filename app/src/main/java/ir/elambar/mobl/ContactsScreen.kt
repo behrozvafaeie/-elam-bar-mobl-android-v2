@@ -209,6 +209,7 @@ internal fun ContactsScreen(
 }
 
 // The RPC endpoints enforce role access on the server; local search only filters already-authorized results.
+// CI validation branch: no runtime behavior changes.
 private fun fetchRoleDirectory(token: String, role: String): DirectoryResult {
     if (token.isBlank()) return DirectoryResult(emptyList(), "نشست ورود معتبر نیست.")
     val result = mutableListOf<DirectoryContact>()
