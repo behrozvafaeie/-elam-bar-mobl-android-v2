@@ -4141,7 +4141,13 @@ private fun createSignedDriverDocumentUrl(accessToken: String, path: String, buc
         val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
         if (code !in 200..299) return ""
         val signed = JSONObject(raw).optString("signedURL")
-        if (signed.isBlank()) "" else if (signed.startsWith("http")) signed else SUPABASE_URL + signed
+        when {
+            signed.isBlank() -> ""
+            signed.startsWith("https://") || signed.startsWith("http://") -> signed
+            signed.startsWith("/storage/") -> SUPABASE_URL + signed
+            signed.startsWith("/") -> SUPABASE_URL + "/storage/v1" + signed
+            else -> ""
+        }
     } catch (_: Exception) { "" }
     finally { connection?.disconnect() }
 }
