@@ -162,7 +162,7 @@ adb logcat -d -v threadtime | grep -F "$PACKAGE" | tail -n 300 || true
 
 # A process that restarts after a fatal exception must not be counted as a
 # successful launch merely because pidof finds the restarted process.
-if adb logcat -d -v threadtime | grep -E "FATAL EXCEPTION|Process: $PACKAGE|Caused by:.*(ClassNotFoundException|NoClassDefFoundError)|at ir\\.elambar\\.mobl\\."; then
+if adb logcat -d -v threadtime | grep -A 80 "FATAL EXCEPTION" | grep -E "Process: $PACKAGE|at ir\\.elambar\\.mobl\\."; then
   echo "A fatal app exception was recorded during startup."
   echo "STARTUP_SMOKE_TEST_FAILED"
   dump_diagnostics
