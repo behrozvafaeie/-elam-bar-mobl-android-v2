@@ -671,6 +671,23 @@ private fun ElaanBarApp(
     var biometricGatePassed by remember { mutableStateOf(!biometricEnabled) }
     var biometricMessage by remember { mutableStateOf("") }
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    var pendingAdminDocumentUrl by remember { mutableStateOf("") }
+    val saveAdminDocumentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { destination ->
+        val sourceUrl = pendingAdminDocumentUrl
+        if (destination != null && sourceUrl.isNotBlank()) {
+            scope.launch {
+                val saved = withContext(Dispatchers.IO) {
+                    copySignedDocumentToUri(context, sourceUrl, destination)
+                }
+                android.widget.Toast.makeText(
+                    context,
+                    if (saved) "فایل مدرک ذخیره شد." else "ذخیره فایل انجام نشد؛ دوباره تلاش کنید.",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+        pendingAdminDocumentUrl = ""
+    }
 
     LaunchedEffect(Unit) {
         if (biometricEnabled) {
@@ -1781,6 +1798,14 @@ private fun ElaanBarApp(
                                                 }
                                                 if (selectedPanel == "مدیریت مدارک") {
                                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                        if (adminLoggedIn && adminRole == "super_admin" && record.mediaUrl.isNotBlank()) {
+                                                            OutlinedButton(onClick = {
+                                                                pendingAdminDocumentUrl = record.mediaUrl
+                                                                val extension = record.mediaUrl.substringBefore("?").substringAfterLast('.', "").takeIf { it.matches(Regex("[A-Za-z0-9]{2,5}")) } ?: "file"
+                                                                val safeName = record.title.replace(Regex("[^A-Za-z0-9_-]"), "_").take(48).ifBlank { "document" }
+                                                                saveAdminDocumentLauncher.launch("$safeName.$extension")
+                                                            }) { Text("دانلود مدرک") }
+                                                        }
                                                         if (record.status != "approved") {
                                                             Button(onClick = {
                                                                 adminPanelLoading = true
@@ -4031,6 +4056,28 @@ private fun createSignedDriverDocumentUrl(accessToken: String, path: String, buc
         if (signed.isBlank()) "" else if (signed.startsWith("http")) signed else SUPABASE_URL + signed
     } catch (_: Exception) { "" }
     finally { connection?.disconnect() }
+}
+
+private fun copySignedDocumentToUri(context: Context, signedUrl: String, destination: Uri): Boolean {
+    if (!signedUrl.startsWith(SUPABASE_URL + "/storage/v1/object/sign/")) return false
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL(signedUrl).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15000
+            readTimeout = 60000
+            instanceFollowRedirects = true
+        }
+        if (connection.responseCode !in 200..299) return false
+        val output = context.contentResolver.openOutputStream(destination, "w") ?: return false
+        output.use { target -> connection.inputStream.use { input -> input.copyTo(target) } }
+        true
+    } catch (_: Exception) {
+        runCatching { context.contentResolver.delete(destination, null, null) }
+        false
+    } finally {
+        connection?.disconnect()
+    }
 }
 
 private fun updateDriverDocumentStatus(accessToken: String, id: String, status: String): String {
