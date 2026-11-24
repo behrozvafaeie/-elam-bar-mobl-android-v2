@@ -40,7 +40,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
 
 private const val CONTACTS_SUPABASE_URL = "https://sckcxtceybwtiecyxqsy.supabase.co"
 private const val CONTACTS_SUPABASE_KEY = "sb_publishable_rcJe7tZqCkHPgnAXZffzUg_f9ixVbwg"
@@ -248,7 +247,7 @@ private fun fetchRoleDirectory(token: String, role: String): DirectoryResult {
                     val name = row.optString("full_name").trim().ifBlank { "راننده" }
                     val destinations = row.optJSONArray("destinations") ?: JSONArray()
                     val destinationText = (0 until destinations.length()).map { destinations.optString(it) }.filter { it.isNotBlank() }.joinToString("، ")
-                    val photo = publicProfilePhotoUrl(row.optString("profile_photo_path"))
+                    val photo = createProfilePhotoSignedUrl(row.optString("profile_photo_path"), token)
                     result += DirectoryContact(
                         row.optString("id"), name, "راننده", row.optString("vehicle_type"),
                         "حساب تأییدشده", photo,
@@ -260,7 +259,7 @@ private fun fetchRoleDirectory(token: String, role: String): DirectoryResult {
                     )
                 } else {
                     val name = row.optString("company_name").ifBlank { "شرکت باربری" }
-                    val photo = publicProfilePhotoUrl(row.optString("profile_photo_path"))
+                    val photo = createProfilePhotoSignedUrl(row.optString("profile_photo_path"), token)
                     result += DirectoryContact(
                         row.optString("company_id"), name, "شرکت باربری",
                         row.optString("activity_city"), "حساب تأییدشده", photo,
@@ -286,9 +285,4 @@ private fun fetchRoleDirectory(token: String, role: String): DirectoryResult {
     return DirectoryResult(deduped, message)
 }
 
-private fun publicProfilePhotoUrl(path: String): String {
-    val clean = path.trim().trimStart('/')
-    if (clean.isBlank()) return ""
-    val encoded = clean.split('/').joinToString("/") { URLEncoder.encode(it, "UTF-8").replace("+", "%20") }
-    return "$CONTACTS_SUPABASE_URL/storage/v1/object/public/profile-photos/$encoded"
-}
+
