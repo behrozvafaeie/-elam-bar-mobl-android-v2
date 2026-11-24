@@ -74,11 +74,17 @@ internal fun ContactsScreen(
         if (loading || accessToken.isBlank()) return
         loading = true
         scope.launch {
-            val result = withContext(Dispatchers.IO) { fetchRoleDirectory(accessToken, role) }
-            contacts = result.contacts
-            message = result.message
-            selected = null
-            loading = false
+            try {
+                val result = withContext(Dispatchers.IO) { fetchRoleDirectory(accessToken, role) }
+                contacts = result.contacts
+                message = result.message
+                selected = null
+            } catch (_: Exception) {
+                contacts = emptyList()
+                message = "دریافت فهرست مخاطبین ناموفق بود؛ اتصال را بررسی و دوباره تلاش کنید."
+            } finally {
+                loading = false
+            }
         }
     }
 
