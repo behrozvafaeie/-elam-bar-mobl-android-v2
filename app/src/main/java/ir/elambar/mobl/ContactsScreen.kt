@@ -263,7 +263,7 @@ private fun fetchRoleDirectory(token: String, role: String): DirectoryResult {
                     )
                 } else {
                     val name = row.optString("company_name").ifBlank { "شرکت باربری" }
-                    val photo = createProfilePhotoSignedUrl(row.optString("profile_photo_path"), token)
+                    val photo = photoUrls[profilePhotoStoragePath(row.optString("profile_photo_path"))].orEmpty()
                     result += DirectoryContact(
                         row.optString("company_id"), name, "شرکت باربری",
                         row.optString("activity_city"), "حساب تأییدشده", photo,
