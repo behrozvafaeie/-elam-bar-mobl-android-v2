@@ -1797,15 +1797,18 @@ private fun ElaanBarApp(
                                                     }
                                                 }
                                                 if (selectedPanel == "مدیریت مدارک") {
-                                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                        if (adminLoggedIn && adminRole == "super_admin" && record.mediaUrl.isNotBlank()) {
-                                                            OutlinedButton(onClick = {
+                                                    if (adminLoggedIn && adminRole == "super_admin" && record.mediaUrl.isNotBlank()) {
+                                                        OutlinedButton(
+                                                            onClick = {
                                                                 pendingAdminDocumentUrl = record.mediaUrl
                                                                 val extension = record.mediaUrl.substringBefore("?").substringAfterLast('.', "").takeIf { it.matches(Regex("[A-Za-z0-9]{2,5}")) } ?: "file"
                                                                 val safeName = record.title.replace(Regex("[^A-Za-z0-9_-]"), "_").take(48).ifBlank { "document" }
                                                                 saveAdminDocumentLauncher.launch("$safeName.$extension")
-                                                            }) { Text("دانلود مدرک") }
-                                                        }
+                                                            },
+                                                            modifier = Modifier.fillMaxWidth()
+                                                        ) { Text("دانلود مدرک") }
+                                                    }
+                                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                         if (record.status != "approved") {
                                                             Button(onClick = {
                                                                 adminPanelLoading = true
