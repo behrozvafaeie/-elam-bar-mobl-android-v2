@@ -515,7 +515,7 @@ private fun decodeLoadDraftState(raw: String): Pair<List<LoadDraft>, JSONObject?
         drafts to root
     }.getOrElse { emptyList<LoadDraft>() to null }
 }
-private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
+private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "", val username: String = "")
 private data class MatchedLoad(val id: String, val origin: String, val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String, val companyName: String = "", val companyMobile: String = "")
 private data class AcceptedLoadContact(val id: String, val destination: String, val companyName: String, val managerName: String, val mobile: String)
 
@@ -1787,6 +1787,19 @@ private fun ElaanBarApp(
                                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                                 Text(record.title, style = MaterialTheme.typography.titleSmall)
                                                 Text(record.detail, style = MaterialTheme.typography.bodySmall)
+                                                if (adminLoggedIn && adminRole == "super_admin" && selectedPanel != "مدیریت مدارک") {
+                                                    Text(
+                                                        "نام کاربری: " + record.username.ifBlank { "دریافت نشد یا ثبت نشده است" },
+                                                        style = MaterialTheme.typography.bodySmall
+                                                    )
+                                                    if (record.username.isNotBlank()) {
+                                                        TextButton(onClick = {
+                                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("نام کاربری", record.username))
+                                                            adminActionMessage = "نام کاربری کپی شد."
+                                                        }) { Text("کپی نام کاربری") }
+                                                    }
+                                                }
                                                 Text("وضعیت: ${record.status}")
                                                 if (selectedPanel == "مدیریت مدارک" && adminLoggedIn && adminRole == "super_admin" && record.mediaUrl.isNotBlank()) {
                                                     val lowerUrl = record.mediaUrl.substringBefore("?").lowercase()
@@ -4010,6 +4023,23 @@ private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRec
         "مدیریت شرکت‌ها" -> "companies"
         else -> return emptyList()
     }
+    // Usernames are intentionally not readable from the client table. Fetch them
+    // through a server-side RPC that returns data only to the primary super admin.
+    val usernameByUserId = runCatching {
+        val (usernameCode, usernameBody) = adminRpc(accessToken, "admin_list_account_usernames", JSONObject())
+        if (usernameCode !in 200..299) emptyMap<String, String>()
+        else {
+            val usernameRows = JSONArray(usernameBody)
+            buildMap {
+                for (i in 0 until usernameRows.length()) {
+                    val row = usernameRows.getJSONObject(i)
+                    val userId = row.optString("user_id")
+                    val value = row.optString("username")
+                    if (userId.isNotBlank() && value.isNotBlank()) put(userId, value)
+                }
+            }
+        }
+    }.getOrDefault(emptyMap())
     var connection: HttpURLConnection? = null
     return try {
         val select = if (table == "drivers") "id,first_name,last_name,full_name,mobile,vehicle_type,primary_destination,status"
@@ -4033,7 +4063,7 @@ private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRec
             val detail = if (table == "drivers")
                 item.optString("mobile") + " | " + item.optString("vehicle_type") + " | " + item.optString("primary_destination")
             else item.optString("manager_name") + " | " + item.optString("mobile")
-            AdminRecord(item.optString("id"), title, detail, item.optString("status"))
+            AdminRecord(item.optString("id"), title, detail, item.optString("status"), username = usernameByUserId[item.optString("id")].orEmpty())
         }
     } catch (_: Exception) { emptyList() }
     finally { connection?.disconnect() }
