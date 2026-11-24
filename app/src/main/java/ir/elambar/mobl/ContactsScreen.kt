@@ -1,5 +1,7 @@
 package ir.elambar.mobl
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
@@ -51,7 +54,8 @@ private data class DirectoryContact(
     val subtitle: String,
     val status: String,
     val photoUrl: String,
-    val details: List<Pair<String, String>>
+    val details: List<Pair<String, String>>,
+    val phoneNumber: String = ""
 )
 
 private data class DirectoryResult(val contacts: List<DirectoryContact>, val message: String)
@@ -68,6 +72,7 @@ internal fun ContactsScreen(
     var loading by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("برای دریافت فهرست مخاطبین، کمی صبر کنید.") }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     fun refresh() {
         if (loading || accessToken.isBlank()) return
@@ -191,6 +196,21 @@ internal fun ContactsScreen(
                     }
                 }
             }
+            if (contact.phoneNumber.isNotBlank()) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("شماره تماس", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        Text(contact.phoneNumber, style = MaterialTheme.typography.bodyLarge)
+                        OutlinedButton(
+                            onClick = {
+                                val dialIntent = Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", contact.phoneNumber, null))
+                                context.startActivity(dialIntent)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("تماس با راننده") }
+                    }
+                }
+            }
             Text(
                 "اطلاعات محرمانه و مدارک هویتی در فهرست مخاطبین نمایش داده نمی‌شود.",
                 style = MaterialTheme.typography.bodySmall,
@@ -259,7 +279,8 @@ private fun fetchRoleDirectory(token: String, role: String): DirectoryResult {
                             "نوع خودرو" to row.optString("vehicle_type"),
                             "مقصد اصلی" to row.optString("primary_destination"),
                             "مقصدهای دیگر" to destinationText
-                        )
+                        ),
+                        phoneNumber = row.optString("mobile")
                     )
                 } else {
                     val name = row.optString("company_name").ifBlank { "شرکت باربری" }
