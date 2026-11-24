@@ -2771,10 +2771,48 @@ private fun uploadAccountDocument(context: Context, uri: Uri, token: String, doc
     finally { upload?.disconnect(); insert?.disconnect(); cleanup?.disconnect() }
 }
 
-private fun profilePhotoPublicUrl(path: String): String {
-    if (path.isBlank() || path == "null") return ""
-    if (path.startsWith("http")) return path
-    return SUPABASE_URL + "/storage/v1/object/public/profile-photos/" + path
+internal fun createProfilePhotoSignedUrl(path: String, token: String): String {
+    if (path.isBlank() || path == "null" || token.isBlank()) return ""
+    val rawPath = if (path.startsWith("http", ignoreCase = true)) {
+        path.substringAfter("/profile-photos/", "").substringBefore('?')
+    } else {
+        path.substringBefore('?').trimStart('/')
+    }
+    if (rawPath.isBlank() || rawPath.split('/').any { it.isBlank() || it == "." || it == ".." }) return ""
+    val encodedPath = rawPath.split('/').joinToString("/") {
+        URLEncoder.encode(it, "UTF-8").replace("+", "%20")
+    }
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL(SUPABASE_URL + "/storage/v1/object/sign/profile-photos/" + encodedPath).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 12000
+            readTimeout = 15000
+            doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer " + token)
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        connection.outputStream.use {
+            it.write(JSONObject().put("expiresIn", 3600).toString().toByteArray(Charsets.UTF_8))
+        }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        if (code !in 200..299) return ""
+        val signed = JSONObject(stream?.bufferedReader()?.use { it.readText() }.orEmpty())
+            .optString("signedURL").ifBlank { return "" }
+        when {
+            signed.startsWith("https://") || signed.startsWith("http://") -> signed
+            signed.startsWith("/storage/") -> SUPABASE_URL + signed
+            signed.startsWith("/") -> SUPABASE_URL + "/storage/v1" + signed
+            else -> ""
+        }
+    } catch (_: Exception) {
+        ""
+    } finally {
+        connection?.disconnect()
+    }
 }
 
 private fun fetchAdminProfilePhoto(token: String): String {
@@ -2795,7 +2833,7 @@ private fun fetchAdminProfilePhoto(token: String): String {
         val code = connection.responseCode
         if (code !in 200..299) return ""
         val rows = JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
-        if (rows.length() == 0) "" else profilePhotoPublicUrl(rows.getJSONObject(0).optString("profile_photo_path"))
+        if (rows.length() == 0) "" else createProfilePhotoSignedUrl(rows.getJSONObject(0).optString("profile_photo_path"), token)
     } catch (_: Exception) {
         ""
     } finally {
@@ -2852,7 +2890,7 @@ private fun uploadProfilePhoto(context: Context, uri: Uri, token: String, role: 
         update.outputStream.use { it.write(JSONObject().put("p_path", path).toString().toByteArray(Charsets.UTF_8)) }
         val updateCode = update.responseCode
         if (updateCode !in 200..299) return "تصویر بارگذاری شد اما ذخیره نشانی پروفایل ناموفق بود (کد " + updateCode + ")."
-        profilePhotoPublicUrl(path) + "?v=" + System.currentTimeMillis()
+        createProfilePhotoSignedUrl(path, token)
     } catch (_: Exception) { "ارتباط با فضای تصاویر برقرار نشد." }
     finally { upload?.disconnect(); update?.disconnect() }
 }
@@ -2987,7 +3025,7 @@ private fun registerDeviceAccount(role: UserRole, first: String, last: String, m
         val p=rows.getJSONObject(0); val status=p.optString("status")
         if(status !in listOf("pending","approved")) return UserLoginResult(false,"وضعیت حساب اجازه ورود نمی‌دهد.")
         val name=if(role==UserRole.COMPANY) p.optString("company_name").ifBlank { first + " " + last } else first + " " + last
-        UserLoginResult(true,if(status=="pending")"ثبت‌نام انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ثبت‌نام و ورود موفق بود.",name,status,access,refresh,profilePhotoPublicUrl(p.optString("profile_photo_path")))
+        UserLoginResult(true,if(status=="pending")"ثبت‌نام انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ثبت‌نام و ورود موفق بود.",name,status,access,refresh,createProfilePhotoSignedUrl(p.optString("profile_photo_path"), access))
     } catch (_:Exception) { UserLoginResult(false,"ارتباط با سامانه برقرار نشد؛ دوباره تلاش کنید.") }
     finally { auth?.disconnect(); profile?.disconnect() }
 }
@@ -3047,7 +3085,7 @@ private fun restoreDeviceSession(refreshToken: String, role: UserRole): UserLogi
         val status = p.optString("status")
         if (status !in listOf("pending", "approved")) return UserLoginResult(false, "دسترسی حساب فعال نیست.")
         val name = if (role == UserRole.COMPANY) p.optString("company_name").ifBlank { p.optString("first_name") + " " + p.optString("last_name") } else (p.optString("first_name") + " " + p.optString("last_name")).trim()
-        UserLoginResult(true, "نشست قبلی بازیابی شد.", name, status, access, fresh, profilePhotoPublicUrl(p.optString("profile_photo_path")), user.optJSONObject("user_metadata")?.optString("username").orEmpty())
+        UserLoginResult(true, "نشست قبلی بازیابی شد.", name, status, access, fresh, createProfilePhotoSignedUrl(p.optString("profile_photo_path"), access), user.optJSONObject("user_metadata")?.optString("username").orEmpty())
     } catch (_: Exception) {
         UserLoginResult(false, "ارتباط با سامانه برقرار نشد.")
     } finally {
