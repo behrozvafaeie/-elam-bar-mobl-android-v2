@@ -2811,7 +2811,7 @@ internal fun createProfilePhotoSignedUrls(paths: List<String>, token: String): M
                 val row = rows.optJSONObject(index) ?: continue
                 val objectPath = profilePhotoStoragePath(row.optString("path"))
                 val signed = row.optString("signedURL")
-                if (objectPath.isBlank() || signed.isBlank() || !row.isNull("error")) continue
+                if (objectPath.isBlank() || signed.isBlank() || (row.has("error") && !row.isNull("error"))) continue
                 val fullUrl = when {
                     signed.startsWith("https://") || signed.startsWith("http://") -> signed
                     signed.startsWith("/storage/") -> SUPABASE_URL + signed
