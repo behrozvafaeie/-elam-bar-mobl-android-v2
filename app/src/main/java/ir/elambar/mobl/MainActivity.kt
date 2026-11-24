@@ -2280,15 +2280,7 @@ private fun ElaanBarApp(
                                             Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
                                             Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
                                             if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")
-                                            if (load.companyMobile.isNotBlank()) {
-                                                Text("شماره تماس: ${load.companyMobile}")
-                                                OutlinedButton(
-                                                    onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${load.companyMobile}"))) },
-                                                    modifier = Modifier.fillMaxWidth()
-                                                ) { Text("تماس با شرکت") }
-                                            } else {
-                                                Text("پس از دریافت بار، امکان تماس با شرکت در بخش بارهای گرفته‌شده فعال می‌شود.", style = MaterialTheme.typography.bodySmall)
-                                            }
+                                            Text("برای تماس با باربری، ابتدا بار را دریافت کنید؛ شماره تماس فقط در بخش بارهای گرفته‌شده و برای راننده مجاز فعال می‌شود.", style = MaterialTheme.typography.bodySmall)
                                             if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                                             Button(enabled = acceptingLoadId.isBlank(), onClick = {
                                                 acceptingLoadId = load.id
@@ -2365,7 +2357,7 @@ private fun ElaanBarApp(
                                                         context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + accepted.mobile)))
                                                     },
                                                     modifier = Modifier.fillMaxWidth()
-                                                ) { Text(if (accepted.mobile.isBlank()) "اطلاعات تماس در دسترس نیست" else "تماس با شرکت") }
+                                                ) { Text(if (accepted.mobile.isBlank()) "اطلاعات تماس در دسترس نیست" else "تماس با باربری") }
                                             }
                                         }
                                     }
@@ -3799,7 +3791,7 @@ private fun fetchPublicHallLoads(accessToken: String): Pair<String, List<Matched
                 freightAmount = item.optString("freight_amount", "0"),
                 description = item.optString("description").takeUnless { it == "null" }.orEmpty(),
                 companyName = item.optString("company_name").takeUnless { it == "null" }.orEmpty(),
-                companyMobile = item.optString("company_mobile").takeUnless { it == "null" }.orEmpty()
+                companyMobile = ""
             )
         }.filter { it.id.isNotBlank() }
         (if (loads.isEmpty()) "در حال حاضر بار منتشرشده‌ای در سالن عمومی وجود ندارد." else "${loads.size} بار منتشرشده در سالن عمومی موجود است.") to loads
