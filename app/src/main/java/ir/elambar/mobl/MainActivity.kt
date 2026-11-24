@@ -2771,48 +2771,67 @@ private fun uploadAccountDocument(context: Context, uri: Uri, token: String, doc
     finally { upload?.disconnect(); insert?.disconnect(); cleanup?.disconnect() }
 }
 
-internal fun createProfilePhotoSignedUrl(path: String, token: String): String {
-    if (path.isBlank() || path == "null" || token.isBlank()) return ""
+internal fun profilePhotoStoragePath(path: String): String {
+    if (path.isBlank() || path == "null") return ""
     val rawPath = if (path.startsWith("http", ignoreCase = true)) {
         path.substringAfter("/profile-photos/", "").substringBefore('?')
     } else {
         path.substringBefore('?').trimStart('/')
     }
     if (rawPath.isBlank() || rawPath.split('/').any { it.isBlank() || it == "." || it == ".." }) return ""
-    val encodedPath = rawPath.split('/').joinToString("/") {
-        URLEncoder.encode(it, "UTF-8").replace("+", "%20")
-    }
+    return rawPath
+}
+
+internal fun createProfilePhotoSignedUrls(paths: List<String>, token: String): Map<String, String> {
+    if (token.isBlank()) return emptyMap()
+    val cleanPaths = paths.map { profilePhotoStoragePath(it) }.filter { it.isNotBlank() }.distinct()
+    if (cleanPaths.isEmpty()) return emptyMap()
     var connection: HttpURLConnection? = null
     return try {
-        connection = (URL(SUPABASE_URL + "/storage/v1/object/sign/profile-photos/" + encodedPath).openConnection() as HttpURLConnection).apply {
+        val requestPaths = JSONArray()
+        cleanPaths.forEach { requestPaths.put(it) }
+        connection = (URL(SUPABASE_URL + "/storage/v1/object/sign/profile-photos").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
-            connectTimeout = 12000
-            readTimeout = 15000
+            connectTimeout = 15000
+            readTimeout = 20000
             doOutput = true
             setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
             setRequestProperty("Authorization", "Bearer " + token)
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Accept", "application/json")
         }
-        connection.outputStream.use {
-            it.write(JSONObject().put("expiresIn", 3600).toString().toByteArray(Charsets.UTF_8))
-        }
+        val body = JSONObject().put("expiresIn", 3600).put("paths", requestPaths)
+        connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
         val code = connection.responseCode
         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-        if (code !in 200..299) return ""
-        val signed = JSONObject(stream?.bufferedReader()?.use { it.readText() }.orEmpty())
-            .optString("signedURL").ifBlank { return "" }
-        when {
-            signed.startsWith("https://") || signed.startsWith("http://") -> signed
-            signed.startsWith("/storage/") -> SUPABASE_URL + signed
-            signed.startsWith("/") -> SUPABASE_URL + "/storage/v1" + signed
-            else -> ""
+        if (code !in 200..299) return emptyMap()
+        val rows = JSONArray(stream?.bufferedReader()?.use { it.readText() }.orEmpty())
+        buildMap {
+            for (index in 0 until rows.length()) {
+                val row = rows.optJSONObject(index) ?: continue
+                val objectPath = profilePhotoStoragePath(row.optString("path"))
+                val signed = row.optString("signedURL")
+                if (objectPath.isBlank() || signed.isBlank() || !row.isNull("error")) continue
+                val fullUrl = when {
+                    signed.startsWith("https://") || signed.startsWith("http://") -> signed
+                    signed.startsWith("/storage/") -> SUPABASE_URL + signed
+                    signed.startsWith("/") -> SUPABASE_URL + "/storage/v1" + signed
+                    else -> ""
+                }
+                if (fullUrl.isNotBlank()) put(objectPath, fullUrl)
+            }
         }
     } catch (_: Exception) {
-        ""
+        emptyMap()
     } finally {
         connection?.disconnect()
     }
+}
+
+internal fun createProfilePhotoSignedUrl(path: String, token: String): String {
+    val cleanPath = profilePhotoStoragePath(path)
+    if (cleanPath.isBlank()) return ""
+    return createProfilePhotoSignedUrls(listOf(cleanPath), token)[cleanPath].orEmpty()
 }
 
 private fun fetchAdminProfilePhoto(token: String): String {
