@@ -70,9 +70,9 @@ fi
 
 echo "APK size:"
 ls -lh "$APK"
-echo "Checking previous 1.6.8 baseline APK..."
+echo "Checking previous 1.6.9 baseline APK..."
 if [ ! -s "$PREVIOUS_APK" ]; then
-  echo "Previous 1.6.8 APK artifact is missing."
+  echo "Previous 1.6.9 APK artifact is missing."
   exit 1
 fi
 
@@ -116,17 +116,17 @@ install_and_verify() {
   }
 }
 
-install_and_verify "$PREVIOUS_APK" 44 "baseline 1.6.8 APK"
+install_and_verify "$PREVIOUS_APK" 45 "baseline 1.6.9 APK"
 echo "Writing a private app-data marker before update..."
 adb shell run-as "$PACKAGE" mkdir -p files shared_prefs
-printf '%s' 'keep-data-across-update-1.6.8-to-1.6.9' | adb shell run-as "$PACKAGE" tee files/update_marker.txt >/dev/null
+printf '%s' 'keep-data-across-update-1.6.9-to-1.7.0' | adb shell run-as "$PACKAGE" tee files/update_marker.txt >/dev/null
 printf '%s' '<?xml version="1.0" encoding="utf-8" standalone="yes" ?><map><string name="update_marker">keep-shared-preferences-across-update</string></map>' | adb shell run-as "$PACKAGE" tee shared_prefs/update_test.xml >/dev/null
 adb shell am force-stop "$PACKAGE" || true
 
-echo "Installing 1.6.9 over the synthetic 1.6.8 baseline..."
-install_and_verify "$APK" 45 "in-place 1.6.9 update"
+echo "Installing 1.7.0 over the synthetic 1.6.9 baseline..."
+install_and_verify "$APK" 46 "in-place 1.7.0 update"
 echo "In-place update installation completed and package version verified."
-adb shell run-as "$PACKAGE" cat files/update_marker.txt | grep -Fx "keep-data-across-update-1.6.8-to-1.6.9"
+adb shell run-as "$PACKAGE" cat files/update_marker.txt | grep -Fx "keep-data-across-update-1.6.9-to-1.7.0"
 adb shell run-as "$PACKAGE" cat shared_prefs/update_test.xml | grep -F "keep-shared-preferences-across-update"
 echo "Private files and shared-preferences data survived the in-place update."
 
