@@ -41,6 +41,7 @@ for i in $(seq 1 240); do
     # Some AOSP emulator images report an empty boot-animation property even after boot.
     # Treat only an explicitly running animation as not-ready; Package Manager is the
     # authoritative readiness probe once sys.boot_completed is 1.
+    # Keep the API 24-36 install/update smoke test strict; this only relaxes the boot-animation property.
     if [ "$boot_completed" = "1" ] && [ "$boot_animation" != "running" ]; then
       # Probe Package Manager only after the framework reports boot complete.
       if timeout 20s adb shell pm list packages >/dev/null 2>&1; then
