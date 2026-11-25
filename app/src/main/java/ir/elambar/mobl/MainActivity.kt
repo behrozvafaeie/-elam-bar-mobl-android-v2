@@ -467,7 +467,8 @@ private fun encodeLoadDraftState(
     priceMode: String,
     freightAmount: String,
     description: String,
-    quantity: String
+    quantity: String,
+    loadingDate: String
 ): String {
     val rows = JSONArray()
     drafts.forEach { d ->
@@ -478,7 +479,8 @@ private fun encodeLoadDraftState(
             .put("loadingType", d.loadingType)
             .put("priceMode", d.priceMode)
             .put("freightAmount", d.freightAmount)
-            .put("description", d.description))
+            .put("description", d.description)
+            .put("loadingDate", d.loadingDate))
     }
     return JSONObject()
         .put("drafts", rows)
@@ -490,6 +492,7 @@ private fun encodeLoadDraftState(
         .put("freightAmount", freightAmount)
         .put("description", description)
         .put("quantity", quantity)
+        .put("loadingDate", loadingDate)
         .toString()
 }
 
@@ -509,7 +512,8 @@ private fun decodeLoadDraftState(raw: String): Pair<List<LoadDraft>, JSONObject?
                 row.optString("loadingType", "روباری"),
                 row.optString("priceMode", "fixed"),
                 row.optString("freightAmount", "0"),
-                row.optString("description")
+                row.optString("description"),
+                row.optString("loadingDate")
             )
         }
         drafts to root
@@ -721,6 +725,7 @@ private fun ElaanBarApp(
                     loadFreightAmount = form.optString("freightAmount")
                     loadDescription = form.optString("description")
                     loadQuantity = form.optString("quantity", "1")
+                    loadDateIso = form.optString("loadingDate")
                 }
             } else {
                 loadDrafts.clear()
@@ -732,19 +737,20 @@ private fun ElaanBarApp(
                 loadFreightAmount = ""
                 loadDescription = ""
                 loadQuantity = "1"
+                loadDateIso = ""
             }
             loadedDraftOwner = activeDraftOwner
         }
     }
     LaunchedEffect(
         activeDraftOwner, loadedDraftOwner, loadDestination, loadCargoType, loadVehicleType,
-        loadLoadingType, loadPriceMode, loadFreightAmount, loadDescription, loadQuantity, loadDrafts.toList()
+        loadLoadingType, loadPriceMode, loadFreightAmount, loadDescription, loadQuantity, loadDateIso, loadDrafts.toList()
     ) {
         if (activeDraftOwner.isNotBlank() && loadedDraftOwner == activeDraftOwner) {
             delay(350)
             val snapshot = encodeLoadDraftState(
                 loadDrafts.toList(), loadDestination, loadCargoType, loadVehicleType,
-                loadLoadingType, loadPriceMode, loadFreightAmount, loadDescription, loadQuantity
+                loadLoadingType, loadPriceMode, loadFreightAmount, loadDescription, loadQuantity, loadDateIso
             )
             EncryptedDraftStore.save(context, activeDraftOwner, snapshot)
         }
