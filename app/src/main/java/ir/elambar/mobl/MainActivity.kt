@@ -1509,7 +1509,16 @@ private fun ElaanBarApp(
                     Text("پنل مدیریت", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
                     Text("خوش آمدید؛ سطح دسترسی: " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }, textAlign = TextAlign.Center)
                     if (selectedPanel == null) {
-                        if (adminRole == "super_admin") {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                selectedPanel = "مدیریت بارها"
+                                adminPanelLoading = true
+                                scope.launch {
+                                    adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, "مدیریت بارها") }
+                                    adminPanelLoading = false
+                                }
+if (adminRole == "super_admin") {
                             AdminDashboard(accessToken = adminAccessToken) { panel ->
                                 selectedPanel = panel
                                 adminPanelData = ""
@@ -1522,23 +1531,6 @@ private fun ElaanBarApp(
                                     }
                                     adminPanelLoading = false
                                 }
-                            }
-                        }
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = {
-                                selectedPanel = "مدیریت بارها"
-                                adminPanelLoading = true
-                                scope.launch {
-                                    adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, "مدیریت بارها") }
-                                    adminPanelLoading = false
-                                }
-                            },
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                        ) {
-                            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text("اعلام بار و مدیریت بارها", style = MaterialTheme.typography.titleLarge)
-                                Text("ثبت بار جدید و مدیریت بارهای منتشرشده", style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     } else {
