@@ -69,6 +69,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Locale
 import java.util.UUID
 import java.net.URLEncoder
 
@@ -2738,8 +2740,7 @@ private fun fetchSupabaseServerTimeMillis(): Long? {
         }
         connection.connect()
         val dateHeader = connection.getHeaderField("Date") ?: return null
-        java.time.ZonedDateTime.parse(dateHeader, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME)
-            .toInstant().toEpochMilli()
+        SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", Locale.US).parse(dateHeader)?.time ?: return null
     } catch (_: Exception) {
         null
     } finally {
