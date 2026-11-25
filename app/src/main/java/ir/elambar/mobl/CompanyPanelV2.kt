@@ -55,6 +55,7 @@ internal fun CompanyPanelV2(
     var priceMode by remember { mutableStateOf("fixed") }
     var freightAmount by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
+    var loadingDate by remember { mutableStateOf("") }
     var publishing by remember { mutableStateOf(false) }
     var actionMessage by remember { mutableStateOf("") }
     var driverDestination by remember { mutableStateOf("") }
@@ -153,6 +154,7 @@ internal fun CompanyPanelV2(
                         FilterChip(selected = loadingType == option, onClick = { loadingType = option }, label = { Text(option) })
                     }
                 }
+                JalaliDatePickerField(selectedIsoDate = loadingDate, onDateSelected = { loadingDate = it }, label = "تاریخ بار")
                 Text("کرایه", style = MaterialTheme.typography.titleMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(selected = priceMode == "fixed", onClick = { priceMode = "fixed" }, label = { Text("مبلغ مشخص") })
@@ -197,7 +199,8 @@ internal fun CompanyPanelV2(
                                     loadingType = loadingType,
                                     priceMode = priceMode,
                                     freightAmount = if (priceMode == "fixed") amount.toString() else "0",
-                                    description = description.trim()
+                                    description = description.trim(),
+                                    loadingDate = loadingDate
                                 )
                             }
                             publishing = true
@@ -210,6 +213,7 @@ internal fun CompanyPanelV2(
                                     destinationText = ""
                                     freightAmount = ""
                                     description = ""
+                                    loadingDate = ""
                                     page = "history"
                                 }
                             }
