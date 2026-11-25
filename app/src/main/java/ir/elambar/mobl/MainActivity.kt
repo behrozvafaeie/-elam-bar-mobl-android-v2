@@ -403,7 +403,7 @@ private enum class UserRole(val label: String) {
 
 private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "", val role: String = "", val refreshToken: String = "")
 private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "", val username: String = "")
-internal data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val priceMode: String, val freightAmount: String, val description: String)
+internal data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val priceMode: String, val freightAmount: String, val description: String, val loadingDate: String = "")
 
 @Composable
 private fun LoadSectionDropdown(title: String, expanded: Boolean, onToggle: () -> Unit, content: @Composable () -> Unit) {
@@ -596,6 +596,7 @@ private fun ElaanBarApp(
     var loadFreightAmount by remember { mutableStateOf("") }
     var loadPriceMode by remember { mutableStateOf("fixed") }
     var loadDescription by remember { mutableStateOf("") }
+    var loadDateIso by remember { mutableStateOf("") }
     var loadQuantity by remember { mutableStateOf("1") }
         var loadDestinationExpanded by remember { mutableStateOf(false) }
     var loadCargoExpanded by remember { mutableStateOf(false) }
@@ -1520,6 +1521,9 @@ private fun ElaanBarApp(
                     Text("پنل مدیریت", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
                     Text("خوش آمدید؛ سطح دسترسی: " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }, textAlign = TextAlign.Center)
                     if (selectedPanel == null) {
+                        Text("پنل اعلام بار مدیر ارشد", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                        AdminLoadManagement(accessToken = adminAccessToken)
+                        HorizontalDivider()
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
@@ -1706,7 +1710,6 @@ private fun ElaanBarApp(
                                     Text("تغییر این گزینه برای همه مدیران دیگر اعمال می‌شود و در گزارش مدیریتی ثبت خواهد شد.", style = MaterialTheme.typography.bodySmall)
                                 }
                                 if (selectedPanel == "مدیریت بارها") {
-                                    AdminLoadManagement(accessToken = adminAccessToken)
                                     HorizontalDivider()
                                     OutlinedButton(onClick = { adminLoadPanelExpanded = !adminLoadPanelExpanded }, modifier = Modifier.fillMaxWidth()) {
                                         Text(if (adminLoadPanelExpanded) "بستن فرم اعلام بار مدیریت ▲" else "باز کردن فرم اعلام بار مدیریت ▼")
@@ -1735,6 +1738,7 @@ private fun ElaanBarApp(
                                         options = listOf("روباری", "دربست", "نیم بار"),
                                         onSelected = { loadLoadingType = it }
                                     )
+                                    JalaliDatePickerField(selectedIsoDate = loadDateIso, onDateSelected = { loadDateIso = it }, label = "تاریخ بار")
                                     LoadSectionDropdown("کرایه", loadPriceExpanded, { loadPriceExpanded = !loadPriceExpanded }) {
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
@@ -1752,7 +1756,7 @@ private fun ElaanBarApp(
                                         if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || (loadPriceMode == "fixed" && (loadFreightAmount.isBlank() || loadFreightAmount.toLongOrNull() == null || loadFreightAmount.toLong() <= 0))) {
                                             adminActionMessage = "مقصد، نوع بار و کرایه را کامل کنید."
                                         } else {
-                                            loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", (if (loadQuantity.isNotBlank()) "تعداد: ${loadQuantity.trim()}\n" else "") + loadDescription.trim()))
+                                            loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", (if (loadQuantity.isNotBlank()) "تعداد: ${loadQuantity.trim()}\n" else "") + loadDescription.trim(), loadDateIso))
                                             loadDestination = ""
                                             loadDescription = ""
                                             loadQuantity = "1"
@@ -2208,7 +2212,7 @@ private fun ElaanBarApp(
                                                     destination, loadCargoType.trim(), loadVehicleType,
                                                     loadLoadingType, loadPriceMode,
                                                     if (loadPriceMode == "fixed") loadFreightAmount else "0",
-                                                    loadDescription.trim()
+                                                    loadDescription.trim(), loadDateIso
                                                 )
                                             }
                                             scope.launch {
@@ -2222,6 +2226,7 @@ private fun ElaanBarApp(
                                                     loadDestination = ""
                                                     loadFreightAmount = ""
                                                     loadDescription = ""
+                                                    loadDateIso = ""
                                                     companyLoadPanelExpanded = false
                                                     companyHallExpanded = true
                                                 }
@@ -3627,7 +3632,8 @@ internal fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>, publ
                 .put("loading_type", d.loadingType)
                 .put("price_mode", d.priceMode)
                 .put("freight_amount", d.freightAmount)
-                .put("description", d.description))
+                .put("description", d.description)
+                .put("loading_date", d.loadingDate.takeIf { it.isNotBlank() } ?: JSONObject.NULL))
         }
         val body = JSONObject()
             .put("p_items", items)
