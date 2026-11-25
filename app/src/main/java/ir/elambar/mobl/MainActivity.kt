@@ -522,6 +522,7 @@ private fun decodeLoadDraftState(raw: String): Pair<List<LoadDraft>, JSONObject?
     }.getOrElse { emptyList<LoadDraft>() to null }
 }
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "", val username: String = "")
+// Driver cards include the scheduled loading date returned by the authenticated public-hall RPC.
 private data class MatchedLoad(val id: String, val origin: String, val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String, val companyName: String = "", val companyMobile: String = "", val contactReservationExpiresAt: String = "", val loadingDate: String = "")
 private data class AcceptedLoadContact(val id: String, val destination: String, val companyName: String, val managerName: String, val mobile: String, val reservationExpiresAt: String = "")
 
