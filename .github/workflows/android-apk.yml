@@ -96,7 +96,7 @@ jobs:
           awk '/^[[:space:]]*FINALIZE_JSON=/ && /versionCode:47,versionName:"1.7.1"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
           ! grep -E 'ELAM_TURN_(URL|USERNAME|PASSWORD)' .github/workflows/android-apk.yml
 
-      - name: Build synthetic 1.6.9-compatible baseline (same source; not historical APK)
+      - name: Build synthetic 1.7.0-compatible baseline (same source; not historical APK)
         shell: bash
         run: |
           set -euo pipefail
