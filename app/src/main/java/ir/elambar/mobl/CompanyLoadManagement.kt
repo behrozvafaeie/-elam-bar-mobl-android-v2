@@ -62,7 +62,8 @@ private data class CompanyLoadDraft(
     val vehicleType: String,
     val loadingType: String,
     val freightAmount: String,
-    val description: String
+    val description: String,
+    val loadingDate: String = ""
 )
 
 private fun companyJwtUserId(token: String): String {
@@ -168,6 +169,7 @@ private class CompanyLoadRepository(private val token: String) {
             .put("loading_type", draft.loadingType.trim())
             .put("freight_amount", amount)
             .put("description", draft.description.trim().take(3000))
+            .put("loading_date", draft.loadingDate.takeIf { it.isNotBlank() } ?: JSONObject.NULL)
         val uid = companyJwtUserId(token)
         val path = "loads?id=eq." + enc(item.id) + "&publisher_user_id=eq." + enc(uid) + "&status=eq.published&assigned_driver_id=is.null"
         val (code, response) = request("PATCH", path, body)
@@ -235,7 +237,7 @@ internal fun CompanyLoadManagement(accessToken: String) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(enabled = canManage, onClick = {
                             editing = item
-                            draft = CompanyLoadDraft(item.destination, item.cargoType, item.vehicleType, item.loadingType, if (item.freightAmount == 0L) "" else item.freightAmount.toString(), item.description)
+                            draft = CompanyLoadDraft(item.destination, item.cargoType, item.vehicleType, item.loadingType, if (item.freightAmount == 0L) "" else item.freightAmount.toString(), item.description, item.loadingDate.orEmpty())
                         }) { Text("ویرایش") }
                         Spacer(Modifier.width(8.dp))
                         TextButton(enabled = canManage, onClick = { cancelling = item }) { Text("لغو بار") }
@@ -311,6 +313,7 @@ internal fun CompanyLoadManagement(accessToken: String) {
                             }
                         }
                     }
+                    JalaliDatePickerField(selectedIsoDate = draft.loadingDate, onDateSelected = { draft = draft.copy(loadingDate = it) }, label = "تاریخ بار")
                     OutlinedTextField(draft.freightAmount, { draft = draft.copy(freightAmount = it.filter(Char::isDigit).take(15)) }, label = { Text("کرایه به تومان؛ خالی یعنی توافقی") }, singleLine = true)
                     OutlinedTextField(draft.description, { draft = draft.copy(description = it.take(3000)) }, label = { Text("توضیحات") }, minLines = 2)
                 }
