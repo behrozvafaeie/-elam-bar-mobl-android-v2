@@ -582,6 +582,7 @@ private fun ElaanBarApp(
     var acceptedLoadContacts by remember { mutableStateOf<List<AcceptedLoadContact>>(emptyList()) }
     var acceptedLoadContactsLoading by remember { mutableStateOf(false) }
     var acceptingLoadId by remember { mutableStateOf("") }
+    var loadingContactLoadId by remember { mutableStateOf("") }
     var companyLoadsText by remember { mutableStateOf("برای مشاهده بارهای ثبت‌شده، بروزرسانی را بزنید.") }
     var companyLoadsLoading by remember { mutableStateOf(false) }
     var driverSearchDestination by remember { mutableStateOf("") }
@@ -2280,9 +2281,22 @@ private fun ElaanBarApp(
                                             Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
                                             Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
                                             if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")
-                                            Text("برای تماس با باربری، ابتدا بار را دریافت کنید؛ شماره تماس فقط در بخش بارهای گرفته‌شده و برای راننده مجاز فعال می‌شود.", style = MaterialTheme.typography.bodySmall)
+                                            if (load.companyMobile.isNotBlank()) {
+                                                Text("شماره شرکت: ${load.companyMobile}", style = MaterialTheme.typography.bodyMedium)
+                                                OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${load.companyMobile}"))) }, modifier = Modifier.fillMaxWidth()) { Text("تماس با شرکت برای هماهنگی") }
+                                            } else {
+                                                OutlinedButton(enabled = loadingContactLoadId.isBlank(), onClick = {
+                                                    loadingContactLoadId = load.id
+                                                    scope.launch {
+                                                        val result = withContext(Dispatchers.IO) { fetchAvailableLoadCompanyContact(userAccessToken, load.id) }
+                                                        if (result.second != null) publicHallLoads = publicHallLoads.map { item -> if (item.id == load.id) item.copy(companyName = result.second!!.companyName, companyMobile = result.second!!.mobile) else item }
+                                                        else publicHallMessage = result.first
+                                                        loadingContactLoadId = ""
+                                                    }
+                                                }, modifier = Modifier.fillMaxWidth()) { Text(if (loadingContactLoadId == load.id) "در حال دریافت شماره..." else "نمایش شماره شرکت و تماس") }
+                                            }
                                             if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
-                                            Button(enabled = acceptingLoadId.isBlank(), onClick = {
+                                            Button(enabled = acceptingLoadId.isBlank() && load.companyMobile.isNotBlank(), onClick = {
                                                 acceptingLoadId = load.id
                                                 scope.launch {
                                                     val accepted = withContext(Dispatchers.IO) { acceptDriverLoad(userAccessToken, load.id) }
@@ -2293,7 +2307,7 @@ private fun ElaanBarApp(
                                                     acceptingLoadId = ""
                                                 }
                                             }, modifier = Modifier.fillMaxWidth()) {
-                                                Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "درخواست دریافت این بار")
+                                                Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "ثبت دریافت بار پس از هماهنگی")
                                             }
                                         }
                                     }
@@ -2319,8 +2333,22 @@ private fun ElaanBarApp(
                                             Text("تهران ← ${load.destination}", style = MaterialTheme.typography.titleMedium)
                                             Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
                                             Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
+                                            if (load.companyMobile.isNotBlank()) {
+                                                Text("شماره شرکت: ${load.companyMobile}", style = MaterialTheme.typography.bodyMedium)
+                                                OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${load.companyMobile}"))) }, modifier = Modifier.fillMaxWidth()) { Text("تماس با شرکت برای هماهنگی") }
+                                            } else {
+                                                OutlinedButton(enabled = loadingContactLoadId.isBlank(), onClick = {
+                                                    loadingContactLoadId = load.id
+                                                    scope.launch {
+                                                        val result = withContext(Dispatchers.IO) { fetchAvailableLoadCompanyContact(userAccessToken, load.id) }
+                                                        if (result.second != null) matchedLoads = matchedLoads.map { item -> if (item.id == load.id) item.copy(companyName = result.second!!.companyName, companyMobile = result.second!!.mobile) else item }
+                                                        else matchedLoadsText = result.first
+                                                        loadingContactLoadId = ""
+                                                    }
+                                                }, modifier = Modifier.fillMaxWidth()) { Text(if (loadingContactLoadId == load.id) "در حال دریافت شماره..." else "نمایش شماره شرکت و تماس") }
+                                            }
                                             if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
-                                            Button(enabled = acceptingLoadId.isBlank(), onClick = {
+                                            Button(enabled = acceptingLoadId.isBlank() && load.companyMobile.isNotBlank(), onClick = {
                                                 acceptingLoadId = load.id
                                                 scope.launch {
                                                     val accepted = withContext(Dispatchers.IO) { acceptDriverLoad(userAccessToken, load.id) }
@@ -2333,7 +2361,7 @@ private fun ElaanBarApp(
                                                     acceptingLoadId = ""
                                                 }
                                             }, modifier = Modifier.fillMaxWidth()) {
-                                                Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "گرفتن این بار")
+                                                Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "ثبت دریافت بار پس از هماهنگی")
                                             }
                                         }
                                     }
@@ -3904,6 +3932,36 @@ private fun fetchMatchedLoads(accessToken: String): String {
     }
 }
 
+
+private fun fetchAvailableLoadCompanyContact(accessToken: String, loadId: String): Pair<String, AcceptedLoadContact?> {
+    if (accessToken.isBlank() || loadId.isBlank()) return "نشست یا بار معتبر نیست." to null
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL("$SUPABASE_URL/rest/v1/rpc/get_available_load_company_contact").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"; connectTimeout = 12000; readTimeout = 15000; doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        connection.outputStream.use { it.write(JSONObject().put("p_load_id", loadId).toString().toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code !in 200..299) {
+            val detail = runCatching { JSONObject(raw).optString("message") }.getOrDefault("")
+            return ("دریافت شماره شرکت انجام نشد." + if (detail.isNotBlank()) " $detail" else " لطفاً دوباره تلاش کنید.") to null
+        }
+        val rows = JSONArray(raw)
+        if (rows.length() == 0) return "اطلاعات تماس این بار در دسترس نیست یا بار قبلاً گرفته شده است." to null
+        val row = rows.getJSONObject(0)
+        val mobile = row.optString("mobile").trim()
+        if (mobile.isBlank() || mobile == "null") return "شماره تماس برای این شرکت ثبت نشده است." to null
+        "شماره شرکت دریافت شد." to AcceptedLoadContact(loadId, "", row.optString("company_name"), row.optString("manager_name"), mobile)
+    } catch (_: Exception) {
+        "ارتباط با سامانه برقرار نشد؛ اینترنت را بررسی کنید." to null
+    } finally { connection?.disconnect() }
+}
 
 private fun fetchAcceptedLoadContacts(accessToken: String): List<AcceptedLoadContact> {
     if (accessToken.isBlank()) return emptyList()
