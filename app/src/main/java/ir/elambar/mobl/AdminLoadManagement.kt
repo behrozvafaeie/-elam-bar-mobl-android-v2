@@ -97,13 +97,19 @@ private class AdminLoadRepository(private val token: String) {
 
     fun list(): Pair<String?, List<AdminLoadItem>> {
         if (token.isBlank()) return "نشست مدیر معتبر نیست؛ دوباره وارد شوید." to emptyList()
-        val query = "loads?select=id,origin,destination,cargo_type,vehicle_type,loading_type,freight_amount,description,status,assigned_driver_id,publisher_type,loading_date&order=created_at.desc&limit=200"
-        val (code, body) = request("GET", query)
-        if (code !in 200..299) return "دریافت فهرست بارها ناموفق بود (کد $code). مجوز مشاهده بارها را بررسی کنید." to emptyList()
         return runCatching {
-            val rows = JSONArray(body)
-            null to (0 until rows.length()).map { i ->
-                val row = rows.getJSONObject(i)
+            val allRows = mutableListOf<JSONObject>()
+            var offset = 0
+            while (true) {
+                val query = "loads?select=id,origin,destination,cargo_type,vehicle_type,loading_type,freight_amount,description,status,assigned_driver_id,publisher_type,loading_date&order=created_at.desc&limit=200&offset=$offset"
+                val (code, body) = request("GET", query)
+                if (code !in 200..299) return "دریافت فهرست بارها ناموفق بود (کد $code). مجوز مشاهده بارها را بررسی کنید." to emptyList()
+                val page = JSONArray(body)
+                for (i in 0 until page.length()) allRows.add(page.getJSONObject(i))
+                if (page.length() < 200) break
+                offset += 200
+            }
+            null to allRows.map { row ->
                 AdminLoadItem(
                     id = row.optString("id"),
                     origin = row.optString("origin", "تهران"),
