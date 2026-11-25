@@ -1518,7 +1518,15 @@ private fun ElaanBarApp(
                                     adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, "مدیریت بارها") }
                                     adminPanelLoading = false
                                 }
-if (adminRole == "super_admin") {
+                            },
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Text("اعلام بار و مدیریت بارها", style = MaterialTheme.typography.titleLarge)
+                                Text("ثبت بار جدید و مدیریت بارهای منتشرشده", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        if (adminRole == "super_admin") {
                             AdminDashboard(accessToken = adminAccessToken) { panel ->
                                 selectedPanel = panel
                                 adminPanelData = ""
