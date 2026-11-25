@@ -1,5 +1,12 @@
 package ir.elambar.mobl
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -56,7 +63,7 @@ internal fun CompanyPanelV2(
     var driverSearchMessage by remember { mutableStateOf("برای جست‌وجو، مقصد را وارد کنید.") }
 
     Column(
-        modifier = Modifier.fillMaxWidth().padding(8.dp),
+        modifier = Modifier.fillMaxWidth().animateContentSize().padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Card(
@@ -78,14 +85,27 @@ internal fun CompanyPanelV2(
             Text("بازگشت به پنل فعلی")
         }
 
-        when (page) {
+        Button(
+            onClick = {
+                actionMessage = ""
+                page = if (page == "publish") "home" else "publish"
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = CompanyPanelBlue)
+        ) {
+            Text(if (page == "publish") "بستن فرم اعلام بار ▲" else "اعلام بار جدید ▼", fontSize = 17.sp)
+        }
+
+        AnimatedContent(
+            targetState = page,
+            transitionSpec = {
+                (slideInVertically(initialOffsetY = { -it }) + fadeIn()) togetherWith
+                    (slideOutVertically(targetOffsetY = { -it }) + fadeOut())
+            },
+            label = "company-panel-dropdown"
+        ) { visiblePage ->
+            when (visiblePage) {
             "home" -> {
-                CompanyPanelActionCard(
-                    title = "ثبت بار جدید",
-                    description = "ثبت یک یا چند مقصد در یک مرحله؛ بدون محدودیت تعداد بار.",
-                    buttonText = "ورود به فرم ثبت بار",
-                    onClick = { actionMessage = ""; page = "publish" }
-                )
                 CompanyPanelActionCard(
                     title = "سوابق و مدیریت بارها",
                     description = "مشاهده بارهای همین شرکت، بروزرسانی، ویرایش و لغو بارهای مجاز.",
@@ -252,6 +272,7 @@ internal fun CompanyPanelV2(
                 OutlinedButton(onClick = { page = "home" }, modifier = Modifier.fillMaxWidth()) {
                     Text("بازگشت به صفحه پنل جدید")
                 }
+            }
             }
         }
     }
