@@ -1790,6 +1790,7 @@ private fun ElaanBarApp(
                                                 adminActionMessage = result
                                                 if (result.startsWith("ثبت شد")) {
                                                     loadDrafts.clear()
+                                                    loadDateIso = ""
                                                     adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, "مدیریت بارها") }
                                                 }
                                             }
