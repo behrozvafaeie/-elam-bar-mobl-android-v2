@@ -61,7 +61,8 @@ private data class AdminLoadDraft(
     val vehicleType: String,
     val loadingType: String,
     val freightAmount: String,
-    val description: String
+    val description: String,
+    val loadingDate: String = ""
 )
 
 private class AdminLoadRepository(private val token: String) {
@@ -145,6 +146,7 @@ private class AdminLoadRepository(private val token: String) {
             .put("loading_type", draft.loadingType)
             .put("freight_amount", amount)
             .put("description", draft.description.trim().take(3000))
+            .put("loading_date", draft.loadingDate.takeIf { it.isNotBlank() } ?: JSONObject.NULL)
         val (code, response) = request("PATCH", "loads?id=eq." + enc(item.id) + "&status=eq.published&assigned_driver_id=is.null", body)
         if (code !in 200..299) return "ویرایش از طرف سرور رد شد (کد $code)."
         return if (runCatching { JSONArray(response).length() }.getOrDefault(0) > 0) "تغییرات بار ذخیره شد." else "بار برای ویرایش پیدا نشد یا وضعیت آن تغییر کرده است."
@@ -229,7 +231,7 @@ internal fun AdminLoadManagement(accessToken: String) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(enabled = !busy && item.status == "published" && item.assignedDriverId == null, onClick = {
                             editing = item
-                            draft = AdminLoadDraft(item.destination, item.cargoType, item.vehicleType, item.loadingType, if (item.freightAmount == 0L) "" else item.freightAmount.toString(), item.description)
+                            draft = AdminLoadDraft(item.destination, item.cargoType, item.vehicleType, item.loadingType, if (item.freightAmount == 0L) "" else item.freightAmount.toString(), item.description, item.loadingDate.orEmpty())
                         }) { Text("ویرایش") }
                         Spacer(Modifier.width(4.dp))
                         TextButton(enabled = !busy && item.status == "published" && item.assignedDriverId == null, onClick = { deleting = item }) { Text("لغو بار") }
@@ -255,6 +257,7 @@ internal fun AdminLoadManagement(accessToken: String) {
                     OutlinedTextField(draft.cargoType, { draft = draft.copy(cargoType = it.take(160)) }, label = { Text("نوع بار") }, singleLine = true)
                     OutlinedTextField(draft.vehicleType, { draft = draft.copy(vehicleType = it.take(100)) }, label = { Text("نوع خودرو") }, singleLine = true)
                     OutlinedTextField(draft.loadingType, { draft = draft.copy(loadingType = it.take(40)) }, label = { Text("نوع بارگیری") }, singleLine = true)
+                    JalaliDatePickerField(selectedIsoDate = draft.loadingDate, onDateSelected = { draft = draft.copy(loadingDate = it) }, label = "تاریخ بار")
                     OutlinedTextField(draft.freightAmount, { draft = draft.copy(freightAmount = it.take(18)) }, label = { Text("کرایه تومان؛ خالی یعنی توافقی") }, singleLine = true)
                     OutlinedTextField(draft.description, { draft = draft.copy(description = it.take(3000)) }, label = { Text("توضیحات") }, minLines = 2)
                 }
