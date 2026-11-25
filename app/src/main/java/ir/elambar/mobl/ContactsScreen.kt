@@ -1,5 +1,8 @@
 package ir.elambar.mobl
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -52,6 +55,7 @@ private data class DirectoryContact(
     val subtitle: String,
     val status: String,
     val photoUrl: String,
+    val mobile: String,
     val details: List<Pair<String, String>>
 )
 
@@ -69,6 +73,7 @@ internal fun ContactsScreen(
     var loading by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("برای دریافت فهرست مخاطبین، کمی صبر کنید.") }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     fun refresh() {
         if (loading || accessToken.isBlank()) return
@@ -161,6 +166,21 @@ internal fun ContactsScreen(
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(contact.name, style = MaterialTheme.typography.titleMedium)
                             Text(contact.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (role == "super_admin" || role == "admin") {
+                                Text(
+                                    if (contact.mobile.isBlank()) "شماره تماس ثبت نشده" else contact.mobile,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                OutlinedButton(
+                                    onClick = {
+                                        if (contact.mobile.isNotBlank()) {
+                                            val dialNumber = contact.mobile.filter { it.isDigit() || it == '+' }
+                                            context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$dialNumber")))
+                                        }
+                                    },
+                                    enabled = contact.mobile.isNotBlank()
+                                ) { Text("تماس مستقیم") }
+                            }
                         }
                         Text("›", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
                     }
@@ -212,6 +232,7 @@ internal fun ContactsScreen(
 private fun fetchRoleDirectory(token: String, role: String): DirectoryResult {
     if (token.isBlank()) return DirectoryResult(emptyList(), "نشست ورود معتبر نیست.")
     val result = mutableListOf<DirectoryContact>()
+    if (role == "super_admin" || role == "admin") return fetchAdminContactDirectory(token)
     val calls = when (role) {
         "COMPANY" -> listOf("list_driver_directory_v2")
         "DRIVER" -> listOf("list_company_directory")
@@ -251,7 +272,7 @@ private fun fetchRoleDirectory(token: String, role: String): DirectoryResult {
                     val photo = publicProfilePhotoUrl(row.optString("profile_photo_path"))
                     result += DirectoryContact(
                         row.optString("id"), name, "راننده", row.optString("vehicle_type"),
-                        "حساب تأییدشده", photo,
+                        "حساب تأییدشده", photo, row.optString("mobile"),
                         listOf(
                             "نوع خودرو" to row.optString("vehicle_type"),
                             "مقصد اصلی" to row.optString("primary_destination"),
@@ -263,7 +284,7 @@ private fun fetchRoleDirectory(token: String, role: String): DirectoryResult {
                     val photo = publicProfilePhotoUrl(row.optString("profile_photo_path"))
                     result += DirectoryContact(
                         row.optString("company_id"), name, "شرکت باربری",
-                        row.optString("activity_city"), "حساب تأییدشده", photo,
+                        row.optString("activity_city"), "حساب تأییدشده", photo, row.optString("mobile"),
                         listOf(
                             "نام مدیر یا مسئول" to row.optString("manager_name"),
                             "شهر محل فعالیت" to row.optString("activity_city")
@@ -284,6 +305,61 @@ private fun fetchRoleDirectory(token: String, role: String): DirectoryResult {
         else -> "در حال حاضر مخاطب تأییدشده‌ای برای نمایش وجود ندارد."
     }
     return DirectoryResult(deduped, message)
+}
+
+
+ // Admin directory reads use authenticated PostgREST requests and remain subject to RLS.
+ // No service-role key is embedded in the app.
+private fun fetchAdminContactDirectory(token: String): DirectoryResult {
+    val contacts = mutableListOf<DirectoryContact>()
+    var lastError = ""
+    for ((table, roleLabel) in listOf("companies" to "شرکت باربری", "drivers" to "راننده")) {
+        var connection: HttpURLConnection? = null
+        try {
+            val select = if (table == "drivers")
+                "id,first_name,last_name,full_name,mobile,vehicle_type,primary_destination,status,profile_photo_path"
+            else "id,first_name,last_name,company_name,manager_name,mobile,status,activity_city,profile_photo_path"
+            val url = "$CONTACTS_SUPABASE_URL/rest/v1/$table?select=$select&order=created_at.desc&limit=500"
+            connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 12000
+                readTimeout = 18000
+                setRequestProperty("apikey", CONTACTS_SUPABASE_KEY)
+                setRequestProperty("Authorization", "Bearer $token")
+                setRequestProperty("Accept", "application/json")
+            }
+            val code = connection.responseCode
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            if (code !in 200..299) {
+                lastError = "دریافت مخاطبین $roleLabel مجاز نبود (کد $code)."
+                continue
+            }
+            val rows = JSONArray(raw)
+            for (i in 0 until rows.length()) {
+                val row = rows.getJSONObject(i)
+                val name = if (table == "drivers")
+                    (row.optString("first_name") + " " + row.optString("last_name")).trim()
+                        .ifBlank { row.optString("full_name") }.ifBlank { "راننده" }
+                else row.optString("company_name").ifBlank { row.optString("manager_name") }.ifBlank { "شرکت باربری" }
+                val subtitle = if (table == "drivers") row.optString("vehicle_type") else row.optString("activity_city")
+                contacts += DirectoryContact(
+                    row.optString("id"), name, roleLabel, subtitle,
+                    row.optString("status").ifBlank { "وضعیت نامشخص" },
+                    publicProfilePhotoUrl(row.optString("profile_photo_path")),
+                    row.optString("mobile").trim(),
+                    listOf("شماره تماس" to row.optString("mobile"), "وضعیت حساب" to row.optString("status"), "نوع خودرو / شهر فعالیت" to subtitle)
+                )
+            }
+        } catch (_: Exception) {
+            lastError = "ارتباط با فهرست مخاطبین برقرار نشد."
+        } finally {
+            connection?.disconnect()
+        }
+    }
+    val unique = contacts.distinctBy { it.id }.sortedBy { it.name }
+    val message = if (unique.isNotEmpty()) "تعداد مخاطبین: ${unique.size}" else lastError.ifBlank { "مخاطبی برای نمایش وجود ندارد." }
+    return DirectoryResult(unique, message)
 }
 
 private fun publicProfilePhotoUrl(path: String): String {
