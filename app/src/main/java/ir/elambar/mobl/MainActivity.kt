@@ -2296,7 +2296,7 @@ private fun ElaanBarApp(
                                                 }, modifier = Modifier.fillMaxWidth()) { Text(if (loadingContactLoadId == load.id) "در حال دریافت شماره..." else "نمایش شماره شرکت و تماس") }
                                             }
                                             if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
-                                            Button(enabled = acceptingLoadId.isBlank() && load.companyMobile.isNotBlank(), onClick = {
+                                            Button(enabled = acceptingLoadId.isBlank() && isLoadContactReservationActive(load.contactReservationExpiresAt, clockNowMillis), onClick = {
                                                 acceptingLoadId = load.id
                                                 scope.launch {
                                                     val accepted = withContext(Dispatchers.IO) { acceptDriverLoad(userAccessToken, load.id) }
@@ -2309,7 +2309,7 @@ private fun ElaanBarApp(
                                             }, modifier = Modifier.fillMaxWidth()) {
                                                 Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "ثبت دریافت بار پس از هماهنگی")
                                             }
-                                            OutlinedButton(enabled = acceptingLoadId.isBlank(), onClick = {
+                                            OutlinedButton(enabled = acceptingLoadId.isBlank() && isLoadContactReservationActive(load.contactReservationExpiresAt, clockNowMillis), onClick = {
                                                 acceptingLoadId = load.id
                                                 scope.launch {
                                                     publicHallMessage = withContext(Dispatchers.IO) { declineDriverLoadReservation(userAccessToken, load.id) }
@@ -2357,7 +2357,7 @@ private fun ElaanBarApp(
                                                 }, modifier = Modifier.fillMaxWidth()) { Text(if (loadingContactLoadId == load.id) "در حال دریافت شماره..." else "نمایش شماره شرکت و تماس") }
                                             }
                                             if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
-                                            Button(enabled = acceptingLoadId.isBlank() && load.companyMobile.isNotBlank(), onClick = {
+                                            Button(enabled = acceptingLoadId.isBlank() && isLoadContactReservationActive(load.contactReservationExpiresAt, clockNowMillis), onClick = {
                                                 acceptingLoadId = load.id
                                                 scope.launch {
                                                     val accepted = withContext(Dispatchers.IO) { acceptDriverLoad(userAccessToken, load.id) }
@@ -2372,7 +2372,7 @@ private fun ElaanBarApp(
                                             }, modifier = Modifier.fillMaxWidth()) {
                                                 Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "ثبت دریافت بار پس از هماهنگی")
                                             }
-                                            OutlinedButton(enabled = acceptingLoadId.isBlank(), onClick = {
+                                            OutlinedButton(enabled = acceptingLoadId.isBlank() && isLoadContactReservationActive(load.contactReservationExpiresAt, clockNowMillis), onClick = {
                                                 acceptingLoadId = load.id
                                                 scope.launch {
                                                     matchedLoadsText = withContext(Dispatchers.IO) { declineDriverLoadReservation(userAccessToken, load.id) }
@@ -4000,7 +4000,11 @@ private fun declineDriverLoadReservation(accessToken: String, loadId: String): S
         if (code !in 200..299) {
             val detail = runCatching { JSONObject(raw).optString("message") }.getOrDefault("")
             "آزادسازی بار انجام نشد." + if (detail.isNotBlank()) " $detail" else ""
-        } else "بار رد شد و دوباره به سالن اعلام بار برگشت."
+        } else if (raw.trim().equals("true", ignoreCase = true)) {
+            "بار رد شد و دوباره به سالن اعلام بار برگشت."
+        } else {
+            "این بار دیگر به نام شما رزرو نیست یا مهلت رزرو آن تمام شده است."
+        }
     } catch (_: Exception) {
         "ارتباط با سامانه برقرار نشد؛ وضعیت بار را دوباره بررسی کنید."
     } finally { connection?.disconnect() }
