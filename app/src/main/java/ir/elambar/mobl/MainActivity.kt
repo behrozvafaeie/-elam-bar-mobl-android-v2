@@ -2193,6 +2193,7 @@ private fun ElaanBarApp(
                                         options = listOf("روباری", "دربست", "نیم بار"),
                                         onSelected = { loadLoadingType = it }
                                     )
+                                    JalaliDatePickerField(selectedIsoDate = loadDateIso, onDateSelected = { loadDateIso = it }, label = "تاریخ بار")
                                     LoadSectionDropdown("کرایه", loadPriceExpanded, { loadPriceExpanded = !loadPriceExpanded }) {
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
