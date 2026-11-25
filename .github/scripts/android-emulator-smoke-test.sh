@@ -162,6 +162,13 @@ adb logcat -d -v threadtime | grep -E -A 60 -B 12 "FATAL EXCEPTION|AndroidRuntim
 echo "===== RECENT APP LOGCAT ====="
 adb logcat -d -v threadtime | grep -F "$PACKAGE" | tail -n 300 || true
 
+# A process can briefly launch and then crash; do not report a pass just
+# because ActivityManager accepted the start request.
+if adb logcat -d -v threadtime | grep -F "Process: $PACKAGE" | grep -q .; then
+  echo "Detected an AndroidRuntime crash for $PACKAGE during startup."
+  process_rc=1
+fi
+
 if [ "$launch_rc" -ne 0 ] || [ "$process_rc" -ne 0 ]; then
   echo "STARTUP_SMOKE_TEST_FAILED"
   dump_diagnostics
