@@ -52,7 +52,8 @@ private data class CompanyLoadItem(
     val freightAmount: Long,
     val description: String,
     val status: String,
-    val assignedDriverId: String?
+    val assignedDriverId: String?,
+    val loadingDate: String?
 )
 
 private data class CompanyLoadDraft(
@@ -122,7 +123,7 @@ private class CompanyLoadRepository(private val token: String) {
             val allRows = mutableListOf<JSONObject>()
             var offset = 0
             while (true) {
-                val query = "loads?select=id,destination,cargo_type,vehicle_type,loading_type,freight_amount,description,status,assigned_driver_id&publisher_user_id=eq." + enc(uid) + "&order=created_at.desc&limit=200&offset=" + offset
+                val query = "loads?select=id,destination,cargo_type,vehicle_type,loading_type,freight_amount,description,status,assigned_driver_id,loading_date&publisher_user_id=eq." + enc(uid) + "&order=created_at.desc&limit=200&offset=" + offset
                 val (code, body) = request("GET", query)
                 if (code !in 200..299) return "دریافت بارها ناموفق بود (کد " + code + ")." to emptyList()
                 val page = JSONArray(body)
@@ -140,7 +141,8 @@ private class CompanyLoadRepository(private val token: String) {
                     freightAmount = row.optLong("freight_amount"),
                     description = row.optString("description"),
                     status = row.optString("status"),
-                    assignedDriverId = row.optString("assigned_driver_id").takeIf { it.isNotBlank() && it != "null" }
+                    assignedDriverId = row.optString("assigned_driver_id").takeIf { it.isNotBlank() && it != "null" },
+                    loadingDate = row.optString("loading_date").takeUnless { it.isBlank() || it == "null" }
                 )
             }
         }.getOrElse { "ساختار پاسخ بارها قابل خواندن نیست." to emptyList() }
@@ -199,6 +201,7 @@ internal fun CompanyLoadManagement(accessToken: String) {
     var draft by remember { mutableStateOf(CompanyLoadDraft("", "", "", "روباری", "", "")) }
     var vehicleMenu by remember { mutableStateOf(false) }
     var loadingMenu by remember { mutableStateOf(false) }
+    var historyDateFilter by remember { mutableStateOf("") }
     var cargoMenu by remember { mutableStateOf(false) }
 
     fun refresh() {
@@ -218,11 +221,13 @@ internal fun CompanyLoadManagement(accessToken: String) {
             TextButton(enabled = !loading, onClick = { refresh() }) { Text("بروزرسانی") }
         }
         if (loading) CircularProgressIndicator()
-        items.forEach { item ->
+        JalaliDatePickerField(selectedIsoDate = historyDateFilter, onDateSelected = { historyDateFilter = it }, label = "فیلتر تاریخ سوابق")
+        items.filter { historyDateFilter.isBlank() || it.loadingDate == historyDateFilter }.forEach { item ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("تهران ← " + item.destination, style = MaterialTheme.typography.titleMedium)
                     Text(item.cargoType + " | " + item.vehicleType + " | " + item.loadingType)
+                    Text("تاریخ بار: " + formatJalaliDate(item.loadingDate), style = MaterialTheme.typography.bodySmall)
                     Text(if (item.freightAmount == 0L) "کرایه: توافقی" else "کرایه: " + item.freightAmount + " تومان")
                     Text("وضعیت: " + item.status + if (item.assignedDriverId != null) " | راننده انتخاب شده" else "")
                     if (item.description.isNotBlank()) Text(item.description)
