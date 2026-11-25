@@ -93,7 +93,7 @@ jobs:
           grep -F 'versionCode = 45' app/build.gradle.kts
           grep -F 'versionName = "1.6.9"' app/build.gradle.kts
           awk '/^[[:space:]]*PREPARE_JSON=/ && /versionCode:45,versionName:"1.6.9"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
-          awk '/^[[:space:]]*FINALIZE_JSON=/ && /versionCode:44,versionName:"1.6.8"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
+          awk '/^[[:space:]]*FINALIZE_JSON=/ && /versionCode:45,versionName:"1.6.9"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
           ! grep -E 'ELAM_TURN_(URL|USERNAME|PASSWORD)' .github/workflows/android-apk.yml
 
       - name: Build synthetic 1.6.8-compatible baseline (same source; not historical APK)
@@ -108,8 +108,8 @@ jobs:
           from pathlib import Path
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          s = s.replace('versionCode = 44', 'versionCode = 44', 1)
-          s = s.replace('versionName = "1.6.8"', 'versionName = "1.6.8"', 1)
+          s = s.replace('versionCode = 45', 'versionCode = 44', 1)
+          s = s.replace('versionName = "1.6.9"', 'versionName = "1.6.8"', 1)
           if 'versionCode = 44' not in s or 'versionName = "1.6.8"' not in s:
               raise SystemExit("Could not create the test baseline version metadata")
           p.write_text(s)
@@ -177,7 +177,7 @@ jobs:
       - name: Upload baseline APK for update tests
         uses: actions/upload-artifact@v4
         with:
-          name: elam-bar-mobl-v1.6.8-debug-apk
+          name: elam-bar-mobl-v1.6.9-debug-apk
           path: artifacts/previous/app-debug.apk
           if-no-files-found: error
           retention-days: 90
@@ -188,13 +188,13 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts
           git archive --format=zip --output=artifacts/elam-bar-mobl-v1.6.9-source.zip HEAD
-          test -s artifacts/elam-bar-mobl-v1.6.8-source.zip
+          test -s artifacts/elam-bar-mobl-v1.6.9-source.zip
           unzip -t artifacts/elam-bar-mobl-v1.6.8-source.zip
 
       - name: Upload complete source ZIP artifact
         uses: actions/upload-artifact@v4
         with:
-          name: elam-bar-mobl-v1.6.8-source
+          name: elam-bar-mobl-v1.6.9-source
           path: artifacts/elam-bar-mobl-v1.6.8-source.zip
           if-no-files-found: error
           retention-days: 90
@@ -222,7 +222,7 @@ jobs:
       - name: Download synthetic lower-version baseline for in-place update test
         uses: actions/download-artifact@v4
         with:
-          name: elam-bar-mobl-v1.6.4-debug-apk
+          name: elam-bar-mobl-v1.6.8-debug-apk
           path: previous
 
       - name: Install and launch APK on Android ${{ matrix.api-level }} emulator
@@ -275,7 +275,7 @@ jobs:
           }
 
           OIDC_TOKEN=$(get_oidc_token)
-          PREPARE_JSON=$(jq -n '{action:"prepare",versionCode:44,versionName:"1.6.8"}')
+          PREPARE_JSON=$(jq -n '{action:"prepare",versionCode:45,versionName:"1.6.9"}')
           PREPARE_RESULT=$(curl -fsS -X POST "https://sckcxtceybwtiecyxqsy.supabase.co/functions/v1/app-release-upload" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
