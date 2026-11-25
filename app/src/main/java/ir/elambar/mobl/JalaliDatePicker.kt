@@ -83,7 +83,7 @@ private fun jalaliToGregorian(jyInput: Int, jm: Int, jd: Int): Triple<Int, Int, 
 
 private fun jalaliIsoDate(year: Int, month: Int, day: Int): String {
     val (gy, gm, gd) = jalaliToGregorian(year, month, day)
-    return "%04d-%02d-%02d".format(gy, gm, gd)
+    return gy.toString().padStart(4, '0') + "-" + gm.toString().padStart(2, '0') + "-" + gd.toString().padStart(2, '0')
 }
 
 internal fun formatJalaliDate(iso: String?): String {
