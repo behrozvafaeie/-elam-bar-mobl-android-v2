@@ -522,7 +522,7 @@ private fun decodeLoadDraftState(raw: String): Pair<List<LoadDraft>, JSONObject?
     }.getOrElse { emptyList<LoadDraft>() to null }
 }
 private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "", val username: String = "")
-private data class MatchedLoad(val id: String, val origin: String, val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String, val companyName: String = "", val companyMobile: String = "", val contactReservationExpiresAt: String = "")
+private data class MatchedLoad(val id: String, val origin: String, val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String, val companyName: String = "", val companyMobile: String = "", val contactReservationExpiresAt: String = "", val loadingDate: String = "")
 private data class AcceptedLoadContact(val id: String, val destination: String, val companyName: String, val managerName: String, val mobile: String, val reservationExpiresAt: String = "")
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -2304,6 +2304,7 @@ private fun ElaanBarApp(
                                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                             Text("تهران ← ${load.destination}", style = MaterialTheme.typography.titleMedium)
                                             Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
+                                            Text("تاریخ بار: " + formatJalaliDate(load.loadingDate), style = MaterialTheme.typography.bodySmall)
                                             Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
                                             if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")
                                             if (load.companyMobile.isNotBlank() && isLoadContactReservationActive(load.contactReservationExpiresAt, clockNowMillis)) {
@@ -2366,6 +2367,7 @@ private fun ElaanBarApp(
                                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                             Text("تهران ← ${load.destination}", style = MaterialTheme.typography.titleMedium)
                                             Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
+                                            Text("تاریخ بار: " + formatJalaliDate(load.loadingDate), style = MaterialTheme.typography.bodySmall)
                                             Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
                                             if (load.companyMobile.isNotBlank()) {
                                                 Text("شماره شرکت: ${load.companyMobile}", style = MaterialTheme.typography.bodyMedium)
@@ -2706,6 +2708,7 @@ private fun PublicLoadHallScreen(
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("${load.origin} ← ${load.destination}", style = MaterialTheme.typography.titleMedium)
                     Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
+                                            Text("تاریخ بار: " + formatJalaliDate(load.loadingDate), style = MaterialTheme.typography.bodySmall)
                     Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
                     if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")
                     if (load.companyMobile.isNotBlank()) {
@@ -3795,7 +3798,7 @@ private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<Ma
         val primary = driver.optString("primary_destination").trim()
         if (primary.isNotBlank()) destinations.add(normalizeMatchText(primary))
         if (vehicle.isBlank() || destinations.isEmpty()) return "ابتدا نوع خودرو و مقصدهای خود را در پروفایل کامل کنید." to emptyList()
-        val loadsUrl = "$SUPABASE_URL/rest/v1/loads?select=id,origin,destination,cargo_type,vehicle_type,freight_amount,description,loading_type&status=eq.published&assigned_driver_id=is.null&order=created_at.desc&limit=200"
+        val loadsUrl = "$SUPABASE_URL/rest/v1/loads?select=id,origin,destination,cargo_type,vehicle_type,freight_amount,description,loading_type,loading_date&status=eq.published&assigned_driver_id=is.null&order=created_at.desc&limit=200"
         loadsConnection = (URL(loadsUrl).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"; connectTimeout = 15000; readTimeout = 20000
             setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
@@ -3819,7 +3822,8 @@ private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<Ma
                 vehicleType = item.optString("vehicle_type"),
                 loadingType = item.optString("loading_type"),
                 freightAmount = item.optString("freight_amount", "0"),
-                description = item.optString("description").takeUnless { it == "null" }.orEmpty()
+                description = item.optString("description").takeUnless { it == "null" }.orEmpty(),
+                loadingDate = item.optString("loading_date").takeUnless { it.isBlank() || it == "null" }.orEmpty()
             )
         }.filter { it.id.isNotBlank() }
         (if (matching.isEmpty()) "در حال حاضر بار منتشرشده متناسب با خودرو و مقصدهای شما وجود ندارد." else "بارهای متناسب پیدا شد: ${matching.size} مورد. برای گرفتن بار، دکمه هر کارت را بزنید.") to matching
@@ -3863,7 +3867,8 @@ private fun fetchPublicHallLoads(accessToken: String): Pair<String, List<Matched
                 freightAmount = item.optString("freight_amount", "0"),
                 description = item.optString("description").takeUnless { it == "null" }.orEmpty(),
                 companyName = item.optString("company_name").takeUnless { it == "null" }.orEmpty(),
-                companyMobile = ""
+                companyMobile = "",
+                loadingDate = item.optString("loading_date").takeUnless { it.isBlank() || it == "null" }.orEmpty()
             )
         }.filter { it.id.isNotBlank() }
         (if (loads.isEmpty()) "در حال حاضر بار منتشرشده‌ای در سالن عمومی وجود ندارد." else "${loads.size} بار منتشرشده در سالن عمومی موجود است.") to loads
