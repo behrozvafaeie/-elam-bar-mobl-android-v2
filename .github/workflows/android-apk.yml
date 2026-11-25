@@ -1,7 +1,7 @@
 name: Android APK
-# Build and validate the v1.7.0 in-place upgrade candidate.
+# Build and validate the v1.7.1 in-place upgrade candidate.
 # Build dependency resolution uses the Google-hosted Maven Central mirror in settings.gradle.kts.
-# v1.7.0: package version and emulator update smoke test must stay in sync.
+# v1.7.1: package version and emulator update smoke test must stay in sync.
 # Build a same-source lower-version baseline so update tests never depend on expired historical artifacts.
 on:
   push:
@@ -90,10 +90,10 @@ jobs:
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 46' app/build.gradle.kts
-          grep -F 'versionName = "1.7.0"' app/build.gradle.kts
-          awk '/^[[:space:]]*PREPARE_JSON=/ && /versionCode:46,versionName:"1.7.0"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
-          awk '/^[[:space:]]*FINALIZE_JSON=/ && /versionCode:46,versionName:"1.7.0"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
+          grep -F 'versionCode = 47' app/build.gradle.kts
+          grep -F 'versionName = "1.7.1"' app/build.gradle.kts
+          awk '/^[[:space:]]*PREPARE_JSON=/ && /versionCode:47,versionName:"1.7.1"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
+          awk '/^[[:space:]]*FINALIZE_JSON=/ && /versionCode:47,versionName:"1.7.1"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
           ! grep -E 'ELAM_TURN_(URL|USERNAME|PASSWORD)' .github/workflows/android-apk.yml
 
       - name: Build synthetic 1.6.9-compatible baseline (same source; not historical APK)
@@ -108,9 +108,9 @@ jobs:
           from pathlib import Path
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          s = s.replace('versionCode = 46', 'versionCode = 45', 1)
-          s = s.replace('versionName = "1.7.0"', 'versionName = "1.6.9"', 1)
-          if 'versionCode = 45' not in s or 'versionName = "1.6.9"' not in s:
+          s = s.replace('versionCode = 47', 'versionCode = 46', 1)
+          s = s.replace('versionName = "1.7.1"', 'versionName = "1.7.0"', 1)
+          if 'versionCode = 46' not in s or 'versionName = "1.7.0"' not in s:
               raise SystemExit("Could not create the test baseline version metadata")
           p.write_text(s)
           PY
@@ -118,7 +118,7 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk artifacts/previous/app-debug.apk
           restore_gradle
           trap - EXIT
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging artifacts/previous/app-debug.apk | grep -F "package: name='ir.elambar.mobl' versionCode='45' versionName='1.6.9'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging artifacts/previous/app-debug.apk | grep -F "package: name='ir.elambar.mobl' versionCode='46' versionName='1.7.0'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs artifacts/previous/app-debug.apk
           echo "Synthetic baseline is built from this exact source tree and signed by the same persistent CI key; it does not represent the historical user-installed APK."
 
@@ -160,7 +160,7 @@ jobs:
         shell: bash
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='46' versionName='1.7.0'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='47' versionName='1.7.1'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs --verbose "$APK"
           keytool -list -v -keystore /home/runner/.android/debug.keystore -storepass android -alias androiddebugkey | grep -E "SHA256:"
           sha256sum "$APK"
@@ -169,7 +169,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: elam-bar-mobl-v1.7.0-debug-apk
+          name: elam-bar-mobl-v1.7.1-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 90
@@ -177,7 +177,7 @@ jobs:
       - name: Upload baseline APK for update tests
         uses: actions/upload-artifact@v4
         with:
-          name: elam-bar-mobl-v1.6.9-debug-apk
+          name: elam-bar-mobl-v1.7.0-debug-apk
           path: artifacts/previous/app-debug.apk
           if-no-files-found: error
           retention-days: 90
@@ -187,15 +187,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          git archive --format=zip --output=artifacts/elam-bar-mobl-v1.7.0-source.zip HEAD
-          test -s artifacts/elam-bar-mobl-v1.7.0-source.zip
-          unzip -t artifacts/elam-bar-mobl-v1.7.0-source.zip
+          git archive --format=zip --output=artifacts/elam-bar-mobl-v1.7.1-source.zip HEAD
+          test -s artifacts/elam-bar-mobl-v1.7.1-source.zip
+          unzip -t artifacts/elam-bar-mobl-v1.7.1-source.zip
 
       - name: Upload complete source ZIP artifact
         uses: actions/upload-artifact@v4
         with:
-          name: elam-bar-mobl-v1.7.0-source
-          path: artifacts/elam-bar-mobl-v1.7.0-source.zip
+          name: elam-bar-mobl-v1.7.1-source
+          path: artifacts/elam-bar-mobl-v1.7.1-source.zip
           if-no-files-found: error
           retention-days: 90
 
@@ -216,13 +216,13 @@ jobs:
       - name: Download built APK
         uses: actions/download-artifact@v4
         with:
-          name: elam-bar-mobl-v1.7.0-debug-apk
+          name: elam-bar-mobl-v1.7.1-debug-apk
           path: artifacts
 
       - name: Download synthetic lower-version baseline for in-place update test
         uses: actions/download-artifact@v4
         with:
-          name: elam-bar-mobl-v1.6.9-debug-apk
+          name: elam-bar-mobl-v1.7.0-debug-apk
           path: previous
 
       - name: Install and launch APK on Android ${{ matrix.api-level }} emulator
@@ -253,7 +253,7 @@ jobs:
       - name: Download tested APK
         uses: actions/download-artifact@v4
         with:
-          name: elam-bar-mobl-v1.7.0-debug-apk
+          name: elam-bar-mobl-v1.7.1-debug-apk
           path: artifacts
 
       - name: Publish tested APK to public update storage using GitHub OIDC
@@ -275,7 +275,7 @@ jobs:
           }
 
           OIDC_TOKEN=$(get_oidc_token)
-          PREPARE_JSON=$(jq -n '{action:"prepare",versionCode:46,versionName:"1.7.0"}')
+          PREPARE_JSON=$(jq -n '{action:"prepare",versionCode:47,versionName:"1.7.1"}')
           PREPARE_RESULT=$(curl -fsS -X POST "https://sckcxtceybwtiecyxqsy.supabase.co/functions/v1/app-release-upload" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
@@ -290,7 +290,7 @@ jobs:
           ARCHIVE_SHA256=$(sha256sum "$ARCHIVE" | awk '{print $1}')
           APK_SHA256=$(sha256sum "$APK" | awk '{print $1}')
           OIDC_TOKEN=$(get_oidc_token)
-          FINALIZE_JSON=$(jq -n --arg archiveSha256 "$ARCHIVE_SHA256" --arg apkSha256 "$APK_SHA256" '{action:"finalize",versionCode:46,versionName:"1.7.0",archiveSha256:$archiveSha256,apkSha256:$apkSha256}')
+          FINALIZE_JSON=$(jq -n --arg archiveSha256 "$ARCHIVE_SHA256" --arg apkSha256 "$APK_SHA256" '{action:"finalize",versionCode:47,versionName:"1.7.1",archiveSha256:$archiveSha256,apkSha256:$apkSha256}')
           curl -fsS -X POST "https://sckcxtceybwtiecyxqsy.supabase.co/functions/v1/app-release-upload" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
