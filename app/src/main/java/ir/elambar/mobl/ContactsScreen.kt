@@ -166,7 +166,7 @@ internal fun ContactsScreen(
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(contact.name, style = MaterialTheme.typography.titleMedium)
                             Text(contact.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            if (role == "super_admin" || role == "admin") {
+                            if (role == "super_admin") {
                                 Text(
                                     if (contact.mobile.isBlank()) "شماره تماس ثبت نشده" else contact.mobile,
                                     style = MaterialTheme.typography.bodyMedium
@@ -232,7 +232,7 @@ internal fun ContactsScreen(
 private fun fetchRoleDirectory(token: String, role: String): DirectoryResult {
     if (token.isBlank()) return DirectoryResult(emptyList(), "نشست ورود معتبر نیست.")
     val result = mutableListOf<DirectoryContact>()
-    if (role == "super_admin" || role == "admin") return fetchAdminContactDirectory(token)
+    if (role == "super_admin") return fetchAdminContactDirectory(token)
     val calls = when (role) {
         "COMPANY" -> listOf("list_driver_directory_v2")
         "DRIVER" -> listOf("list_company_directory")
