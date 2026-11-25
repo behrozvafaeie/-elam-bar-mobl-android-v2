@@ -38,7 +38,9 @@ for i in $(seq 1 240); do
   if [ "$adb_state" = "device" ]; then
     boot_completed="$(timeout 10s adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
     boot_animation="$(timeout 10s adb shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r' || true)"
-    if [ "$boot_completed" = "1" ] && [ "$boot_animation" = "stopped" ]; then
+    # Some AOSP images leave bootanim empty after boot; only an explicitly running animation blocks readiness.
+    # Package Manager remains the final readiness probe.
+    if [ "$boot_completed" = "1" ] && [ "$boot_animation" != "running" ]; then
       # Probe Package Manager only after the framework reports boot complete.
       if timeout 20s adb shell pm list packages >/dev/null 2>&1; then
         ready=1
