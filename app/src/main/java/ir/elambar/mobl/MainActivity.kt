@@ -841,6 +841,16 @@ private fun ElaanBarApp(
             if (role == UserRole.DRIVER && userStatus != "approved") showPublicHall = false
         }
     }
+    LaunchedEffect(userLoggedIn, role, userStatus, userAccessToken, showPublicHall) {
+        if (userLoggedIn && role == UserRole.DRIVER && userStatus == "approved" && userAccessToken.isNotBlank() && showPublicHall) {
+            while (true) {
+                delay(30_000)
+                val refreshed = withContext(Dispatchers.IO) { fetchPublicHallLoads(userAccessToken) }
+                publicHallMessage = refreshed.first
+                publicHallLoads = refreshed.second
+            }
+        }
+    }
     LaunchedEffect(Unit) {
         while (true) {
             val serverMillis = withContext(Dispatchers.IO) { fetchSupabaseServerTimeMillis() }
