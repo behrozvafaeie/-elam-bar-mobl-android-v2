@@ -14,7 +14,7 @@ on:
       - ".github/workflows/android-apk.yml"
       - ".github/scripts/**"
   pull_request:
-    branches: [ "release/v1.6.9-upgrade", "fix/load-status-edit-delete-logout-v1", "diagnostic/startup-crash-log-v1", "feature/company-panel-and-admin-contacts-v1" ]
+    branches: [ "main", "release/v1.6.9-upgrade", "fix/load-status-edit-delete-logout-v1", "diagnostic/startup-crash-log-v1", "feature/company-panel-and-admin-contacts-v1" ]
     paths:
       - "app/**"
       - "supabase/**"
