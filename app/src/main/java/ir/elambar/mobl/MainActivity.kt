@@ -989,6 +989,14 @@ private fun ElaanBarApp(
                         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("اعلام بار مبل", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
                             Text(if (adminLoggedIn) "پنل " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" } else if (userLoggedIn) "پنل کاربر" else "سامانه اعلام بار", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            if (userLoggedIn && username.isNotBlank()) {
+                                Text("نام کاربری شما: " + username, color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyMedium)
+                                TextButton(onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("نام کاربری", username))
+                                    message = "نام کاربری کپی شد."
+                                }) { Text("کپی نام کاربری", color = MaterialTheme.colorScheme.onPrimaryContainer) }
+                            }
                         }
                     }
                     if (userLoggedIn || adminLoggedIn) {
