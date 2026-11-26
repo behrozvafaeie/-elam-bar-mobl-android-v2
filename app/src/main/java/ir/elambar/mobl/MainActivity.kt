@@ -1717,7 +1717,7 @@ private fun ElaanBarApp(
                                                         ) { Text("ادمین ارشد") }
                                                     }
                                                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                        OutlinedButton(modifier = Modifier.fillMaxWidth(), enabled = !adminManageBusy, onClick = {
+                                                        OutlinedButton(enabled = !adminManageBusy, onClick = {
                                                             adminManageBusy = true
                                                             scope.launch {
                                                                 adminActionMessage = withContext(Dispatchers.IO) { setAdminUserBlocked(adminAccessToken, account.userId, !account.isBlocked, adminStatusReason) }
