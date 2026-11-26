@@ -1654,6 +1654,13 @@ private fun ElaanBarApp(
                                     }
                                     HorizontalDivider()
                                     Text("فهرست مدیران سامانه", style = MaterialTheme.typography.titleMedium)
+                                    OutlinedTextField(
+                                        value = adminStatusReason,
+                                        onValueChange = { adminStatusReason = it.take(500) },
+                                        label = { Text("دلیل مسدودسازی مدیر (حداقل ۳ نویسه)") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        maxLines = 2
+                                    )
                                     if (managedAdmins.isEmpty()) {
                                         Text("فهرست مدیران دریافت نشد یا هنوز مدیری ثبت نشده است.", style = MaterialTheme.typography.bodySmall)
                                     }
