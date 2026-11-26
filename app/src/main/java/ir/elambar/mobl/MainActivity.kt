@@ -591,6 +591,8 @@ private fun ElaanBarApp(
     var markingLoadedLoadId by remember { mutableStateOf("") }
     var driverLoadActionMessage by remember { mutableStateOf("") }
     var acceptingLoadId by remember { mutableStateOf("") }
+    var publicHallReservations by remember { mutableStateOf<Map<String, AcceptedLoadContact>>(emptyMap()) }
+    var reservingPublicHallLoadId by remember { mutableStateOf("") }
     var loadingContactLoadId by remember { mutableStateOf("") }
     var companyLoadsText by remember { mutableStateOf("برای مشاهده بارهای ثبت‌شده، بروزرسانی را بزنید.") }
     var companyLoadsLoading by remember { mutableStateOf(false) }
@@ -1264,6 +1266,9 @@ private fun ElaanBarApp(
                         message = publicHallMessage,
                         loading = publicHallLoading,
                         acceptingLoadId = acceptingLoadId,
+                        reservingLoadId = reservingPublicHallLoadId,
+                        reservations = publicHallReservations,
+                        nowMillis = clockNowMillis,
                         canAccept = userLoggedIn && role == UserRole.DRIVER && userStatus == "approved",
                         onRefresh = {
                             publicHallLoading = true
@@ -1275,15 +1280,51 @@ private fun ElaanBarApp(
                                 publicHallLoading = false
                             }
                         },
+                        onReserve = { loadId ->
+                            if (reservingPublicHallLoadId.isBlank() && acceptingLoadId.isBlank()) {
+                                reservingPublicHallLoadId = loadId
+                                scope.launch {
+                                    val result = withContext(Dispatchers.IO) { fetchAvailableLoadCompanyContact(userAccessToken, loadId) }
+                                    publicHallMessage = result.first
+                                    val contact = result.second
+                                    if (contact != null) publicHallReservations = publicHallReservations + (loadId to contact)
+                                    reservingPublicHallLoadId = ""
+                                }
+                            }
+                        },
                         onAccept = { loadId ->
-                            acceptingLoadId = loadId
-                            scope.launch {
-                                val accepted = withContext(Dispatchers.IO) { acceptDriverLoad(userAccessToken, loadId) }
-                                publicHallMessage = accepted
-                                val refreshed = withContext(Dispatchers.IO) { fetchPublicHallLoads(userAccessToken) }
-                                publicHallLoads = refreshed.second
-                                if (refreshed.first.isNotBlank()) publicHallMessage += "\\n" + refreshed.first
-                                acceptingLoadId = ""
+                            val reservation = publicHallReservations[loadId]
+                            if (reservation != null && isLoadContactReservationActive(reservation.reservationExpiresAt, clockNowMillis)) {
+                                acceptingLoadId = loadId
+                                scope.launch {
+                                    val accepted = withContext(Dispatchers.IO) { acceptDriverLoad(userAccessToken, loadId) }
+                                    publicHallMessage = accepted
+                                    if (accepted.startsWith("بار با موفقیت")) {
+                                        publicHallReservations = publicHallReservations - loadId
+                                        acceptedLoadContactsLoading = true
+                                        acceptedLoadContacts = withContext(Dispatchers.IO) { fetchAcceptedLoadContacts(userAccessToken) }
+                                        acceptedLoadContactsLoading = false
+                                    }
+                                    val refreshed = withContext(Dispatchers.IO) { fetchPublicHallLoads(userAccessToken) }
+                                    publicHallLoads = refreshed.second
+                                    if (refreshed.first.isNotBlank()) publicHallMessage += "\\n" + refreshed.first
+                                    acceptingLoadId = ""
+                                }
+                            } else {
+                                publicHallReservations = publicHallReservations - loadId
+                                publicHallMessage = "مهلت رزرو تمام شده است؛ شماره شرکت را دوباره رزرو کنید."
+                            }
+                        },
+                        onDecline = { loadId ->
+                            if (acceptingLoadId.isBlank()) {
+                                acceptingLoadId = loadId
+                                scope.launch {
+                                    publicHallMessage = withContext(Dispatchers.IO) { declineDriverLoadReservation(userAccessToken, loadId) }
+                                    publicHallReservations = publicHallReservations - loadId
+                                    val refreshed = withContext(Dispatchers.IO) { fetchPublicHallLoads(userAccessToken) }
+                                    publicHallLoads = refreshed.second
+                                    acceptingLoadId = ""
+                                }
                             }
                         }
                     )
@@ -2767,9 +2808,14 @@ private fun PublicLoadHallScreen(
     message: String,
     loading: Boolean,
     acceptingLoadId: String,
+    reservingLoadId: String,
+    reservations: Map<String, AcceptedLoadContact>,
+    nowMillis: Long,
     canAccept: Boolean,
     onRefresh: () -> Unit,
-    onAccept: (String) -> Unit
+    onReserve: (String) -> Unit,
+    onAccept: (String) -> Unit,
+    onDecline: (String) -> Unit
 ) {
     val context = LocalContext.current
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -2799,8 +2845,26 @@ private fun PublicLoadHallScreen(
                     }
                     if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                     if (canAccept) {
-                        Button(enabled = acceptingLoadId.isBlank(), onClick = { onAccept(load.id) }, modifier = Modifier.fillMaxWidth()) {
-                            Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "درخواست دریافت این بار")
+                        val reservation = reservations[load.id]
+                        val reservationActive = reservation != null && isLoadContactReservationActive(reservation.reservationExpiresAt, nowMillis)
+                        if (reservationActive && reservation != null) {
+                            Text("شماره شرکت: ${reservation.mobile}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                            Text("مهلت هماهنگی تا: ${reservation.reservationExpiresAt}", style = MaterialTheme.typography.bodySmall)
+                            OutlinedButton(
+                                onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${reservation.mobile}"))) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("تماس با شرکت") }
+                            Button(enabled = acceptingLoadId.isBlank(), onClick = { onAccept(load.id) }, modifier = Modifier.fillMaxWidth()) {
+                                Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "تأیید دریافت بار پس از هماهنگی")
+                            }
+                            OutlinedButton(enabled = acceptingLoadId.isBlank(), onClick = { onDecline(load.id) }, modifier = Modifier.fillMaxWidth()) {
+                                Text("رد بار و آزادسازی رزرو")
+                            }
+                        } else {
+                            Button(enabled = acceptingLoadId.isBlank() && reservingLoadId.isBlank(), onClick = { onReserve(load.id) }, modifier = Modifier.fillMaxWidth()) {
+                                Text(if (reservingLoadId == load.id) "در حال رزرو شماره..." else "رزرو شماره شرکت و دریافت بار")
+                            }
+                            if (reservation != null) Text("مهلت رزرو این بار تمام شده است؛ برای تلاش دوباره رزرو کنید.", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
