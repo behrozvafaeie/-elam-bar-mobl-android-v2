@@ -1,8 +1,9 @@
 -- Expose company contact details only to approved drivers, and only for
 -- currently published loads that have not yet been assigned.
+-- Privileged implementation stays in the private schema; public RPC is invoker-only.
 -- This is additive: existing tables, rows, and assignment-gated RPC remain unchanged.
 
-create or replace function public.get_published_load_company_contacts()
+create or replace function private.get_published_load_company_contacts()
 returns table (
   load_id uuid,
   company_name text,
@@ -38,6 +39,25 @@ begin
     and l.assigned_driver_id is null
     and l.company_id is not null;
 end;
+$function$;
+
+revoke all on function private.get_published_load_company_contacts() from public, anon;
+grant usage on schema private to authenticated;
+grant execute on function private.get_published_load_company_contacts() to authenticated;
+
+create or replace function public.get_published_load_company_contacts()
+returns table (
+  load_id uuid,
+  company_name text,
+  manager_name text,
+  mobile text
+)
+language sql
+stable
+security invoker
+set search_path = ''
+as $function$
+  select * from private.get_published_load_company_contacts();
 $function$;
 
 revoke all on function public.get_published_load_company_contacts() from public, anon;
