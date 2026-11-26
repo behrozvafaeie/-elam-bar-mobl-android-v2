@@ -192,6 +192,42 @@ private class CompanyLoadRepository(private val token: String) {
     }
 }
 
+private fun companyLoadStatusLabel(status: String): String = when (status) {
+    "published" -> "منتشرشده و آماده راننده"
+    "driver_selected" -> "راننده بار را قبول کرده"
+    "in_transit" -> "بارگیری‌شده / در مسیر"
+    "delivered" -> "تحویل‌شده"
+    "settled" -> "تسویه‌شده"
+    "cancelled" -> "لغوشده"
+    else -> status
+}
+
+@Composable
+private fun CompanyLoadCard(
+    item: CompanyLoadItem,
+    onEdit: (CompanyLoadItem) -> Unit,
+    onCancel: (CompanyLoadItem) -> Unit
+) {
+    val canManage = item.status == "published" && item.assignedDriverId == null
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("تهران ← " + item.destination, style = MaterialTheme.typography.titleMedium)
+            Text(item.cargoType + " | " + item.vehicleType + " | " + item.loadingType)
+            Text("تاریخ بار: " + formatJalaliDate(item.loadingDate), style = MaterialTheme.typography.bodySmall)
+            Text(if (item.freightAmount == 0L) "کرایه: توافقی" else "کرایه: " + item.freightAmount + " تومان")
+            Text("وضعیت: " + companyLoadStatusLabel(item.status))
+            if (item.assignedDriverId != null) Text("راننده برای این بار تعیین شده است.", style = MaterialTheme.typography.bodySmall)
+            if (item.description.isNotBlank()) Text(item.description)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(enabled = canManage, onClick = { onEdit(item) }) { Text("ویرایش") }
+                Spacer(Modifier.width(8.dp))
+                TextButton(enabled = canManage, onClick = { onCancel(item) }) { Text("لغو بار") }
+            }
+            if (!canManage) Text("پس از انتخاب راننده یا تغییر وضعیت، ویرایش و لغو شرکت غیرفعال است.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+        }
+    }
+}
+
 @Composable
 internal fun CompanyLoadManagement(accessToken: String) {
     val scope = rememberCoroutineScope()
@@ -225,27 +261,34 @@ internal fun CompanyLoadManagement(accessToken: String) {
         }
         if (loading) CircularProgressIndicator()
         JalaliDatePickerField(selectedIsoDate = historyDateFilter, onDateSelected = { historyDateFilter = it }, label = "فیلتر تاریخ سوابق")
-        items.filter { historyDateFilter.isBlank() || it.loadingDate == historyDateFilter }.forEach { item ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("تهران ← " + item.destination, style = MaterialTheme.typography.titleMedium)
-                    Text(item.cargoType + " | " + item.vehicleType + " | " + item.loadingType)
-                    Text("تاریخ بار: " + formatJalaliDate(item.loadingDate), style = MaterialTheme.typography.bodySmall)
-                    Text(if (item.freightAmount == 0L) "کرایه: توافقی" else "کرایه: " + item.freightAmount + " تومان")
-                    Text("وضعیت: " + item.status + if (item.assignedDriverId != null) " | راننده انتخاب شده" else "")
-                    if (item.description.isNotBlank()) Text(item.description)
-                    val canManage = item.status == "published" && item.assignedDriverId == null
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(enabled = canManage, onClick = {
-                            editing = item
-                            draft = CompanyLoadDraft(item.destination, item.cargoType, item.vehicleType, item.loadingType, if (item.freightAmount == 0L) "" else item.freightAmount.toString(), item.description, item.loadingDate.orEmpty())
-                        }) { Text("ویرایش") }
-                        Spacer(Modifier.width(8.dp))
-                        TextButton(enabled = canManage, onClick = { cancelling = item }) { Text("لغو بار") }
-                    }
-                    if (!canManage) Text("پس از انتخاب راننده یا تغییر وضعیت، ویرایش و حذف شرکت غیرفعال است.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
-                }
-            }
+        val filteredItems = items.filter { historyDateFilter.isBlank() || it.loadingDate == historyDateFilter }
+        val activeItems = filteredItems.filter { it.status == "published" || it.status == "driver_selected" }
+        val historyItems = filteredItems.filter { it.status != "published" && it.status != "driver_selected" }
+
+        Text("بارهای فعال", style = MaterialTheme.typography.titleSmall)
+        if (activeItems.isEmpty()) Text("بار فعالی ندارید.", style = MaterialTheme.typography.bodySmall)
+        activeItems.forEach { item ->
+            CompanyLoadCard(
+                item = item,
+                onEdit = { selected ->
+                    editing = selected
+                    draft = CompanyLoadDraft(selected.destination, selected.cargoType, selected.vehicleType, selected.loadingType, if (selected.freightAmount == 0L) "" else selected.freightAmount.toString(), selected.description, selected.loadingDate.orEmpty())
+                },
+                onCancel = { cancelling = it }
+            )
+        }
+
+        Text("سابقه بارها", style = MaterialTheme.typography.titleSmall)
+        if (historyItems.isEmpty()) Text("هنوز سابقه‌ای برای نمایش وجود ندارد.", style = MaterialTheme.typography.bodySmall)
+        historyItems.forEach { item ->
+            CompanyLoadCard(
+                item = item,
+                onEdit = { selected ->
+                    editing = selected
+                    draft = CompanyLoadDraft(selected.destination, selected.cargoType, selected.vehicleType, selected.loadingType, if (selected.freightAmount == 0L) "" else selected.freightAmount.toString(), selected.description, selected.loadingDate.orEmpty())
+                },
+                onCancel = { cancelling = it }
+            )
         }
         if (status.isNotBlank()) Text(status, color = MaterialTheme.colorScheme.secondary)
     }
