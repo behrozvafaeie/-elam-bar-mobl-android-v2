@@ -1506,10 +1506,24 @@ private fun ElaanBarApp(
                     }
                     OutlinedButton(onClick = { showProfile = false }, modifier = Modifier.fillMaxWidth()) { Text("بازگشت به پنل مدیریت") }
                 } else if (adminLoggedIn) {
-                    HorizontalDivider()
-                    Text("پنل مدیریت", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
-                    Text("خوش آمدید؛ سطح دسترسی: " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }, textAlign = TextAlign.Center)
                     if (selectedPanel == null) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                selectedPanel = "مدیریت بارها"
+                                adminPanelLoading = true
+                                scope.launch {
+                                    adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, "مدیریت بارها") }
+                                    adminPanelLoading = false
+                                }
+                            },
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Text("پنل اعلام بار مدیر ارشد", style = MaterialTheme.typography.titleLarge)
+                                Text("ثبت بار جدید و مدیریت بارهای منتشرشده", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
                         if (adminRole == "super_admin") {
                             AdminDashboard(accessToken = adminAccessToken) { panel ->
                                 selectedPanel = panel
@@ -1525,23 +1539,10 @@ private fun ElaanBarApp(
                                 }
                             }
                         }
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = {
-                                selectedPanel = "مدیریت بارها"
-                                adminPanelLoading = true
-                                scope.launch {
-                                    adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, "مدیریت بارها") }
-                                    adminPanelLoading = false
-                                }
-                            },
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                        ) {
-                            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text("اعلام بار و مدیریت بارها", style = MaterialTheme.typography.titleLarge)
-                                Text("ثبت بار جدید و مدیریت بارهای منتشرشده", style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
+                    }
+                    HorizontalDivider()
+                    Text("پنل مدیریت", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
+                    Text("خوش آمدید؛ سطح دسترسی: " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }, textAlign = TextAlign.Center)
                     } else {
                         TextButton(onClick = { selectedPanel = null }, modifier = Modifier.align(Alignment.Start)) {
                             Text("بازگشت به پنل اصلی")
