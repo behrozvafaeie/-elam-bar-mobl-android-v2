@@ -1714,7 +1714,6 @@ private fun ElaanBarApp(
                                                             }
                                                         }, modifier = Modifier.weight(1f)) { Text("اخراج از همه دستگاه‌ها") }
                                                     }
-                                                }
                                             }
                                         }
                                     }
