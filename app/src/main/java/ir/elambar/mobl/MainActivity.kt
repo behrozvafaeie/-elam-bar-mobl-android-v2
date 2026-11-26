@@ -2650,9 +2650,10 @@ private fun PublicLoadHallScreen(
     onRefresh: () -> Unit,
     onAccept: (String) -> Unit
 ) {
+    val context = LocalContext.current
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("سالن عمومی اعلام بار", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-        Text("بارهای منتشرشده برای کاربران واردشده قابل مشاهده است. شماره تماس شرکت عمومی نیست؛ پس از دریافت و ثبت بار، از بخش «بارهایی که شما گرفته‌اید» با دکمه «تماس با باربری» تماس بگیرید.", style = MaterialTheme.typography.bodySmall)
+        Text("رانندگان تأییدشده می‌توانند پیش از دریافت بار با شرکت تماس بگیرند.", style = MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick = onRefresh, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
             Text(if (loading) "در حال بروزرسانی سالن..." else "بروزرسانی سالن عمومی")
         }
@@ -2664,7 +2665,16 @@ private fun PublicLoadHallScreen(
                     Text("${load.origin} ← ${load.destination}", style = MaterialTheme.typography.titleMedium)
                     Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
                     Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
-                    if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")                    if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
+                    if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")
+                    if (canAccept && load.companyMobile.isNotBlank()) {
+                        Text("شماره تماس شرکت: ${load.companyMobile}")
+                        Button(onClick = {
+                            context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + load.companyMobile)))
+                        }, modifier = Modifier.fillMaxWidth()) { Text("تماس با شرکت") }
+                    } else if (canAccept) {
+                        Text("شماره تماس شرکت در دسترس نیست.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                     if (canAccept) {
                         Button(enabled = acceptingLoadId.isBlank(), onClick = { onAccept(load.id) }, modifier = Modifier.fillMaxWidth()) {
                             Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "درخواست دریافت این بار")
