@@ -186,7 +186,7 @@ private class AdminLoadRepository(private val token: String) {
 private fun adminLoadStatusLabel(status: String): String = when (status) {
     "published" -> "در انتظار راننده"
     "driver_selected" -> "راننده انتخاب شد"
-    "in_transit" -> "بارگیری شد / در مسیر"
+    "in_transit" -> "بار ردشده (بارگیری شد / در مسیر)"
     "delivered" -> "تحویل شد"
     "settled" -> "تسویه شد"
     "cancelled" -> "لغوشده"
