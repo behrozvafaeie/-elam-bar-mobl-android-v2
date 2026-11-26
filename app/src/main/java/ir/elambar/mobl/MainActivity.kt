@@ -3200,7 +3200,7 @@ private fun restoreDeviceSession(refreshToken: String, role: UserRole): UserLogi
         val status = p.optString("status")
         if (status !in listOf("pending", "approved")) return UserLoginResult(false, "دسترسی حساب فعال نیست.")
         val name = if (role == UserRole.COMPANY) p.optString("company_name").ifBlank { p.optString("first_name") + " " + p.optString("last_name") } else (p.optString("first_name") + " " + p.optString("last_name")).trim()
-        UserLoginResult(true, "نشست قبلی بازیابی شد.", name, status, access, fresh, profilePhotoPublicUrl(p.optString("profile_photo_path")), user.optJSONObject("user_metadata")?.optString("username").orEmpty())
+        UserLoginResult(true, "نشست قبلی بازیابی شد.", name, status, access, fresh, profilePhotoPublicUrl(p.optString("profile_photo_path")), fetchMyAccountUsername(access))
     } catch (_: Exception) {
         UserLoginResult(false, "ارتباط با سامانه برقرار نشد.")
     } finally {
@@ -3712,7 +3712,7 @@ private fun authenticateUser(username: String, password: String, role: UserRole)
                 status = status,
                 accessToken = accessToken,
                 refreshToken = refreshToken,
-                username = user.optJSONObject("user_metadata")?.optString("username").orEmpty().ifBlank { username }
+                username = fetchMyAccountUsername(accessToken).ifBlank { username }
             )
             else -> UserLoginResult(false, "وضعیت حساب در سامانه معتبر نیست.")
         }
