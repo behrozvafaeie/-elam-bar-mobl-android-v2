@@ -195,7 +195,7 @@ private class CompanyLoadRepository(private val token: String) {
 private fun companyLoadStatusLabel(status: String): String = when (status) {
     "published" -> "منتشرشده و آماده راننده"
     "driver_selected" -> "راننده بار را قبول کرده"
-    "in_transit" -> "بارگیری‌شده / در مسیر"
+    "in_transit" -> "بار ردشده (بارگیری‌شده / در مسیر)"
     "delivered" -> "تحویل‌شده"
     "settled" -> "تسویه‌شده"
     "cancelled" -> "لغوشده"
@@ -278,7 +278,7 @@ internal fun CompanyLoadManagement(accessToken: String) {
             )
         }
 
-        Text("سابقه بارها", style = MaterialTheme.typography.titleSmall)
+        Text("سابقه بارها و بارهای ردشده", style = MaterialTheme.typography.titleSmall)
         if (historyItems.isEmpty()) Text("هنوز سابقه‌ای برای نمایش وجود ندارد.", style = MaterialTheme.typography.bodySmall)
         historyItems.forEach { item ->
             CompanyLoadCard(
