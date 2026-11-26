@@ -2340,6 +2340,15 @@ private fun ElaanBarApp(
                                             Text("تهران ← ${load.destination}", style = MaterialTheme.typography.titleMedium)
                                             Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
                                             Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
+                                            if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")
+                                            if (load.companyMobile.isNotBlank()) {
+                                                Text("شماره تماس شرکت: ${load.companyMobile}")
+                                                Button(onClick = {
+                                                    context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + load.companyMobile)))
+                                                }, modifier = Modifier.fillMaxWidth()) { Text("تماس با شرکت") }
+                                            } else {
+                                                Text("شماره تماس شرکت در دسترس نیست.", style = MaterialTheme.typography.bodySmall)
+                                            }
                                             if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                                             Button(enabled = acceptingLoadId.isBlank(), onClick = {
                                                 acceptingLoadId = load.id
