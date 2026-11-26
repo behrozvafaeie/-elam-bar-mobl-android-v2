@@ -637,6 +637,7 @@ private fun ElaanBarApp(
     var loading by remember { mutableStateOf(false) }
     var adminLoggedIn by remember { mutableStateOf(false) }
     var adminRole by remember { mutableStateOf("") }
+    var adminUsername by remember { mutableStateOf("") }
     var adminAccessToken by remember { mutableStateOf("") }
     var loadedDraftOwner by remember { mutableStateOf("") }
     val activeDraftOwner = remember(userAccessToken, adminAccessToken, userLoggedIn, adminLoggedIn, role, adminRole) {
@@ -893,6 +894,7 @@ private fun ElaanBarApp(
                     adminLoggedIn = true
                     adminRole = restored.status
                     adminAccessToken = restored.accessToken
+                    adminUsername = withContext(Dispatchers.IO) { fetchMyAccountUsername(restored.accessToken) }
                     adminProfilePhotoUrl = withContext(Dispatchers.IO) { fetchAdminProfilePhoto(restored.accessToken) }
                     adminMenuVisibleToOtherAdmins = withContext(Dispatchers.IO) { fetchAdminMenuVisibility(restored.accessToken) }
                 } else {
@@ -938,7 +940,7 @@ private fun ElaanBarApp(
                 } else {
                     DeviceSessionStore.clear(context)
                     if (savedRole == UserRole.ADMIN) {
-                        adminLoggedIn = false; adminAccessToken = ""; adminRole = ""
+                        adminLoggedIn = false; adminAccessToken = ""; adminRole = ""; adminUsername = ""
                     } else {
                         userLoggedIn = false; userAccessToken = ""
                     }
@@ -994,6 +996,13 @@ private fun ElaanBarApp(
                                 TextButton(onClick = {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("نام کاربری", username))
+                                    message = "نام کاربری کپی شد."
+                                }) { Text("کپی نام کاربری", color = MaterialTheme.colorScheme.onPrimaryContainer) }
+                            } else if (adminLoggedIn) {
+                                Text("نام کاربری شما: " + adminUsername.ifBlank { "برای این حساب ثبت نشده است" }, color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyMedium)
+                                if (adminUsername.isNotBlank()) TextButton(onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("نام کاربری", adminUsername))
                                     message = "نام کاربری کپی شد."
                                 }) { Text("کپی نام کاربری", color = MaterialTheme.colorScheme.onPrimaryContainer) }
                             }
@@ -1524,6 +1533,8 @@ private fun ElaanBarApp(
                             }
                             Text("پروفایل مدیر", style = MaterialTheme.typography.headlineSmall)
                             Text(when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }, style = MaterialTheme.typography.titleMedium)
+                            if (adminUsername.isNotBlank()) Text("نام کاربری: $adminUsername", style = MaterialTheme.typography.bodyMedium)
+                            else Text("نام کاربری: برای این حساب ثبت نشده است", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                             if (email.isNotBlank()) Text(email, style = MaterialTheme.typography.bodyMedium)
                             Button(enabled = !profilePhotoUploading, onClick = { photoPicker.launch("image/*") }) {
                                 Text(if (profilePhotoUploading) "در حال بارگذاری تصویر..." else if (adminProfilePhotoUrl.isBlank()) "انتخاب عکس از گالری" else "تغییر عکس پروفایل")
@@ -2630,6 +2641,7 @@ private fun ElaanBarApp(
                                             if (result.success) {
                                                 adminAccessToken = result.accessToken
                                                 adminRole = result.role
+                                                adminUsername = withContext(Dispatchers.IO) { fetchMyAccountUsername(result.accessToken) }
                                                 adminLoggedIn = true
                                                 DeviceSessionStore.save(context, result.refreshToken, "ADMIN")
                                                 adminProfilePhotoUrl = withContext(Dispatchers.IO) { fetchAdminProfilePhoto(result.accessToken) }
@@ -3176,6 +3188,17 @@ private fun restoreDeviceSession(refreshToken: String, role: UserRole): UserLogi
         auth?.disconnect()
         profile?.disconnect()
     }
+}
+
+
+private fun fetchMyAccountUsername(accessToken: String): String {
+    if (accessToken.isBlank()) return ""
+    val (code, body) = adminRpc(accessToken, "get_my_account_username", JSONObject())
+    if (code !in 200..299) return ""
+    return runCatching {
+        val rows = JSONArray(body)
+        if (rows.length() > 0) rows.getJSONObject(0).optString("username").trim() else ""
+    }.getOrDefault("")
 }
 
 private data class AdminAccount(
