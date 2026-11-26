@@ -521,7 +521,7 @@ private fun decodeLoadDraftState(raw: String): Pair<List<LoadDraft>, JSONObject?
         drafts to root
     }.getOrElse { emptyList<LoadDraft>() to null }
 }
-private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "", val username: String = "")
+private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "", val username: String = "", val usernameError: String = "")
 // Driver cards include the scheduled loading date returned by the authenticated public-hall RPC.
 private data class MatchedLoad(val id: String, val origin: String, val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String, val companyName: String = "", val companyMobile: String = "", val contactReservationExpiresAt: String = "", val loadingDate: String = "")
 private data class AcceptedLoadContact(val id: String, val destination: String, val companyName: String, val managerName: String, val mobile: String, val reservationExpiresAt: String = "")
@@ -1850,6 +1850,9 @@ private fun ElaanBarApp(
                                                         "نام کاربری: " + record.username.ifBlank { "دریافت نشد یا ثبت نشده است" },
                                                         style = MaterialTheme.typography.bodySmall
                                                     )
+                                                    if (record.usernameError.isNotBlank()) {
+                                                        Text("خطای دریافت نام کاربری: " + record.usernameError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                                    }
                                                     if (record.username.isNotBlank()) {
                                                         TextButton(onClick = {
                                                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
@@ -1932,7 +1935,7 @@ private fun ElaanBarApp(
                                                         }) { Text("رد درخواست") }
                                                     }
                                                     }
-                                                    if (record.status != "blocked") {
+                                                    if (adminRole == "super_admin" && record.status != "blocked") {
                                                         OutlinedButton(onClick = {
                                                             adminPanelLoading = true
                                                             scope.launch {
@@ -1942,7 +1945,7 @@ private fun ElaanBarApp(
                                                             }
                                                         }) { Text("مسدودسازی") }
                                                     }
-                                                    if (record.status == "blocked") {
+                                                    if (adminRole == "super_admin" && record.status == "blocked") {
                                                         Button(onClick = {
                                                             adminPanelLoading = true
                                                             scope.launch {
@@ -2420,7 +2423,7 @@ private fun ElaanBarApp(
                                                     loadingContactLoadId = load.id
                                                     scope.launch {
                                                         val result = withContext(Dispatchers.IO) { fetchAvailableLoadCompanyContact(userAccessToken, load.id) }
-                                                        if (result.second != null) matchedLoads = matchedLoads.map { item -> if (item.id == load.id) item.copy(companyName = result.second!!.companyName, companyMobile = result.second!!.mobile) else item }
+                                                        if (result.second != null) matchedLoads = matchedLoads.map { item -> if (item.id == load.id) item.copy(companyName = result.second!!.companyName, companyMobile = result.second!!.mobile, contactReservationExpiresAt = result.second!!.reservationExpiresAt) else item }
                                                         else matchedLoadsText = result.first
                                                         loadingContactLoadId = ""
                                                     }
@@ -4208,10 +4211,16 @@ private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRec
     }
     // Usernames are intentionally not readable from the client table. Fetch them
     // through a server-side RPC that returns data only to the primary super admin.
-    val usernameByUserId = runCatching {
+    var usernameError = ""
+    val usernameByUserId = try {
         val (usernameCode, usernameBody) = adminRpc(accessToken, "admin_list_account_usernames", JSONObject())
-        if (usernameCode !in 200..299) emptyMap<String, String>()
-        else {
+        if (usernameCode !in 200..299) {
+            usernameError = runCatching {
+                val error = JSONObject(usernameBody)
+                error.optString("message").ifBlank { error.optString("hint") }.ifBlank { "خطای HTTP $usernameCode" }
+            }.getOrDefault("خطای HTTP $usernameCode")
+            emptyMap<String, String>()
+        } else {
             val usernameRows = JSONArray(usernameBody)
             buildMap {
                 for (i in 0 until usernameRows.length()) {
@@ -4222,7 +4231,10 @@ private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRec
                 }
             }
         }
-    }.getOrDefault(emptyMap())
+    } catch (error: Exception) {
+        usernameError = error.message?.take(180).orEmpty().ifBlank { "خطای ارتباط با فهرست نام‌های کاربری" }
+        emptyMap()
+    }
     var connection: HttpURLConnection? = null
     return try {
         val select = if (table == "drivers") "id,first_name,last_name,full_name,mobile,vehicle_type,primary_destination,status"
@@ -4246,7 +4258,7 @@ private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRec
             val detail = if (table == "drivers")
                 item.optString("mobile") + " | " + item.optString("vehicle_type") + " | " + item.optString("primary_destination")
             else item.optString("manager_name") + " | " + item.optString("mobile")
-            AdminRecord(item.optString("id"), title, detail, item.optString("status"), username = usernameByUserId[item.optString("id")].orEmpty())
+            AdminRecord(item.optString("id"), title, detail, item.optString("status"), username = usernameByUserId[item.optString("id")].orEmpty(), usernameError = usernameError)
         }
     } catch (_: Exception) { emptyList() }
     finally { connection?.disconnect() }
