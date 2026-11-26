@@ -2473,12 +2473,12 @@ private fun ElaanBarApp(
                                 }
                                 HorizontalDivider()
                                 Text("بارهایی که شما گرفته‌اید", style = MaterialTheme.typography.titleMedium)
+                                if (driverLoadActionMessage.isNotBlank()) Text(driverLoadActionMessage, color = MaterialTheme.colorScheme.secondary)
                                 if (acceptedLoadContactsLoading) {
                                     CircularProgressIndicator()
                                 } else if (acceptedLoadContacts.isEmpty()) {
                                     Text("هنوز باری به نام شما ثبت نشده است.", style = MaterialTheme.typography.bodySmall)
                                 } else {
-                                    if (driverLoadActionMessage.isNotBlank()) Text(driverLoadActionMessage, color = MaterialTheme.colorScheme.secondary)
                                     acceptedLoadContacts.forEach { accepted ->
                                         Card(Modifier.fillMaxWidth()) {
                                             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
