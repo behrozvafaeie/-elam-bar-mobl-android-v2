@@ -29,8 +29,11 @@ import javax.crypto.spec.GCMParameterSpec
 import java.security.KeyStore
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -72,7 +75,7 @@ import java.net.URLEncoder
 private const val SUPABASE_URL = "https://sckcxtceybwtiecyxqsy.supabase.co"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_rcJe7tZqCkHPgnAXZffzUg_f9ixVbwg"
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private var updateInfo by mutableStateOf<JSONObject?>(null)
     private var updateCheckMessage by mutableStateOf("")
     private var updateCheckInProgress by mutableStateOf(false)
@@ -111,7 +114,11 @@ class MainActivity : ComponentActivity() {
                 if (androidx.compose.foundation.isSystemInDarkTheme()) schemes[3] else schemes[0]
             } else schemes[palette]
             MaterialTheme(colorScheme = activeScheme) {
-                ElaanBarApp(palette, updateCheckMessage, updateCheckInProgress, onCheckForUpdates = { checkForAppUpdates() }) {
+                ElaanBarApp(
+                    palette, updateCheckMessage, updateCheckInProgress,
+                    onCheckForUpdates = { checkForAppUpdates() },
+                    onBiometricAuth = { callback -> authenticateBiometric(callback) }
+                ) {
                     palette = (palette + 1) % 5
                     getSharedPreferences("elambar_ui", MODE_PRIVATE).edit().putInt("palette", palette).apply()
                 }
@@ -146,6 +153,33 @@ class MainActivity : ComponentActivity() {
             }
         }
         checkForAppUpdates()
+    }
+
+    private fun authenticateBiometric(onResult: (Boolean) -> Unit) {
+        val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG
+        if (BiometricManager.from(this).canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
+            onResult(false)
+            return
+        }
+        val prompt = BiometricPrompt(
+            this,
+            ContextCompat.getMainExecutor(this),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    onResult(true)
+                }
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    onResult(false)
+                }
+            }
+        )
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("ورود امن به اعلام بار مبل")
+            .setSubtitle("برای بازیابی نشست قبلی، اثر انگشت خود را تأیید کنید.")
+            .setNegativeButtonText("لغو")
+            .setAllowedAuthenticators(authenticators)
+            .build()
+        prompt.authenticate(info)
     }
 
     private fun checkForAppUpdates() {
@@ -481,7 +515,7 @@ private fun decodeLoadDraftState(raw: String): Pair<List<LoadDraft>, JSONObject?
         drafts to root
     }.getOrElse { emptyList<LoadDraft>() to null }
 }
-private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
+private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "", val username: String = "")
 private data class MatchedLoad(val id: String, val origin: String, val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String, val companyName: String = "", val companyMobile: String = "")
 private data class AcceptedLoadContact(val id: String, val destination: String, val companyName: String, val managerName: String, val mobile: String)
 
@@ -492,6 +526,7 @@ private fun ElaanBarApp(
     updateCheckMessage: String,
     updateCheckInProgress: Boolean,
     onCheckForUpdates: () -> Unit,
+    onBiometricAuth: ((Boolean) -> Unit) -> Unit,
     onNextPalette: () -> Unit
 ) {
     var role by remember { mutableStateOf(UserRole.DRIVER) }
@@ -531,6 +566,7 @@ private fun ElaanBarApp(
     var recoveryMessage by remember { mutableStateOf("") }
     var editProfileBirthDate by remember { mutableStateOf("") }
     var showProfile by remember { mutableStateOf(false) }
+    var showContacts by remember { mutableStateOf(false) }
     var showCommunication by remember { mutableStateOf(false) }
     var showChatRooms by remember { mutableStateOf(false) }
     var showStories by remember { mutableStateOf(false) }
@@ -622,6 +658,7 @@ private fun ElaanBarApp(
     var adminRecords by remember { mutableStateOf<List<AdminRecord>>(emptyList()) }
     var adminActionMessage by remember { mutableStateOf("") }
     var adminStatusReason by remember { mutableStateOf("") }
+    var adminRecordSearch by remember { mutableStateOf("") }
     var adminPanelLoading by remember { mutableStateOf(false) }
     var adminSearchQuery by remember { mutableStateOf("") }
     var adminSearchResults by remember { mutableStateOf<List<AdminAccount>>(emptyList()) }
@@ -631,7 +668,36 @@ private fun ElaanBarApp(
     var adminMenuVisibleToOtherAdmins by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var biometricEnabled by remember { mutableStateOf(context.getSharedPreferences("elambar_security", Context.MODE_PRIVATE).getBoolean("biometric_enabled", false)) }
+    var biometricGatePassed by remember { mutableStateOf(!biometricEnabled) }
+    var biometricMessage by remember { mutableStateOf("") }
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    var pendingAdminDocumentUrl by remember { mutableStateOf("") }
+    val saveAdminDocumentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { destination ->
+        val sourceUrl = pendingAdminDocumentUrl
+        if (destination != null && sourceUrl.isNotBlank()) {
+            scope.launch {
+                val saved = withContext(Dispatchers.IO) {
+                    copySignedDocumentToUri(context, sourceUrl, destination)
+                }
+                android.widget.Toast.makeText(
+                    context,
+                    if (saved) "فایل مدرک ذخیره شد." else "ذخیره فایل انجام نشد؛ دوباره تلاش کنید.",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+        pendingAdminDocumentUrl = ""
+    }
+
+    LaunchedEffect(Unit) {
+        if (biometricEnabled) {
+            onBiometricAuth { success ->
+                biometricGatePassed = success
+                biometricMessage = if (success) "اثر انگشت تأیید شد." else "اثر انگشت تأیید نشد؛ می‌توانید با روش ورود قبلی وارد شوید."
+            }
+        }
+    }
 
     LaunchedEffect(activeDraftOwner) {
         loadedDraftOwner = ""
@@ -720,13 +786,14 @@ private fun ElaanBarApp(
         "مدیریت مدارک", "گفتگوها", "شکایات", "گزارش‌ها", "تنظیمات کل برنامه"
     )
     BackHandler(
-        enabled = showStories || showChatRooms || showCommunication || showProfile || showSettings || showPublicHall || selectedPanel != null || companyLoadPanelExpanded || companyHallExpanded || drawerState.isOpen
+        enabled = showStories || showChatRooms || showCommunication || showProfile || showContacts || showSettings || showPublicHall || selectedPanel != null || companyLoadPanelExpanded || companyHallExpanded || drawerState.isOpen
     ) {
         when {
             showStories -> showStories = false
             showChatRooms -> showChatRooms = false
             showCommunication -> showCommunication = false
             showProfile -> showProfile = false
+            showContacts -> showContacts = false
             showSettings -> showSettings = false
             showPublicHall -> showPublicHall = false
             selectedPanel != null -> selectedPanel = null
@@ -794,7 +861,8 @@ private fun ElaanBarApp(
     var textScale by remember { mutableFloatStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getFloat("text_scale", 1.15f).coerceIn(0.9f, 1.35f)) }
     val currentDensity = androidx.compose.ui.platform.LocalDensity.current
     val scaledDensity = androidx.compose.ui.unit.Density(density = currentDensity.density, fontScale = textScale)
-    LaunchedEffect(Unit) {
+    LaunchedEffect(biometricGatePassed) {
+        if (!biometricGatePassed) return@LaunchedEffect
         val saved = DeviceSessionStore.load(context)
         if (saved != null) {
             val savedRole = when (saved.second) { "COMPANY" -> UserRole.COMPANY; "ADMIN" -> UserRole.ADMIN; else -> UserRole.DRIVER }
@@ -908,6 +976,24 @@ private fun ElaanBarApp(
                             label = { Text("پروفایل من") },
                             selected = showProfile,
                             onClick = { showPublicHall = false; showProfile = true; scope.launch { drawerState.close() } },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        NavigationDrawerItem(
+                            label = { Text("مخاطبین") },
+                            selected = showContacts,
+                            onClick = {
+                                showContacts = true
+                                showProfile = false
+                                showSettings = false
+                                showPublicHall = false
+                                showStories = false
+                                showChatRooms = false
+                                showCommunication = false
+                                selectedPanel = null
+                                companyLoadPanelExpanded = false
+                                companyHallExpanded = false
+                                scope.launch { drawerState.close() }
+                            },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -1083,10 +1169,11 @@ private fun ElaanBarApp(
                         }
                     },
                     navigationIcon = {
-                        if (showProfile || showSettings || showPublicHall || selectedPanel != null || companyLoadPanelExpanded || companyHallExpanded) {
+                        if (showProfile || showContacts || showSettings || showPublicHall || selectedPanel != null || companyLoadPanelExpanded || companyHallExpanded) {
                             IconButton(onClick = {
                                 when {
                                     showProfile -> showProfile = false
+                                    showContacts -> showContacts = false
                                     showSettings -> showSettings = false
                                     showPublicHall -> showPublicHall = false
                                     selectedPanel != null -> selectedPanel = null
@@ -1113,6 +1200,9 @@ private fun ElaanBarApp(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                if (biometricEnabled && !biometricGatePassed && !userLoggedIn && !adminLoggedIn && biometricMessage.isNotBlank()) {
+                    Text(biometricMessage, color = MaterialTheme.colorScheme.secondary, textAlign = TextAlign.Center)
+                }
                 if (!(userLoggedIn && role == UserRole.COMPANY && !showProfile && !showPublicHall)) {
                     Spacer(Modifier.height(12.dp))
                     Surface(
@@ -1158,6 +1248,12 @@ private fun ElaanBarApp(
                             }
                         }
                     )
+                } else if (showContacts && (userLoggedIn || adminLoggedIn)) {
+                    ContactsScreen(
+                        accessToken = if (adminLoggedIn) adminAccessToken else userAccessToken,
+                        role = if (adminLoggedIn) adminRole else role.name,
+                        onBack = { showContacts = false }
+                    )
                 } else if (showSettings) {
                     HorizontalDivider()
                     Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge) {
@@ -1175,6 +1271,35 @@ private fun ElaanBarApp(
                             TextButton(onClick = onNextPalette, modifier = Modifier.fillMaxWidth()) {
                                 Text("پوسته فعلی: " + listOf("روشن", "سبز", "آبی", "تیره", "خودکار")[palette] + "  |  تغییر پوسته")
                             }
+                            HorizontalDivider()
+                            Text("قفل اثر انگشت", style = MaterialTheme.typography.titleMedium)
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(if (biometricEnabled) "ورود با اثر انگشت روشن" else "ورود با اثر انگشت خاموش")
+                                Switch(
+                                    checked = biometricEnabled,
+                                    onCheckedChange = { enabled ->
+                                        if (enabled) {
+                                            biometricMessage = "اثر انگشت را برای فعال‌سازی تأیید کنید."
+                                            onBiometricAuth { success ->
+                                                if (success) {
+                                                    biometricEnabled = true
+                                                    biometricGatePassed = true
+                                                    context.getSharedPreferences("elambar_security", Context.MODE_PRIVATE).edit().putBoolean("biometric_enabled", true).apply()
+                                                    biometricMessage = "قفل اثر انگشت فعال شد."
+                                                } else {
+                                                    biometricMessage = "فعال‌سازی انجام نشد؛ حسگر و اثر انگشت ثبت‌شده را بررسی کنید."
+                                                }
+                                            }
+                                        } else {
+                                            biometricEnabled = false
+                                            biometricGatePassed = true
+                                            context.getSharedPreferences("elambar_security", Context.MODE_PRIVATE).edit().putBoolean("biometric_enabled", false).apply()
+                                            biometricMessage = "ورود با اثر انگشت غیرفعال شد."
+                                        }
+                                    }
+                                )
+                            }
+                            if (biometricMessage.isNotBlank()) Text(biometricMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                             HorizontalDivider()
                             Text("اعلان و صدا", style = MaterialTheme.typography.titleMedium)
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -1381,9 +1506,6 @@ private fun ElaanBarApp(
                     }
                     OutlinedButton(onClick = { showProfile = false }, modifier = Modifier.fillMaxWidth()) { Text("بازگشت به پنل مدیریت") }
                 } else if (adminLoggedIn) {
-                    HorizontalDivider()
-                    Text("پنل مدیریت", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
-                    Text("خوش آمدید؛ سطح دسترسی: " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }, textAlign = TextAlign.Center)
                     if (selectedPanel == null) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -1398,10 +1520,28 @@ private fun ElaanBarApp(
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                         ) {
                             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text("اعلام بار و مدیریت بارها", style = MaterialTheme.typography.titleLarge)
+                                Text("پنل اعلام بار مدیر ارشد", style = MaterialTheme.typography.titleLarge)
                                 Text("ثبت بار جدید و مدیریت بارهای منتشرشده", style = MaterialTheme.typography.bodySmall)
                             }
                         }
+                        if (adminRole == "super_admin") {
+                            AdminDashboard(accessToken = adminAccessToken) { panel ->
+                                selectedPanel = panel
+                                adminPanelData = ""
+                                adminActionMessage = ""
+                                adminPanelLoading = true
+                                scope.launch {
+                                    adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, panel) }
+                                    if (panel == "مدیریت رانندگان" || panel == "مدیریت شرکت‌ها" || panel == "مدیریت مدارک") {
+                                        adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, panel) }
+                                    }
+                                    adminPanelLoading = false
+                                }
+                            }
+                        }
+                    HorizontalDivider()
+                    Text("پنل مدیریت", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
+                    Text("خوش آمدید؛ سطح دسترسی: " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }, textAlign = TextAlign.Center)
                     } else {
                         TextButton(onClick = { selectedPanel = null }, modifier = Modifier.align(Alignment.Start)) {
                             Text("بازگشت به پنل اصلی")
@@ -1642,14 +1782,33 @@ private fun ElaanBarApp(
                                 if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها" || selectedPanel == "مدیریت مدارک") {
                                     if (selectedPanel == "مدیریت رانندگان" || selectedPanel == "مدیریت شرکت‌ها") {
                                         OutlinedTextField(value = adminStatusReason, onValueChange = { adminStatusReason = it.take(500) }, label = { Text("دلیل رد یا مسدودسازی (برای مسدودسازی الزامی است)") }, modifier = Modifier.fillMaxWidth(), maxLines = 3)
+                                        OutlinedTextField(value = adminRecordSearch, onValueChange = { adminRecordSearch = it.take(120) }, label = { Text("جستجو در نام، نام کاربری، موبایل یا وضعیت") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                                     }
-                                    adminRecords.forEach { record ->
+                                    adminRecords.filter { record ->
+                                        if (selectedPanel == "مدیریت مدارک") true else {
+                                            val query = adminRecordSearch.trim()
+                                            query.isBlank() || listOf(record.title, record.detail, record.username, record.status).any { it.contains(query, ignoreCase = true) }
+                                        }
+                                    }.forEach { record ->
                                         Card(Modifier.fillMaxWidth()) {
                                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                                 Text(record.title, style = MaterialTheme.typography.titleSmall)
                                                 Text(record.detail, style = MaterialTheme.typography.bodySmall)
+                                                if (adminLoggedIn && adminRole == "super_admin" && selectedPanel != "مدیریت مدارک") {
+                                                    Text(
+                                                        "نام کاربری: " + record.username.ifBlank { "دریافت نشد یا ثبت نشده است" },
+                                                        style = MaterialTheme.typography.bodySmall
+                                                    )
+                                                    if (record.username.isNotBlank()) {
+                                                        TextButton(onClick = {
+                                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("نام کاربری", record.username))
+                                                            adminActionMessage = "نام کاربری کپی شد."
+                                                        }) { Text("کپی نام کاربری") }
+                                                    }
+                                                }
                                                 Text("وضعیت: ${record.status}")
-                                                if (selectedPanel == "مدیریت مدارک" && record.mediaUrl.isNotBlank()) {
+                                                if (selectedPanel == "مدیریت مدارک" && adminLoggedIn && adminRole == "super_admin" && record.mediaUrl.isNotBlank()) {
                                                     val lowerUrl = record.mediaUrl.substringBefore("?").lowercase()
                                                     if (lowerUrl.endsWith(".jpg") || lowerUrl.endsWith(".jpeg") || lowerUrl.endsWith(".png") || lowerUrl.endsWith(".webp")) {
                                                         AsyncImage(model = record.mediaUrl, contentDescription = "مدرک راننده", modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp))
@@ -1658,6 +1817,17 @@ private fun ElaanBarApp(
                                                     }
                                                 }
                                                 if (selectedPanel == "مدیریت مدارک") {
+                                                    if (adminLoggedIn && adminRole == "super_admin" && record.mediaUrl.isNotBlank()) {
+                                                        OutlinedButton(
+                                                            onClick = {
+                                                                pendingAdminDocumentUrl = record.mediaUrl
+                                                                val extension = record.mediaUrl.substringBefore("?").substringAfterLast('.', "").takeIf { it.matches(Regex("[A-Za-z0-9]{2,5}")) } ?: "file"
+                                                                val safeName = record.title.replace(Regex("[^A-Za-z0-9_-]"), "_").take(48).ifBlank { "document" }
+                                                                saveAdminDocumentLauncher.launch("$safeName.$extension")
+                                                            },
+                                                            modifier = Modifier.fillMaxWidth()
+                                                        ) { Text("دانلود مدرک") }
+                                                    }
                                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                         if (record.status != "approved") {
                                                             Button(onClick = {
@@ -2118,13 +2288,19 @@ private fun ElaanBarApp(
                                             Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
                                             if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")
                                             if (load.companyMobile.isNotBlank()) {
-                                                Text("شماره تماس: ${load.companyMobile}")
-                                                OutlinedButton(
-                                                    onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${load.companyMobile}"))) },
-                                                    modifier = Modifier.fillMaxWidth()
-                                                ) { Text("تماس با شرکت") }
+
+                                                Text("شماره تماس شرکت: ${load.companyMobile}")
+
+                                                Button(onClick = {
+
+                                                    context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + load.companyMobile)))
+
+                                                }, modifier = Modifier.fillMaxWidth()) { Text("تماس با شرکت") }
+
                                             } else {
-                                                Text("پس از دریافت بار، امکان تماس با شرکت در بخش بارهای گرفته‌شده فعال می‌شود.", style = MaterialTheme.typography.bodySmall)
+
+                                                Text("شماره تماس شرکت در دسترس نیست.", style = MaterialTheme.typography.bodySmall)
+
                                             }
                                             if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                                             Button(enabled = acceptingLoadId.isBlank(), onClick = {
@@ -2164,6 +2340,15 @@ private fun ElaanBarApp(
                                             Text("تهران ← ${load.destination}", style = MaterialTheme.typography.titleMedium)
                                             Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
                                             Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
+                                            if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")
+                                            if (load.companyMobile.isNotBlank()) {
+                                                Text("شماره تماس شرکت: ${load.companyMobile}")
+                                                Button(onClick = {
+                                                    context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + load.companyMobile)))
+                                                }, modifier = Modifier.fillMaxWidth()) { Text("تماس با شرکت") }
+                                            } else {
+                                                Text("شماره تماس شرکت در دسترس نیست.", style = MaterialTheme.typography.bodySmall)
+                                            }
                                             if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                                             Button(enabled = acceptingLoadId.isBlank(), onClick = {
                                                 acceptingLoadId = load.id
@@ -2202,7 +2387,7 @@ private fun ElaanBarApp(
                                                         context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + accepted.mobile)))
                                                     },
                                                     modifier = Modifier.fillMaxWidth()
-                                                ) { Text(if (accepted.mobile.isBlank()) "اطلاعات تماس در دسترس نیست" else "تماس با شرکت") }
+                                                ) { Text(if (accepted.mobile.isBlank()) "اطلاعات تماس در دسترس نیست" else "تماس با باربری") }
                                             }
                                         }
                                     }
@@ -2468,7 +2653,7 @@ private fun PublicLoadHallScreen(
     val context = LocalContext.current
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("سالن عمومی اعلام بار", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-        Text("بارهای منتشرشده برای همه کاربران واردشده قابل مشاهده است. شماره تماس شرکت نیز در هر آگهی نمایش داده می‌شود.", style = MaterialTheme.typography.bodySmall)
+        Text("رانندگان تأییدشده می‌توانند پیش از دریافت بار با شرکت تماس بگیرند.", style = MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick = onRefresh, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
             Text(if (loading) "در حال بروزرسانی سالن..." else "بروزرسانی سالن عمومی")
         }
@@ -2481,14 +2666,13 @@ private fun PublicLoadHallScreen(
                     Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
                     Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
                     if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")
-                    if (load.companyMobile.isNotBlank()) {
-                        Text("شماره تماس: ${load.companyMobile}", style = MaterialTheme.typography.bodyMedium)
-                        OutlinedButton(
-                            onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${load.companyMobile}"))) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("تماس با شرکت") }
-                    } else {
-                        Text("پس از دریافت بار، امکان تماس با شرکت در بخش بارهای گرفته‌شده فعال می‌شود.", style = MaterialTheme.typography.bodySmall)
+                    if (canAccept && load.companyMobile.isNotBlank()) {
+                        Text("شماره تماس شرکت: ${load.companyMobile}")
+                        Button(onClick = {
+                            context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + load.companyMobile)))
+                        }, modifier = Modifier.fillMaxWidth()) { Text("تماس با شرکت") }
+                    } else if (canAccept) {
+                        Text("شماره تماس شرکت در دسترس نیست.", style = MaterialTheme.typography.bodySmall)
                     }
                     if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                     if (canAccept) {
@@ -2618,10 +2802,67 @@ private fun uploadAccountDocument(context: Context, uri: Uri, token: String, doc
     finally { upload?.disconnect(); insert?.disconnect(); cleanup?.disconnect() }
 }
 
-private fun profilePhotoPublicUrl(path: String): String {
+internal fun profilePhotoStoragePath(path: String): String {
     if (path.isBlank() || path == "null") return ""
-    if (path.startsWith("http")) return path
-    return SUPABASE_URL + "/storage/v1/object/public/profile-photos/" + path
+    val rawPath = if (path.startsWith("http", ignoreCase = true)) {
+        path.substringAfter("/profile-photos/", "").substringBefore('?')
+    } else {
+        path.substringBefore('?').trimStart('/')
+    }
+    if (rawPath.isBlank() || rawPath.split('/').any { it.isBlank() || it == "." || it == ".." }) return ""
+    return rawPath
+}
+
+internal fun createProfilePhotoSignedUrls(paths: List<String>, token: String): Map<String, String> {
+    if (token.isBlank()) return emptyMap()
+    val cleanPaths = paths.map { profilePhotoStoragePath(it) }.filter { it.isNotBlank() }.distinct()
+    if (cleanPaths.isEmpty()) return emptyMap()
+    var connection: HttpURLConnection? = null
+    return try {
+        val requestPaths = JSONArray()
+        cleanPaths.forEach { requestPaths.put(it) }
+        connection = (URL(SUPABASE_URL + "/storage/v1/object/sign/profile-photos").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 20000
+            doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer " + token)
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        val body = JSONObject().put("expiresIn", 3600).put("paths", requestPaths)
+        connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        if (code !in 200..299) return emptyMap()
+        val rows = JSONArray(stream?.bufferedReader()?.use { it.readText() }.orEmpty())
+        buildMap {
+            for (index in 0 until rows.length()) {
+                val row = rows.optJSONObject(index) ?: continue
+                val objectPath = profilePhotoStoragePath(row.optString("path"))
+                val signed = row.optString("signedURL")
+                if (objectPath.isBlank() || signed.isBlank() || (row.has("error") && !row.isNull("error"))) continue
+                val fullUrl = when {
+                    signed.startsWith("https://") || signed.startsWith("http://") -> signed
+                    signed.startsWith("/storage/") -> SUPABASE_URL + signed
+                    signed.startsWith("/") -> SUPABASE_URL + "/storage/v1" + signed
+                    else -> ""
+                }
+                if (fullUrl.isNotBlank()) put(objectPath, fullUrl)
+            }
+        }
+    } catch (_: Exception) {
+        emptyMap()
+    } finally {
+        connection?.disconnect()
+    }
+}
+
+internal fun createProfilePhotoSignedUrl(path: String, token: String): String {
+    val cleanPath = profilePhotoStoragePath(path)
+    if (cleanPath.isBlank()) return ""
+    return createProfilePhotoSignedUrls(listOf(cleanPath), token)[cleanPath].orEmpty()
 }
 
 private fun fetchAdminProfilePhoto(token: String): String {
@@ -2642,7 +2883,7 @@ private fun fetchAdminProfilePhoto(token: String): String {
         val code = connection.responseCode
         if (code !in 200..299) return ""
         val rows = JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
-        if (rows.length() == 0) "" else profilePhotoPublicUrl(rows.getJSONObject(0).optString("profile_photo_path"))
+        if (rows.length() == 0) "" else createProfilePhotoSignedUrl(rows.getJSONObject(0).optString("profile_photo_path"), token)
     } catch (_: Exception) {
         ""
     } finally {
@@ -2699,7 +2940,7 @@ private fun uploadProfilePhoto(context: Context, uri: Uri, token: String, role: 
         update.outputStream.use { it.write(JSONObject().put("p_path", path).toString().toByteArray(Charsets.UTF_8)) }
         val updateCode = update.responseCode
         if (updateCode !in 200..299) return "تصویر بارگذاری شد اما ذخیره نشانی پروفایل ناموفق بود (کد " + updateCode + ")."
-        profilePhotoPublicUrl(path) + "?v=" + System.currentTimeMillis()
+        createProfilePhotoSignedUrl(path, token)
     } catch (_: Exception) { "ارتباط با فضای تصاویر برقرار نشد." }
     finally { upload?.disconnect(); update?.disconnect() }
 }
@@ -2834,7 +3075,7 @@ private fun registerDeviceAccount(role: UserRole, first: String, last: String, m
         val p=rows.getJSONObject(0); val status=p.optString("status")
         if(status !in listOf("pending","approved")) return UserLoginResult(false,"وضعیت حساب اجازه ورود نمی‌دهد.")
         val name=if(role==UserRole.COMPANY) p.optString("company_name").ifBlank { first + " " + last } else first + " " + last
-        UserLoginResult(true,if(status=="pending")"ثبت‌نام انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ثبت‌نام و ورود موفق بود.",name,status,access,refresh,profilePhotoPublicUrl(p.optString("profile_photo_path")))
+        UserLoginResult(true,if(status=="pending")"ثبت‌نام انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ثبت‌نام و ورود موفق بود.",name,status,access,refresh,createProfilePhotoSignedUrl(p.optString("profile_photo_path"), access))
     } catch (_:Exception) { UserLoginResult(false,"ارتباط با سامانه برقرار نشد؛ دوباره تلاش کنید.") }
     finally { auth?.disconnect(); profile?.disconnect() }
 }
@@ -2894,7 +3135,7 @@ private fun restoreDeviceSession(refreshToken: String, role: UserRole): UserLogi
         val status = p.optString("status")
         if (status !in listOf("pending", "approved")) return UserLoginResult(false, "دسترسی حساب فعال نیست.")
         val name = if (role == UserRole.COMPANY) p.optString("company_name").ifBlank { p.optString("first_name") + " " + p.optString("last_name") } else (p.optString("first_name") + " " + p.optString("last_name")).trim()
-        UserLoginResult(true, "نشست قبلی بازیابی شد.", name, status, access, fresh, profilePhotoPublicUrl(p.optString("profile_photo_path")), user.optJSONObject("user_metadata")?.optString("username").orEmpty())
+        UserLoginResult(true, "نشست قبلی بازیابی شد.", name, status, access, fresh, createProfilePhotoSignedUrl(p.optString("profile_photo_path"), access), user.optJSONObject("user_metadata")?.optString("username").orEmpty())
     } catch (_: Exception) {
         UserLoginResult(false, "ارتباط با سامانه برقرار نشد.")
     } finally {
@@ -2910,7 +3151,7 @@ private data class AdminAccount(
     val isBlocked: Boolean = false
 )
 
-private fun adminRpc(accessToken: String, functionName: String, body: JSONObject): Pair<Int, String> {
+internal fun adminRpc(accessToken: String, functionName: String, body: JSONObject): Pair<Int, String> {
     var connection: HttpURLConnection? = null
     return try {
         connection = (URL("$SUPABASE_URL/rest/v1/rpc/$functionName").openConnection() as HttpURLConnection).apply {
@@ -3580,6 +3821,7 @@ private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<Ma
         val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
         if (code !in 200..299) return "دریافت بارها ناموفق بود (کد $code)." to emptyList()
         val rows = JSONArray(raw)
+        val companyContacts = fetchPublishedLoadCompanyContacts(accessToken)
         val matching = (0 until rows.length()).map { rows.getJSONObject(it) }.filter { item ->
             normalizeVehicleType(item.optString("vehicle_type")).equals(normalizeVehicleType(vehicle), ignoreCase = true) &&
                 destinations.contains(normalizeMatchText(item.optString("destination")) )
@@ -3592,7 +3834,9 @@ private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<Ma
                 vehicleType = item.optString("vehicle_type"),
                 loadingType = item.optString("loading_type"),
                 freightAmount = item.optString("freight_amount", "0"),
-                description = item.optString("description").takeUnless { it == "null" }.orEmpty()
+                description = item.optString("description").takeUnless { it == "null" }.orEmpty(),
+                companyName = companyContacts[item.optString("id")]?.first.orEmpty(),
+                companyMobile = companyContacts[item.optString("id")]?.second.orEmpty()
             )
         }.filter { it.id.isNotBlank() }
         (if (matching.isEmpty()) "در حال حاضر بار منتشرشده متناسب با خودرو و مقصدهای شما وجود ندارد." else "بارهای متناسب پیدا شد: ${matching.size} مورد. برای گرفتن بار، دکمه هر کارت را بزنید.") to matching
@@ -3625,6 +3869,7 @@ private fun fetchPublicHallLoads(accessToken: String): Pair<String, List<Matched
         val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
         if (code !in 200..299) return "دریافت سالن عمومی ناموفق بود (کد $code)." to emptyList()
         val rows = JSONArray(raw)
+        val companyContacts = fetchPublishedLoadCompanyContacts(accessToken)
         val loads = (0 until rows.length()).map { rows.getJSONObject(it) }.map { item ->
             MatchedLoad(
                 id = item.optString("id"),
@@ -3635,8 +3880,9 @@ private fun fetchPublicHallLoads(accessToken: String): Pair<String, List<Matched
                 loadingType = item.optString("loading_type"),
                 freightAmount = item.optString("freight_amount", "0"),
                 description = item.optString("description").takeUnless { it == "null" }.orEmpty(),
-                companyName = item.optString("company_name").takeUnless { it == "null" }.orEmpty(),
-                companyMobile = item.optString("company_mobile").takeUnless { it == "null" }.orEmpty()
+                companyName = companyContacts[item.optString("id")]?.first
+                    ?: item.optString("company_name").takeUnless { it == "null" }.orEmpty(),
+                companyMobile = companyContacts[item.optString("id")]?.second.orEmpty()
             )
         }.filter { it.id.isNotBlank() }
         (if (loads.isEmpty()) "در حال حاضر بار منتشرشده‌ای در سالن عمومی وجود ندارد." else "${loads.size} بار منتشرشده در سالن عمومی موجود است.") to loads
@@ -3750,6 +3996,38 @@ private fun fetchMatchedLoads(accessToken: String): String {
 }
 
 
+private fun fetchPublishedLoadCompanyContacts(accessToken: String): Map<String, Pair<String, String>> {
+    if (accessToken.isBlank()) return emptyMap()
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL("$SUPABASE_URL/rest/v1/rpc/get_published_load_company_contacts").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 20000
+            doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        connection.outputStream.use { it.write(JSONObject().toString().toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        if (code !in 200..299) return emptyMap()
+        val rows = JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
+        buildMap {
+            for (i in 0 until rows.length()) {
+                val item = rows.getJSONObject(i)
+                val id = item.optString("load_id")
+                if (id.isNotBlank()) put(id, item.optString("company_name") to item.optString("mobile"))
+            }
+        }
+    } catch (_: Exception) {
+        emptyMap()
+    } finally {
+        connection?.disconnect()
+    }
+}
+
 private fun fetchAcceptedLoadContacts(accessToken: String): List<AcceptedLoadContact> {
     if (accessToken.isBlank()) return emptyList()
     var connection: HttpURLConnection? = null
@@ -3860,21 +4138,46 @@ private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRec
         "مدیریت شرکت‌ها" -> "companies"
         else -> return emptyList()
     }
+    // Usernames are intentionally not readable from the client table. Fetch them
+    // through a server-side RPC that returns data only to the primary super admin.
+    val usernameByUserId = runCatching {
+        val (usernameCode, usernameBody) = adminRpc(accessToken, "admin_list_account_usernames", JSONObject())
+        if (usernameCode !in 200..299) emptyMap<String, String>()
+        else {
+            val usernameRows = JSONArray(usernameBody)
+            buildMap {
+                for (i in 0 until usernameRows.length()) {
+                    val row = usernameRows.getJSONObject(i)
+                    val userId = row.optString("user_id")
+                    val value = row.optString("username")
+                    if (userId.isNotBlank() && value.isNotBlank()) put(userId, value)
+                }
+            }
+        }
+    }.getOrDefault(emptyMap())
     var connection: HttpURLConnection? = null
     return try {
         val select = if (table == "drivers") "id,first_name,last_name,full_name,mobile,vehicle_type,primary_destination,status"
             else "id,first_name,last_name,company_name,manager_name,mobile,status"
-        val url = "$SUPABASE_URL/rest/v1/$table?select=$select&order=created_at.desc&limit=100"
-        connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = 15000
-            readTimeout = 20000
-            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
-            setRequestProperty("Authorization", "Bearer $accessToken")
-            setRequestProperty("Accept", "application/json")
+        val rows = JSONArray()
+        var offset = 0
+        while (true) {
+            connection = (URL("$SUPABASE_URL/rest/v1/$table?select=$select&order=created_at.asc&limit=1000&offset=$offset").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 15000
+                readTimeout = 20000
+                setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+                setRequestProperty("Authorization", "Bearer $accessToken")
+                setRequestProperty("Accept", "application/json")
+            }
+            if (connection.responseCode !in 200..299) return emptyList()
+            val page = JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
+            for (i in 0 until page.length()) rows.put(page.getJSONObject(i))
+            connection.disconnect()
+            connection = null
+            if (page.length() < 1000) break
+            offset += page.length()
         }
-        if (connection.responseCode !in 200..299) return emptyList()
-        val rows = JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
         (0 until rows.length()).map { i ->
             val item = rows.getJSONObject(i)
             val title = if (table == "drivers")
@@ -3883,7 +4186,7 @@ private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRec
             val detail = if (table == "drivers")
                 item.optString("mobile") + " | " + item.optString("vehicle_type") + " | " + item.optString("primary_destination")
             else item.optString("manager_name") + " | " + item.optString("mobile")
-            AdminRecord(item.optString("id"), title, detail, item.optString("status"))
+            AdminRecord(item.optString("id"), title, detail, item.optString("status"), username = usernameByUserId[item.optString("id")].orEmpty())
         }
     } catch (_: Exception) { emptyList() }
     finally { connection?.disconnect() }
@@ -3906,9 +4209,37 @@ private fun createSignedDriverDocumentUrl(accessToken: String, path: String, buc
         val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
         if (code !in 200..299) return ""
         val signed = JSONObject(raw).optString("signedURL")
-        if (signed.isBlank()) "" else if (signed.startsWith("http")) signed else SUPABASE_URL + signed
+        when {
+            signed.isBlank() -> ""
+            signed.startsWith("https://") || signed.startsWith("http://") -> signed
+            signed.startsWith("/storage/") -> SUPABASE_URL + signed
+            signed.startsWith("/") -> SUPABASE_URL + "/storage/v1" + signed
+            else -> ""
+        }
     } catch (_: Exception) { "" }
     finally { connection?.disconnect() }
+}
+
+private fun copySignedDocumentToUri(context: Context, signedUrl: String, destination: Uri): Boolean {
+    if (!signedUrl.startsWith(SUPABASE_URL + "/storage/v1/object/sign/")) return false
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL(signedUrl).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15000
+            readTimeout = 60000
+            instanceFollowRedirects = true
+        }
+        if (connection.responseCode !in 200..299) return false
+        val output = context.contentResolver.openOutputStream(destination, "w") ?: return false
+        output.use { target -> connection.inputStream.use { input -> input.copyTo(target) } }
+        true
+    } catch (_: Exception) {
+        runCatching { context.contentResolver.delete(destination, null, null) }
+        false
+    } finally {
+        connection?.disconnect()
+    }
 }
 
 private fun updateDriverDocumentStatus(accessToken: String, id: String, status: String): String {
