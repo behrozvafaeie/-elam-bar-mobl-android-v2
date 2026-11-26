@@ -1703,7 +1703,6 @@ private fun ElaanBarApp(
                                                             modifier = Modifier.weight(1f)
                                                         ) { Text("ادمین ارشد") }
                                                     }
-                                                }
                                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                         OutlinedButton(enabled = !adminManageBusy, onClick = {
                                                             adminManageBusy = true
@@ -1721,6 +1720,7 @@ private fun ElaanBarApp(
                                                             }
                                                         }, modifier = Modifier.weight(1f)) { Text("اخراج از همه دستگاه‌ها") }
                                                     }
+                                                }
                                             }
                                         }
                                     }
