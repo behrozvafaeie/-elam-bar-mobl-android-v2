@@ -1669,6 +1669,7 @@ private fun ElaanBarApp(
                                                 if (account.role == "super_admin") {
                                                     Text("حساب اصلی قابل تغییر نیست.", color = MaterialTheme.colorScheme.primary)
                                                 } else {
+                                                    Text("وضعیت: " + if (account.isBlocked) "مسدود" else "فعال")
                                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                         OutlinedButton(
                                                             enabled = !adminManageBusy && account.role != "admin",
@@ -1694,6 +1695,24 @@ private fun ElaanBarApp(
                                                             },
                                                             modifier = Modifier.weight(1f)
                                                         ) { Text("ادمین ارشد") }
+                                                    }
+                                                }
+                                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                        OutlinedButton(enabled = !adminManageBusy, onClick = {
+                                                            adminManageBusy = true
+                                                            scope.launch {
+                                                                adminActionMessage = withContext(Dispatchers.IO) { setAdminUserBlocked(adminAccessToken, account.userId, !account.isBlocked, adminStatusReason) }
+                                                                managedAdmins = withContext(Dispatchers.IO) { fetchAdminUsers(adminAccessToken) }
+                                                                adminManageBusy = false
+                                                            }
+                                                        }, modifier = Modifier.weight(1f)) { Text(if (account.isBlocked) "رفع مسدودی" else "مسدودسازی") }
+                                                        OutlinedButton(enabled = !adminManageBusy, onClick = {
+                                                            adminManageBusy = true
+                                                            scope.launch {
+                                                                adminActionMessage = withContext(Dispatchers.IO) { forceLogoutMember(adminAccessToken, account.userId) }
+                                                                adminManageBusy = false
+                                                            }
+                                                        }, modifier = Modifier.weight(1f)) { Text("اخراج از همه دستگاه‌ها") }
                                                     }
                                                 }
                                             }
@@ -1834,6 +1853,15 @@ private fun ElaanBarApp(
                                                     }
                                                 }
                                                 Text("وضعیت: ${record.status}")
+                                                if (adminLoggedIn && adminRole == "super_admin" && selectedPanel != "مدیریت مدارک") {
+                                                    OutlinedButton(enabled = !adminPanelLoading, onClick = {
+                                                        adminPanelLoading = true
+                                                        scope.launch {
+                                                            adminActionMessage = withContext(Dispatchers.IO) { forceLogoutMember(adminAccessToken, record.id) }
+                                                            adminPanelLoading = false
+                                                        }
+                                                    }, modifier = Modifier.fillMaxWidth()) { Text("اخراج از همه دستگاه‌ها") }
+                                                }
                                                 if (selectedPanel == "مدیریت مدارک" && adminLoggedIn && adminRole == "super_admin" && record.mediaUrl.isNotBlank()) {
                                                     val lowerUrl = record.mediaUrl.substringBefore("?").lowercase()
                                                     if (lowerUrl.endsWith(".jpg") || lowerUrl.endsWith(".jpeg") || lowerUrl.endsWith(".png") || lowerUrl.endsWith(".webp")) {
@@ -3224,6 +3252,13 @@ private fun forceLogoutMember(accessToken: String, userId: String): String {
         val count = body.trim().trim(34.toChar()).toIntOrNull()
         "دستور خروج اجباری ثبت شد؛ نشست‌های فعال باطل شدند" + (count?.let { " (تعداد نشست: $it)." } ?: ".")
     } else "خروج اجباری انجام نشد؛ فقط مدیر ارشد اصلی مجاز است یا حساب هدف معتبر نیست."
+}
+
+private fun setAdminUserBlocked(accessToken: String, userId: String, blocked: Boolean, reason: String): String {
+    if (blocked && reason.trim().length < 3) return "برای مسدودسازی مدیر، دلیل حداقل سه نویسه‌ای وارد کنید."
+    val (code, body) = adminRpc(accessToken, "admin_set_blocked", JSONObject().put("p_target_user_id", userId).put("p_blocked", blocked).put("p_reason", if (blocked) reason.trim() else JSONObject.NULL))
+    return if (code in 200..299) { if (blocked) "دسترسی مدیر مسدود شد." else "دسترسی مدیر دوباره فعال شد." }
+    else "تغییر وضعیت مدیر انجام نشد؛ مجوز مدیر ارشد اصلی را بررسی کنید."
 }
 
 private fun fetchAdminPanelData(accessToken: String, panel: String): String {
