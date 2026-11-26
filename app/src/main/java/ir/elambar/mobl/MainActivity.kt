@@ -588,6 +588,8 @@ private fun ElaanBarApp(
     var publicHallLoading by remember { mutableStateOf(false) }
     var acceptedLoadContacts by remember { mutableStateOf<List<AcceptedLoadContact>>(emptyList()) }
     var acceptedLoadContactsLoading by remember { mutableStateOf(false) }
+    var markingLoadedLoadId by remember { mutableStateOf("") }
+    var driverLoadActionMessage by remember { mutableStateOf("") }
     var acceptingLoadId by remember { mutableStateOf("") }
     var loadingContactLoadId by remember { mutableStateOf("") }
     var companyLoadsText by remember { mutableStateOf("برای مشاهده بارهای ثبت‌شده، بروزرسانی را بزنید.") }
@@ -2476,6 +2478,7 @@ private fun ElaanBarApp(
                                 } else if (acceptedLoadContacts.isEmpty()) {
                                     Text("هنوز باری به نام شما ثبت نشده است.", style = MaterialTheme.typography.bodySmall)
                                 } else {
+                                    if (driverLoadActionMessage.isNotBlank()) Text(driverLoadActionMessage, color = MaterialTheme.colorScheme.secondary)
                                     acceptedLoadContacts.forEach { accepted ->
                                         Card(Modifier.fillMaxWidth()) {
                                             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -2489,6 +2492,22 @@ private fun ElaanBarApp(
                                                     },
                                                     modifier = Modifier.fillMaxWidth()
                                                 ) { Text(if (accepted.mobile.isBlank()) "اطلاعات تماس در دسترس نیست" else "تماس با باربری") }
+                                                Button(
+                                                    enabled = markingLoadedLoadId.isBlank(),
+                                                    onClick = {
+                                                        markingLoadedLoadId = accepted.id
+                                                        driverLoadActionMessage = ""
+                                                        scope.launch {
+                                                            val result = withContext(Dispatchers.IO) { markDriverLoadInTransit(userAccessToken, accepted.id) }
+                                                            driverLoadActionMessage = result
+                                                            acceptedLoadContactsLoading = true
+                                                            acceptedLoadContacts = withContext(Dispatchers.IO) { fetchAcceptedLoadContacts(userAccessToken) }
+                                                            acceptedLoadContactsLoading = false
+                                                            markingLoadedLoadId = ""
+                                                        }
+                                                    },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) { Text(if (markingLoadedLoadId == accepted.id) "در حال ثبت بارگیری..." else "ثبت بارگیری و حرکت از مبدأ") }
                                             }
                                         }
                                     }
@@ -4086,6 +4105,37 @@ private fun fetchAvailableLoadCompanyContact(accessToken: String, loadId: String
     } catch (_: Exception) {
         "ارتباط با سامانه برقرار نشد؛ اینترنت را بررسی کنید." to null
     } finally { connection?.disconnect() }
+}
+
+private fun markDriverLoadInTransit(accessToken: String, loadId: String): String {
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL("$SUPABASE_URL/rest/v1/rpc/driver_mark_load_in_transit").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 20000
+            doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        connection.outputStream.use {
+            it.write(JSONObject().put("p_load_id", loadId).toString().toByteArray(Charsets.UTF_8))
+        }
+        val code = connection.responseCode
+        if (code in 200..299) {
+            "بارگیری ثبت شد؛ بار از فهرست فعال شرکت به سابقه منتقل شد."
+        } else {
+            val stream = connection.errorStream
+            val detail = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            "ثبت بارگیری انجام نشد (کد $code). " + detail.take(220)
+        }
+    } catch (e: Exception) {
+        "ارتباط با سامانه برقرار نشد؛ وضعیت بار را دوباره بررسی کنید."
+    } finally {
+        connection?.disconnect()
+    }
 }
 
 private fun declineDriverLoadReservation(accessToken: String, loadId: String): String {
