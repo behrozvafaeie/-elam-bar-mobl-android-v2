@@ -1,5 +1,7 @@
 package ir.elambar.mobl
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
@@ -40,7 +43,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
 
 private const val CONTACTS_SUPABASE_URL = "https://sckcxtceybwtiecyxqsy.supabase.co"
 private const val CONTACTS_SUPABASE_KEY = "sb_publishable_rcJe7tZqCkHPgnAXZffzUg_f9ixVbwg"
@@ -52,7 +54,8 @@ private data class DirectoryContact(
     val subtitle: String,
     val status: String,
     val photoUrl: String,
-    val details: List<Pair<String, String>>
+    val details: List<Pair<String, String>>,
+    val phoneNumber: String = ""
 )
 
 private data class DirectoryResult(val contacts: List<DirectoryContact>, val message: String)
@@ -69,6 +72,7 @@ internal fun ContactsScreen(
     var loading by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("برای دریافت فهرست مخاطبین، کمی صبر کنید.") }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     fun refresh() {
         if (loading || accessToken.isBlank()) return
@@ -192,6 +196,21 @@ internal fun ContactsScreen(
                     }
                 }
             }
+            if (contact.phoneNumber.isNotBlank()) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("شماره تماس", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        Text(contact.phoneNumber, style = MaterialTheme.typography.bodyLarge)
+                        OutlinedButton(
+                            onClick = {
+                                val dialIntent = Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", contact.phoneNumber, null))
+                                context.startActivity(dialIntent)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("تماس با راننده") }
+                    }
+                }
+            }
             Text(
                 "اطلاعات محرمانه و مدارک هویتی در فهرست مخاطبین نمایش داده نمی‌شود.",
                 style = MaterialTheme.typography.bodySmall,
@@ -240,6 +259,10 @@ private fun fetchRoleDirectory(token: String, role: String): DirectoryResult {
                 continue
             }
             val rows = JSONArray(raw)
+            val photoUrls = createProfilePhotoSignedUrls(
+                (0 until rows.length()).map { rows.getJSONObject(it).optString("profile_photo_path") },
+                token
+            )
             for (i in 0 until rows.length()) {
                 val row = rows.getJSONObject(i)
                 if (rpcName == "list_driver_directory_v2") {
@@ -248,7 +271,7 @@ private fun fetchRoleDirectory(token: String, role: String): DirectoryResult {
                     val name = row.optString("full_name").trim().ifBlank { "راننده" }
                     val destinations = row.optJSONArray("destinations") ?: JSONArray()
                     val destinationText = (0 until destinations.length()).map { destinations.optString(it) }.filter { it.isNotBlank() }.joinToString("، ")
-                    val photo = publicProfilePhotoUrl(row.optString("profile_photo_path"))
+                    val photo = photoUrls[profilePhotoStoragePath(row.optString("profile_photo_path"))].orEmpty()
                     result += DirectoryContact(
                         row.optString("id"), name, "راننده", row.optString("vehicle_type"),
                         "حساب تأییدشده", photo,
@@ -256,11 +279,12 @@ private fun fetchRoleDirectory(token: String, role: String): DirectoryResult {
                             "نوع خودرو" to row.optString("vehicle_type"),
                             "مقصد اصلی" to row.optString("primary_destination"),
                             "مقصدهای دیگر" to destinationText
-                        )
+                        ),
+                        phoneNumber = row.optString("mobile")
                     )
                 } else {
                     val name = row.optString("company_name").ifBlank { "شرکت باربری" }
-                    val photo = publicProfilePhotoUrl(row.optString("profile_photo_path"))
+                    val photo = photoUrls[profilePhotoStoragePath(row.optString("profile_photo_path"))].orEmpty()
                     result += DirectoryContact(
                         row.optString("company_id"), name, "شرکت باربری",
                         row.optString("activity_city"), "حساب تأییدشده", photo,
@@ -286,9 +310,4 @@ private fun fetchRoleDirectory(token: String, role: String): DirectoryResult {
     return DirectoryResult(deduped, message)
 }
 
-private fun publicProfilePhotoUrl(path: String): String {
-    val clean = path.trim().trimStart('/')
-    if (clean.isBlank()) return ""
-    val encoded = clean.split('/').joinToString("/") { URLEncoder.encode(it, "UTF-8").replace("+", "%20") }
-    return "$CONTACTS_SUPABASE_URL/storage/v1/object/public/profile-photos/$encoded"
-}
+

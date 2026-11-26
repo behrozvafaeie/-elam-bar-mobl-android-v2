@@ -1506,10 +1506,24 @@ private fun ElaanBarApp(
                     }
                     OutlinedButton(onClick = { showProfile = false }, modifier = Modifier.fillMaxWidth()) { Text("بازگشت به پنل مدیریت") }
                 } else if (adminLoggedIn) {
-                    HorizontalDivider()
-                    Text("پنل مدیریت", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
-                    Text("خوش آمدید؛ سطح دسترسی: " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }, textAlign = TextAlign.Center)
                     if (selectedPanel == null) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                selectedPanel = "مدیریت بارها"
+                                adminPanelLoading = true
+                                scope.launch {
+                                    adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, "مدیریت بارها") }
+                                    adminPanelLoading = false
+                                }
+                            },
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Text("پنل اعلام بار مدیر ارشد", style = MaterialTheme.typography.titleLarge)
+                                Text("ثبت بار جدید و مدیریت بارهای منتشرشده", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
                         if (adminRole == "super_admin") {
                             AdminDashboard(accessToken = adminAccessToken) { panel ->
                                 selectedPanel = panel
@@ -1525,23 +1539,9 @@ private fun ElaanBarApp(
                                 }
                             }
                         }
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = {
-                                selectedPanel = "مدیریت بارها"
-                                adminPanelLoading = true
-                                scope.launch {
-                                    adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, "مدیریت بارها") }
-                                    adminPanelLoading = false
-                                }
-                            },
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                        ) {
-                            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text("اعلام بار و مدیریت بارها", style = MaterialTheme.typography.titleLarge)
-                                Text("ثبت بار جدید و مدیریت بارهای منتشرشده", style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
+                    HorizontalDivider()
+                    Text("پنل مدیریت", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
+                    Text("خوش آمدید؛ سطح دسترسی: " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }, textAlign = TextAlign.Center)
                     } else {
                         TextButton(onClick = { selectedPanel = null }, modifier = Modifier.align(Alignment.Start)) {
                             Text("بازگشت به پنل اصلی")
@@ -2287,7 +2287,21 @@ private fun ElaanBarApp(
                                             Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
                                             Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
                                             if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")
-                                            Text("برای تماس با باربری، ابتدا بار را دریافت کنید؛ شماره تماس فقط در بخش بارهای گرفته‌شده و برای راننده مجاز فعال می‌شود.", style = MaterialTheme.typography.bodySmall)
+                                            if (load.companyMobile.isNotBlank()) {
+
+                                                Text("شماره تماس شرکت: ${load.companyMobile}")
+
+                                                Button(onClick = {
+
+                                                    context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + load.companyMobile)))
+
+                                                }, modifier = Modifier.fillMaxWidth()) { Text("تماس با شرکت") }
+
+                                            } else {
+
+                                                Text("شماره تماس شرکت در دسترس نیست.", style = MaterialTheme.typography.bodySmall)
+
+                                            }
                                             if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                                             Button(enabled = acceptingLoadId.isBlank(), onClick = {
                                                 acceptingLoadId = load.id
@@ -2326,6 +2340,15 @@ private fun ElaanBarApp(
                                             Text("تهران ← ${load.destination}", style = MaterialTheme.typography.titleMedium)
                                             Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
                                             Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
+                                            if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")
+                                            if (load.companyMobile.isNotBlank()) {
+                                                Text("شماره تماس شرکت: ${load.companyMobile}")
+                                                Button(onClick = {
+                                                    context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + load.companyMobile)))
+                                                }, modifier = Modifier.fillMaxWidth()) { Text("تماس با شرکت") }
+                                            } else {
+                                                Text("شماره تماس شرکت در دسترس نیست.", style = MaterialTheme.typography.bodySmall)
+                                            }
                                             if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                                             Button(enabled = acceptingLoadId.isBlank(), onClick = {
                                                 acceptingLoadId = load.id
@@ -2627,9 +2650,10 @@ private fun PublicLoadHallScreen(
     onRefresh: () -> Unit,
     onAccept: (String) -> Unit
 ) {
+    val context = LocalContext.current
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("سالن عمومی اعلام بار", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-        Text("بارهای منتشرشده برای کاربران واردشده قابل مشاهده است. شماره تماس شرکت عمومی نیست؛ پس از دریافت و ثبت بار، از بخش «بارهایی که شما گرفته‌اید» با دکمه «تماس با باربری» تماس بگیرید.", style = MaterialTheme.typography.bodySmall)
+        Text("رانندگان تأییدشده می‌توانند پیش از دریافت بار با شرکت تماس بگیرند.", style = MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick = onRefresh, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
             Text(if (loading) "در حال بروزرسانی سالن..." else "بروزرسانی سالن عمومی")
         }
@@ -2642,7 +2666,14 @@ private fun PublicLoadHallScreen(
                     Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
                     Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
                     if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")
-                    Text("برای حفظ حریم تماس، شماره شرکت در سالن عمومی نمایش داده نمی‌شود. پس از دریافت بار، دکمه «تماس با باربری» در بخش بارهای گرفته‌شده فعال است.", style = MaterialTheme.typography.bodySmall)
+                    if (canAccept && load.companyMobile.isNotBlank()) {
+                        Text("شماره تماس شرکت: ${load.companyMobile}")
+                        Button(onClick = {
+                            context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + load.companyMobile)))
+                        }, modifier = Modifier.fillMaxWidth()) { Text("تماس با شرکت") }
+                    } else if (canAccept) {
+                        Text("شماره تماس شرکت در دسترس نیست.", style = MaterialTheme.typography.bodySmall)
+                    }
                     if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                     if (canAccept) {
                         Button(enabled = acceptingLoadId.isBlank(), onClick = { onAccept(load.id) }, modifier = Modifier.fillMaxWidth()) {
@@ -2771,10 +2802,67 @@ private fun uploadAccountDocument(context: Context, uri: Uri, token: String, doc
     finally { upload?.disconnect(); insert?.disconnect(); cleanup?.disconnect() }
 }
 
-private fun profilePhotoPublicUrl(path: String): String {
+internal fun profilePhotoStoragePath(path: String): String {
     if (path.isBlank() || path == "null") return ""
-    if (path.startsWith("http")) return path
-    return SUPABASE_URL + "/storage/v1/object/public/profile-photos/" + path
+    val rawPath = if (path.startsWith("http", ignoreCase = true)) {
+        path.substringAfter("/profile-photos/", "").substringBefore('?')
+    } else {
+        path.substringBefore('?').trimStart('/')
+    }
+    if (rawPath.isBlank() || rawPath.split('/').any { it.isBlank() || it == "." || it == ".." }) return ""
+    return rawPath
+}
+
+internal fun createProfilePhotoSignedUrls(paths: List<String>, token: String): Map<String, String> {
+    if (token.isBlank()) return emptyMap()
+    val cleanPaths = paths.map { profilePhotoStoragePath(it) }.filter { it.isNotBlank() }.distinct()
+    if (cleanPaths.isEmpty()) return emptyMap()
+    var connection: HttpURLConnection? = null
+    return try {
+        val requestPaths = JSONArray()
+        cleanPaths.forEach { requestPaths.put(it) }
+        connection = (URL(SUPABASE_URL + "/storage/v1/object/sign/profile-photos").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 20000
+            doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer " + token)
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        val body = JSONObject().put("expiresIn", 3600).put("paths", requestPaths)
+        connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        if (code !in 200..299) return emptyMap()
+        val rows = JSONArray(stream?.bufferedReader()?.use { it.readText() }.orEmpty())
+        buildMap {
+            for (index in 0 until rows.length()) {
+                val row = rows.optJSONObject(index) ?: continue
+                val objectPath = profilePhotoStoragePath(row.optString("path"))
+                val signed = row.optString("signedURL")
+                if (objectPath.isBlank() || signed.isBlank() || (row.has("error") && !row.isNull("error"))) continue
+                val fullUrl = when {
+                    signed.startsWith("https://") || signed.startsWith("http://") -> signed
+                    signed.startsWith("/storage/") -> SUPABASE_URL + signed
+                    signed.startsWith("/") -> SUPABASE_URL + "/storage/v1" + signed
+                    else -> ""
+                }
+                if (fullUrl.isNotBlank()) put(objectPath, fullUrl)
+            }
+        }
+    } catch (_: Exception) {
+        emptyMap()
+    } finally {
+        connection?.disconnect()
+    }
+}
+
+internal fun createProfilePhotoSignedUrl(path: String, token: String): String {
+    val cleanPath = profilePhotoStoragePath(path)
+    if (cleanPath.isBlank()) return ""
+    return createProfilePhotoSignedUrls(listOf(cleanPath), token)[cleanPath].orEmpty()
 }
 
 private fun fetchAdminProfilePhoto(token: String): String {
@@ -2795,7 +2883,7 @@ private fun fetchAdminProfilePhoto(token: String): String {
         val code = connection.responseCode
         if (code !in 200..299) return ""
         val rows = JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
-        if (rows.length() == 0) "" else profilePhotoPublicUrl(rows.getJSONObject(0).optString("profile_photo_path"))
+        if (rows.length() == 0) "" else createProfilePhotoSignedUrl(rows.getJSONObject(0).optString("profile_photo_path"), token)
     } catch (_: Exception) {
         ""
     } finally {
@@ -2852,7 +2940,7 @@ private fun uploadProfilePhoto(context: Context, uri: Uri, token: String, role: 
         update.outputStream.use { it.write(JSONObject().put("p_path", path).toString().toByteArray(Charsets.UTF_8)) }
         val updateCode = update.responseCode
         if (updateCode !in 200..299) return "تصویر بارگذاری شد اما ذخیره نشانی پروفایل ناموفق بود (کد " + updateCode + ")."
-        profilePhotoPublicUrl(path) + "?v=" + System.currentTimeMillis()
+        createProfilePhotoSignedUrl(path, token)
     } catch (_: Exception) { "ارتباط با فضای تصاویر برقرار نشد." }
     finally { upload?.disconnect(); update?.disconnect() }
 }
@@ -2987,7 +3075,7 @@ private fun registerDeviceAccount(role: UserRole, first: String, last: String, m
         val p=rows.getJSONObject(0); val status=p.optString("status")
         if(status !in listOf("pending","approved")) return UserLoginResult(false,"وضعیت حساب اجازه ورود نمی‌دهد.")
         val name=if(role==UserRole.COMPANY) p.optString("company_name").ifBlank { first + " " + last } else first + " " + last
-        UserLoginResult(true,if(status=="pending")"ثبت‌نام انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ثبت‌نام و ورود موفق بود.",name,status,access,refresh,profilePhotoPublicUrl(p.optString("profile_photo_path")))
+        UserLoginResult(true,if(status=="pending")"ثبت‌نام انجام شد؛ حساب در انتظار تأیید مدیر ارشد است." else "ثبت‌نام و ورود موفق بود.",name,status,access,refresh,createProfilePhotoSignedUrl(p.optString("profile_photo_path"), access))
     } catch (_:Exception) { UserLoginResult(false,"ارتباط با سامانه برقرار نشد؛ دوباره تلاش کنید.") }
     finally { auth?.disconnect(); profile?.disconnect() }
 }
@@ -3047,7 +3135,7 @@ private fun restoreDeviceSession(refreshToken: String, role: UserRole): UserLogi
         val status = p.optString("status")
         if (status !in listOf("pending", "approved")) return UserLoginResult(false, "دسترسی حساب فعال نیست.")
         val name = if (role == UserRole.COMPANY) p.optString("company_name").ifBlank { p.optString("first_name") + " " + p.optString("last_name") } else (p.optString("first_name") + " " + p.optString("last_name")).trim()
-        UserLoginResult(true, "نشست قبلی بازیابی شد.", name, status, access, fresh, profilePhotoPublicUrl(p.optString("profile_photo_path")), user.optJSONObject("user_metadata")?.optString("username").orEmpty())
+        UserLoginResult(true, "نشست قبلی بازیابی شد.", name, status, access, fresh, createProfilePhotoSignedUrl(p.optString("profile_photo_path"), access), user.optJSONObject("user_metadata")?.optString("username").orEmpty())
     } catch (_: Exception) {
         UserLoginResult(false, "ارتباط با سامانه برقرار نشد.")
     } finally {
@@ -3733,6 +3821,7 @@ private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<Ma
         val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
         if (code !in 200..299) return "دریافت بارها ناموفق بود (کد $code)." to emptyList()
         val rows = JSONArray(raw)
+        val companyContacts = fetchPublishedLoadCompanyContacts(accessToken)
         val matching = (0 until rows.length()).map { rows.getJSONObject(it) }.filter { item ->
             normalizeVehicleType(item.optString("vehicle_type")).equals(normalizeVehicleType(vehicle), ignoreCase = true) &&
                 destinations.contains(normalizeMatchText(item.optString("destination")) )
@@ -3745,7 +3834,9 @@ private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<Ma
                 vehicleType = item.optString("vehicle_type"),
                 loadingType = item.optString("loading_type"),
                 freightAmount = item.optString("freight_amount", "0"),
-                description = item.optString("description").takeUnless { it == "null" }.orEmpty()
+                description = item.optString("description").takeUnless { it == "null" }.orEmpty(),
+                companyName = companyContacts[item.optString("id")]?.first.orEmpty(),
+                companyMobile = companyContacts[item.optString("id")]?.second.orEmpty()
             )
         }.filter { it.id.isNotBlank() }
         (if (matching.isEmpty()) "در حال حاضر بار منتشرشده متناسب با خودرو و مقصدهای شما وجود ندارد." else "بارهای متناسب پیدا شد: ${matching.size} مورد. برای گرفتن بار، دکمه هر کارت را بزنید.") to matching
@@ -3778,6 +3869,7 @@ private fun fetchPublicHallLoads(accessToken: String): Pair<String, List<Matched
         val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
         if (code !in 200..299) return "دریافت سالن عمومی ناموفق بود (کد $code)." to emptyList()
         val rows = JSONArray(raw)
+        val companyContacts = fetchPublishedLoadCompanyContacts(accessToken)
         val loads = (0 until rows.length()).map { rows.getJSONObject(it) }.map { item ->
             MatchedLoad(
                 id = item.optString("id"),
@@ -3788,8 +3880,9 @@ private fun fetchPublicHallLoads(accessToken: String): Pair<String, List<Matched
                 loadingType = item.optString("loading_type"),
                 freightAmount = item.optString("freight_amount", "0"),
                 description = item.optString("description").takeUnless { it == "null" }.orEmpty(),
-                companyName = item.optString("company_name").takeUnless { it == "null" }.orEmpty(),
-                companyMobile = ""
+                companyName = companyContacts[item.optString("id")]?.first
+                    ?: item.optString("company_name").takeUnless { it == "null" }.orEmpty(),
+                companyMobile = companyContacts[item.optString("id")]?.second.orEmpty()
             )
         }.filter { it.id.isNotBlank() }
         (if (loads.isEmpty()) "در حال حاضر بار منتشرشده‌ای در سالن عمومی وجود ندارد." else "${loads.size} بار منتشرشده در سالن عمومی موجود است.") to loads
@@ -3902,6 +3995,38 @@ private fun fetchMatchedLoads(accessToken: String): String {
     }
 }
 
+
+private fun fetchPublishedLoadCompanyContacts(accessToken: String): Map<String, Pair<String, String>> {
+    if (accessToken.isBlank()) return emptyMap()
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL("$SUPABASE_URL/rest/v1/rpc/get_published_load_company_contacts").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 20000
+            doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        connection.outputStream.use { it.write(JSONObject().toString().toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        if (code !in 200..299) return emptyMap()
+        val rows = JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
+        buildMap {
+            for (i in 0 until rows.length()) {
+                val item = rows.getJSONObject(i)
+                val id = item.optString("load_id")
+                if (id.isNotBlank()) put(id, item.optString("company_name") to item.optString("mobile"))
+            }
+        }
+    } catch (_: Exception) {
+        emptyMap()
+    } finally {
+        connection?.disconnect()
+    }
+}
 
 private fun fetchAcceptedLoadContacts(accessToken: String): List<AcceptedLoadContact> {
     if (accessToken.isBlank()) return emptyList()
@@ -4084,7 +4209,13 @@ private fun createSignedDriverDocumentUrl(accessToken: String, path: String, buc
         val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
         if (code !in 200..299) return ""
         val signed = JSONObject(raw).optString("signedURL")
-        if (signed.isBlank()) "" else if (signed.startsWith("http")) signed else SUPABASE_URL + signed
+        when {
+            signed.isBlank() -> ""
+            signed.startsWith("https://") || signed.startsWith("http://") -> signed
+            signed.startsWith("/storage/") -> SUPABASE_URL + signed
+            signed.startsWith("/") -> SUPABASE_URL + "/storage/v1" + signed
+            else -> ""
+        }
     } catch (_: Exception) { "" }
     finally { connection?.disconnect() }
 }
