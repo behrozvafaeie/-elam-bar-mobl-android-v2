@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -64,7 +67,7 @@ internal fun CompanyPanelV2(
     var driverSearchMessage by remember { mutableStateOf("برای جست‌وجو، مقصد را وارد کنید.") }
 
     Column(
-        modifier = Modifier.fillMaxWidth().animateContentSize().padding(8.dp),
+        modifier = Modifier.fillMaxWidth().animateContentSize().verticalScroll(rememberScrollState()).imePadding().padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Card(
@@ -134,11 +137,12 @@ internal fun CompanyPanelV2(
                 )
                 Text("نوع بار", style = MaterialTheme.typography.titleMedium)
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("مبل", "سرویس خواب", "نهارخوری", "اثاث منزل", "لوازم اداری", "سایر").chunked(3).forEach { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    listOf("مبل", "سرویس خواب", "نهارخوری", "اثاث منزل", "لوازم اداری", "سایر").chunked(2).forEach { row ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             row.forEach { option ->
-                                FilterChip(selected = cargoType == option, onClick = { cargoType = option }, label = { Text(option) })
+                                FilterChip(modifier = Modifier.weight(1f), selected = cargoType == option, onClick = { cargoType = option }, label = { Text(option, maxLines = 1) })
                             }
+                            if (row.size == 1) Spacer(Modifier.weight(1f))
                         }
                     }
                 }
@@ -149,16 +153,21 @@ internal fun CompanyPanelV2(
                     }
                 }
                 Text("نوع بارگیری", style = MaterialTheme.typography.titleMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("دربست", "روباری", "نیم بار").forEach { option ->
-                        FilterChip(selected = loadingType == option, onClick = { loadingType = option }, label = { Text(option) })
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("دربست", "روباری", "نیم بار").chunked(2).forEach { row ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            row.forEach { option ->
+                                FilterChip(modifier = Modifier.weight(1f), selected = loadingType == option, onClick = { loadingType = option }, label = { Text(option, maxLines = 1) })
+                            }
+                            if (row.size == 1) Spacer(Modifier.weight(1f))
+                        }
                     }
                 }
                 JalaliDatePickerField(selectedIsoDate = loadingDate, onDateSelected = { loadingDate = it }, label = "تاریخ بار")
                 Text("کرایه", style = MaterialTheme.typography.titleMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(selected = priceMode == "fixed", onClick = { priceMode = "fixed" }, label = { Text("مبلغ مشخص") })
-                    FilterChip(selected = priceMode == "negotiable", onClick = { priceMode = "negotiable"; freightAmount = "" }, label = { Text("توافقی") })
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(modifier = Modifier.weight(1f), selected = priceMode == "fixed", onClick = { priceMode = "fixed" }, label = { Text("مبلغ مشخص", maxLines = 1) })
+                    FilterChip(modifier = Modifier.weight(1f), selected = priceMode == "negotiable", onClick = { priceMode = "negotiable"; freightAmount = "" }, label = { Text("توافقی", maxLines = 1) })
                 }
                 if (priceMode == "fixed") {
                     OutlinedTextField(
