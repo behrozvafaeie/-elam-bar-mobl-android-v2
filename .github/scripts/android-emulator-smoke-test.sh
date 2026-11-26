@@ -118,15 +118,15 @@ install_and_verify() {
   }
 }
 
-install_and_verify "$PREVIOUS_APK" 46 "baseline 1.7.0 APK"
+install_and_verify "$PREVIOUS_APK" 47 "baseline 1.7.1 APK"
 echo "Writing a private app-data marker before update..."
 adb shell run-as "$PACKAGE" mkdir -p files shared_prefs
-printf '%s' 'keep-data-across-update-1.7.0-to-1.7.1' | adb shell run-as "$PACKAGE" tee files/update_marker.txt >/dev/null
+printf '%s' 'keep-data-across-update-1.7.1-to-1.7.2' | adb shell run-as "$PACKAGE" tee files/update_marker.txt >/dev/null
 printf '%s' '<?xml version="1.0" encoding="utf-8" standalone="yes" ?><map><string name="update_marker">keep-shared-preferences-across-update</string></map>' | adb shell run-as "$PACKAGE" tee shared_prefs/update_test.xml >/dev/null
 adb shell am force-stop "$PACKAGE" || true
 
-echo "Installing 1.7.1 over the synthetic 1.7.0 baseline..."
-install_and_verify "$APK" 47 "in-place 1.7.1 update"
+echo "Installing 1.7.2 over the synthetic 1.7.1 baseline..."
+install_and_verify "$APK" 48 "in-place 1.7.2 update"
 echo "In-place update installation completed and package version verified."
 adb shell run-as "$PACKAGE" cat files/update_marker.txt | grep -Fx "keep-data-across-update-1.7.0-to-1.7.1"
 adb shell run-as "$PACKAGE" cat shared_prefs/update_test.xml | grep -F "keep-shared-preferences-across-update"
