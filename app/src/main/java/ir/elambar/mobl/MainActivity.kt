@@ -2820,7 +2820,7 @@ private fun PublicLoadHallScreen(
     val context = LocalContext.current
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("سالن عمومی اعلام بار", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-        Text("بارهای منتشرشده برای همه کاربران واردشده قابل مشاهده است. شماره تماس شرکت نیز در هر آگهی نمایش داده می‌شود.", style = MaterialTheme.typography.bodySmall)
+        Text("بارهای منتشرشده قابل مشاهده است. راننده پس از رزرو ۱۵ دقیقه‌ای، شماره شرکت را می‌بیند و می‌تواند هماهنگ کند.", style = MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick = onRefresh, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
             Text(if (loading) "در حال بروزرسانی سالن..." else "بروزرسانی سالن عمومی")
         }
@@ -2841,7 +2841,7 @@ private fun PublicLoadHallScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("تماس با شرکت") }
                     } else {
-                        Text("پس از دریافت بار، امکان تماس با شرکت در بخش بارهای گرفته‌شده فعال می‌شود.", style = MaterialTheme.typography.bodySmall)
+                        Text("برای دیدن شماره تماس، ابتدا رزرو ۱۵ دقیقه‌ای این بار را انجام دهید.", style = MaterialTheme.typography.bodySmall)
                     }
                     if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                     if (canAccept) {
