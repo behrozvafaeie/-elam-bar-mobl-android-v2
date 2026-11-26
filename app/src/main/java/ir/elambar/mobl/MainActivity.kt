@@ -1690,7 +1690,7 @@ private fun ElaanBarApp(
                                                     Text("حساب اصلی قابل تغییر نیست.", color = MaterialTheme.colorScheme.primary)
                                                 } else {
                                                     Text("وضعیت: " + if (account.isBlocked) "مسدود" else "فعال")
-                                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                                         OutlinedButton(
                                                             enabled = !adminManageBusy && account.role != "admin",
                                                             onClick = {
@@ -1701,7 +1701,7 @@ private fun ElaanBarApp(
                                                                     adminManageBusy = false
                                                                 }
                                                             },
-                                                            modifier = Modifier.weight(1f)
+                                                            modifier = Modifier.fillMaxWidth()
                                                         ) { Text("ادمین عادی") }
                                                         OutlinedButton(
                                                             enabled = !adminManageBusy && account.role != "senior_admin",
@@ -1713,25 +1713,25 @@ private fun ElaanBarApp(
                                                                     adminManageBusy = false
                                                                 }
                                                             },
-                                                            modifier = Modifier.weight(1f)
+                                                            modifier = Modifier.fillMaxWidth()
                                                         ) { Text("ادمین ارشد") }
                                                     }
-                                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                        OutlinedButton(enabled = !adminManageBusy, onClick = {
+                                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                        OutlinedButton(modifier = Modifier.fillMaxWidth(), enabled = !adminManageBusy, onClick = {
                                                             adminManageBusy = true
                                                             scope.launch {
                                                                 adminActionMessage = withContext(Dispatchers.IO) { setAdminUserBlocked(adminAccessToken, account.userId, !account.isBlocked, adminStatusReason) }
                                                                 managedAdmins = withContext(Dispatchers.IO) { fetchAdminUsers(adminAccessToken) }
                                                                 adminManageBusy = false
                                                             }
-                                                        }, modifier = Modifier.weight(1f)) { Text(if (account.isBlocked) "رفع مسدودی" else "مسدودسازی") }
+                                                        }, modifier = Modifier.fillMaxWidth()) { Text(if (account.isBlocked) "رفع مسدودی" else "مسدودسازی") }
                                                         OutlinedButton(enabled = !adminManageBusy, onClick = {
                                                             adminManageBusy = true
                                                             scope.launch {
                                                                 adminActionMessage = withContext(Dispatchers.IO) { forceLogoutMember(adminAccessToken, account.userId) }
                                                                 adminManageBusy = false
                                                             }
-                                                        }, modifier = Modifier.weight(1f)) { Text("اخراج از همه دستگاه‌ها") }
+                                                        }, modifier = Modifier.fillMaxWidth()) { Text("اخراج از همه دستگاه‌ها") }
                                                     }
                                                 }
                                             }
@@ -1795,9 +1795,9 @@ private fun ElaanBarApp(
                                     )
                                     JalaliDatePickerField(selectedIsoDate = loadDateIso, onDateSelected = { loadDateIso = it }, label = "تاریخ بار")
                                     LoadSectionDropdown("کرایه", loadPriceExpanded, { loadPriceExpanded = !loadPriceExpanded }) {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
-                                            FilterChip(selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
+                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            FilterChip(modifier = Modifier.fillMaxWidth(), selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
+                                            FilterChip(modifier = Modifier.fillMaxWidth(), selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
                                         }
                                         if (loadPriceMode == "fixed") OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("مبلغ کرایه (تومان)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                     }
@@ -1927,7 +1927,7 @@ private fun ElaanBarApp(
                                                         }
                                                     }
                                                 } else {
-                                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                                     if (record.status != "approved") {
                                                         Button(onClick = {
                                                             adminPanelLoading = true
@@ -2256,9 +2256,9 @@ private fun ElaanBarApp(
                                     )
                                     JalaliDatePickerField(selectedIsoDate = loadDateIso, onDateSelected = { loadDateIso = it }, label = "تاریخ بار")
                                     LoadSectionDropdown("کرایه", loadPriceExpanded, { loadPriceExpanded = !loadPriceExpanded }) {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
-                                            FilterChip(selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
+                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            FilterChip(modifier = Modifier.fillMaxWidth(), selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
+                                            FilterChip(modifier = Modifier.fillMaxWidth(), selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
                                         }
                                         if (loadPriceMode == "fixed") OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("مبلغ کرایه (تومان)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                     }
