@@ -2287,7 +2287,21 @@ private fun ElaanBarApp(
                                             Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
                                             Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
                                             if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")
-                                            Text("برای تماس با باربری، ابتدا بار را دریافت کنید؛ شماره تماس فقط در بخش بارهای گرفته‌شده و برای راننده مجاز فعال می‌شود.", style = MaterialTheme.typography.bodySmall)
+                                            if (load.companyMobile.isNotBlank()) {
+
+                                                Text("شماره تماس شرکت: ${load.companyMobile}")
+
+                                                Button(onClick = {
+
+                                                    context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + load.companyMobile)))
+
+                                                }, modifier = Modifier.fillMaxWidth()) { Text("تماس با شرکت") }
+
+                                            } else {
+
+                                                Text("شماره تماس شرکت در دسترس نیست.", style = MaterialTheme.typography.bodySmall)
+
+                                            }
                                             if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                                             Button(enabled = acceptingLoadId.isBlank(), onClick = {
                                                 acceptingLoadId = load.id
@@ -2641,9 +2655,7 @@ private fun PublicLoadHallScreen(
                     Text("${load.origin} ← ${load.destination}", style = MaterialTheme.typography.titleMedium)
                     Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
                     Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
-                    if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")
-                    Text("برای حفظ حریم تماس، شماره شرکت در سالن عمومی نمایش داده نمی‌شود. پس از دریافت بار، دکمه «تماس با باربری» در بخش بارهای گرفته‌شده فعال است.", style = MaterialTheme.typography.bodySmall)
-                    if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
+                    if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")                    if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                     if (canAccept) {
                         Button(enabled = acceptingLoadId.isBlank(), onClick = { onAccept(load.id) }, modifier = Modifier.fillMaxWidth()) {
                             Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "درخواست دریافت این بار")
@@ -3790,6 +3802,7 @@ private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<Ma
         val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
         if (code !in 200..299) return "دریافت بارها ناموفق بود (کد $code)." to emptyList()
         val rows = JSONArray(raw)
+        val companyContacts = fetchPublishedLoadCompanyContacts(accessToken)
         val matching = (0 until rows.length()).map { rows.getJSONObject(it) }.filter { item ->
             normalizeVehicleType(item.optString("vehicle_type")).equals(normalizeVehicleType(vehicle), ignoreCase = true) &&
                 destinations.contains(normalizeMatchText(item.optString("destination")) )
@@ -3802,7 +3815,9 @@ private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<Ma
                 vehicleType = item.optString("vehicle_type"),
                 loadingType = item.optString("loading_type"),
                 freightAmount = item.optString("freight_amount", "0"),
-                description = item.optString("description").takeUnless { it == "null" }.orEmpty()
+                description = item.optString("description").takeUnless { it == "null" }.orEmpty(),
+                companyName = companyContacts[item.optString("id")]?.first.orEmpty(),
+                companyMobile = companyContacts[item.optString("id")]?.second.orEmpty()
             )
         }.filter { it.id.isNotBlank() }
         (if (matching.isEmpty()) "در حال حاضر بار منتشرشده متناسب با خودرو و مقصدهای شما وجود ندارد." else "بارهای متناسب پیدا شد: ${matching.size} مورد. برای گرفتن بار، دکمه هر کارت را بزنید.") to matching
@@ -3835,6 +3850,7 @@ private fun fetchPublicHallLoads(accessToken: String): Pair<String, List<Matched
         val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
         if (code !in 200..299) return "دریافت سالن عمومی ناموفق بود (کد $code)." to emptyList()
         val rows = JSONArray(raw)
+        val companyContacts = fetchPublishedLoadCompanyContacts(accessToken)
         val loads = (0 until rows.length()).map { rows.getJSONObject(it) }.map { item ->
             MatchedLoad(
                 id = item.optString("id"),
@@ -3845,8 +3861,9 @@ private fun fetchPublicHallLoads(accessToken: String): Pair<String, List<Matched
                 loadingType = item.optString("loading_type"),
                 freightAmount = item.optString("freight_amount", "0"),
                 description = item.optString("description").takeUnless { it == "null" }.orEmpty(),
-                companyName = item.optString("company_name").takeUnless { it == "null" }.orEmpty(),
-                companyMobile = ""
+                companyName = companyContacts[item.optString("id")]?.first
+                    ?: item.optString("company_name").takeUnless { it == "null" }.orEmpty(),
+                companyMobile = companyContacts[item.optString("id")]?.second.orEmpty()
             )
         }.filter { it.id.isNotBlank() }
         (if (loads.isEmpty()) "در حال حاضر بار منتشرشده‌ای در سالن عمومی وجود ندارد." else "${loads.size} بار منتشرشده در سالن عمومی موجود است.") to loads
@@ -3959,6 +3976,38 @@ private fun fetchMatchedLoads(accessToken: String): String {
     }
 }
 
+
+private fun fetchPublishedLoadCompanyContacts(accessToken: String): Map<String, Pair<String, String>> {
+    if (accessToken.isBlank()) return emptyMap()
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL("$SUPABASE_URL/rest/v1/rpc/get_published_load_company_contacts").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 20000
+            doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        connection.outputStream.use { it.write(JSONObject().toString().toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        if (code !in 200..299) return emptyMap()
+        val rows = JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
+        buildMap {
+            for (i in 0 until rows.length()) {
+                val item = rows.getJSONObject(i)
+                val id = item.optString("load_id")
+                if (id.isNotBlank()) put(id, item.optString("company_name") to item.optString("mobile"))
+            }
+        }
+    } catch (_: Exception) {
+        emptyMap()
+    } finally {
+        connection?.disconnect()
+    }
+}
 
 private fun fetchAcceptedLoadContacts(accessToken: String): List<AcceptedLoadContact> {
     if (accessToken.isBlank()) return emptyList()
