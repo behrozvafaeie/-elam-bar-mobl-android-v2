@@ -594,7 +594,8 @@ private fun ElaanBarApp(
     var publicHallReservations by remember { mutableStateOf<Map<String, AcceptedLoadContact>>(emptyMap()) }
     var reservingPublicHallLoadIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var publicHallReservationMessages by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    var loadingContactLoadId by remember { mutableStateOf("") }
+    var loadingContactLoadIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var loadContactMessages by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var companyLoadsText by remember { mutableStateOf("برای مشاهده بارهای ثبت‌شده، بروزرسانی را بزنید.") }
     var companyLoadsLoading by remember { mutableStateOf(false) }
     var driverSearchDestination by remember { mutableStateOf("") }
@@ -2425,15 +2426,23 @@ private fun ElaanBarApp(
                                                 Text("شماره شرکت: ${load.companyMobile}", style = MaterialTheme.typography.bodyMedium)
                                                 OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${load.companyMobile}"))) }, modifier = Modifier.fillMaxWidth()) { Text("تماس با شرکت برای هماهنگی") }
                                             } else {
-                                                OutlinedButton(enabled = loadingContactLoadId.isBlank(), onClick = {
-                                                    loadingContactLoadId = load.id
+                                                OutlinedButton(enabled = load.id !in loadingContactLoadIds, onClick = {
+                                                    loadingContactLoadIds = loadingContactLoadIds + load.id
+                                                    loadContactMessages = loadContactMessages - load.id
                                                     scope.launch {
                                                         val result = withContext(Dispatchers.IO) { fetchAvailableLoadCompanyContact(userAccessToken, load.id) }
-                                                        if (result.second != null) publicHallLoads = publicHallLoads.map { item -> if (item.id == load.id) item.copy(companyName = result.second!!.companyName, companyMobile = result.second!!.mobile, contactReservationExpiresAt = result.second!!.reservationExpiresAt) else item }
-                                                        else publicHallMessage = result.first
-                                                        loadingContactLoadId = ""
+                                                        if (result.second != null) {
+                                                            publicHallLoads = publicHallLoads.map { item -> if (item.id == load.id) item.copy(companyName = result.second!!.companyName, companyMobile = result.second!!.mobile, contactReservationExpiresAt = result.second!!.reservationExpiresAt) else item }
+                                                            loadContactMessages = loadContactMessages - load.id
+                                                        } else {
+                                                            loadContactMessages = loadContactMessages + (load.id to result.first)
+                                                        }
+                                                        loadingContactLoadIds = loadingContactLoadIds - load.id
                                                     }
-                                                }, modifier = Modifier.fillMaxWidth()) { Text(if (loadingContactLoadId == load.id) "در حال دریافت شماره..." else "نمایش شماره شرکت و تماس") }
+                                                }, modifier = Modifier.fillMaxWidth()) { Text(if (load.id in loadingContactLoadIds) "در حال دریافت شماره..." else "نمایش شماره شرکت و تماس") }
+                                                loadContactMessages[load.id]?.takeIf { it.isNotBlank() }?.let {
+                                                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                                }
                                             }
                                             if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                                             Button(enabled = acceptingLoadId.isBlank() && isLoadContactReservationActive(load.contactReservationExpiresAt, clockNowMillis), onClick = {
@@ -2487,15 +2496,23 @@ private fun ElaanBarApp(
                                                 Text("شماره شرکت: ${load.companyMobile}", style = MaterialTheme.typography.bodyMedium)
                                                 OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${load.companyMobile}"))) }, modifier = Modifier.fillMaxWidth()) { Text("تماس با شرکت برای هماهنگی") }
                                             } else {
-                                                OutlinedButton(enabled = loadingContactLoadId.isBlank(), onClick = {
-                                                    loadingContactLoadId = load.id
+                                                OutlinedButton(enabled = load.id !in loadingContactLoadIds, onClick = {
+                                                    loadingContactLoadIds = loadingContactLoadIds + load.id
+                                                    loadContactMessages = loadContactMessages - load.id
                                                     scope.launch {
                                                         val result = withContext(Dispatchers.IO) { fetchAvailableLoadCompanyContact(userAccessToken, load.id) }
-                                                        if (result.second != null) matchedLoads = matchedLoads.map { item -> if (item.id == load.id) item.copy(companyName = result.second!!.companyName, companyMobile = result.second!!.mobile, contactReservationExpiresAt = result.second!!.reservationExpiresAt) else item }
-                                                        else matchedLoadsText = result.first
-                                                        loadingContactLoadId = ""
+                                                        if (result.second != null) {
+                                                            matchedLoads = matchedLoads.map { item -> if (item.id == load.id) item.copy(companyName = result.second!!.companyName, companyMobile = result.second!!.mobile, contactReservationExpiresAt = result.second!!.reservationExpiresAt) else item }
+                                                            loadContactMessages = loadContactMessages - load.id
+                                                        } else {
+                                                            loadContactMessages = loadContactMessages + (load.id to result.first)
+                                                        }
+                                                        loadingContactLoadIds = loadingContactLoadIds - load.id
                                                     }
-                                                }, modifier = Modifier.fillMaxWidth()) { Text(if (loadingContactLoadId == load.id) "در حال دریافت شماره..." else "نمایش شماره شرکت و تماس") }
+                                                }, modifier = Modifier.fillMaxWidth()) { Text(if (load.id in loadingContactLoadIds) "در حال دریافت شماره..." else "نمایش شماره شرکت و تماس") }
+                                                loadContactMessages[load.id]?.takeIf { it.isNotBlank() }?.let {
+                                                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                                }
                                             }
                                             if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                                             Button(enabled = acceptingLoadId.isBlank() && isLoadContactReservationActive(load.contactReservationExpiresAt, clockNowMillis), onClick = {
