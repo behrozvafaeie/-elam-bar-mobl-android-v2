@@ -3972,8 +3972,13 @@ private fun normalizeMatchText(value: String): String =
         .replace('ي', 'ی')
         .replace('ى', 'ی')
         .replace('ك', 'ک')
-        .replace("\\u200c", " ")
+        .replace('ـ', ' ')
+        .replace('\u200c', ' ')
+        .replace('\u200d', ' ')
+        .replace(Regex("[\\u064B-\\u065F\\u0670]"), "")
+        .replace(Regex("[،,؛;.!؟?]+"), " ")
         .replace(Regex("\\s+"), " ")
+        .trim()
         .lowercase()
 
 private fun normalizeVehicleType(value: String): String {
@@ -3987,68 +3992,67 @@ private fun normalizeVehicleType(value: String): String {
 private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<MatchedLoad>> {
     if (accessToken.isBlank()) return "نشست ورود معتبر نیست؛ دوباره وارد شوید." to emptyList()
     var profileConnection: HttpURLConnection? = null
-    var loadsConnection: HttpURLConnection? = null
     return try {
-        val payload = accessToken.split(".").getOrNull(1) ?: return "نشست ورود نامعتبر است." to emptyList()
+        val payload = accessToken.split(".").getOrNull(1)
+            ?: return "نشست ورود نامعتبر است." to emptyList()
         val decoded = Base64.decode(payload, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
         val userId = JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
         if (userId.isBlank()) return "شناسه راننده از نشست دریافت نشد." to emptyList()
+
         val profileUrl = "$SUPABASE_URL/rest/v1/drivers?select=vehicle_type,primary_destination,destinations&id=eq.$userId&limit=1"
         profileConnection = (URL(profileUrl).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"; connectTimeout = 15000; readTimeout = 15000
+            requestMethod = "GET"
+            connectTimeout = 15000
+            readTimeout = 15000
             setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
             setRequestProperty("Authorization", "Bearer $accessToken")
             setRequestProperty("Accept", "application/json")
         }
         val profileCode = profileConnection.responseCode
         val profileStream = if (profileCode in 200..299) profileConnection.inputStream else profileConnection.errorStream
-        val profileRows = JSONArray(profileStream?.bufferedReader()?.use { it.readText() }.orEmpty())
-        if (profileCode !in 200..299 || profileRows.length() == 0) return "اطلاعات خودرو و مقصد راننده دریافت نشد." to emptyList()
+        val profileRaw = profileStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (profileCode !in 200..299) {
+            return "دریافت پروفایل راننده ناموفق بود (کد $profileCode)." to emptyList()
+        }
+        val profileRows = JSONArray(profileRaw)
+        if (profileRows.length() == 0) return "پروفایل راننده پیدا نشد؛ اطلاعات حساب را بررسی کنید." to emptyList()
+
         val driver = profileRows.getJSONObject(0)
-        val vehicle = driver.optString("vehicle_type").trim()
+        val vehicle = normalizeVehicleType(driver.optString("vehicle_type"))
         val destinations = mutableSetOf<String>()
         val destinationArray = driver.optJSONArray("destinations")
-        if (destinationArray != null) for (i in 0 until destinationArray.length()) {
-            val value = destinationArray.optString(i).trim()
-            if (value.isNotBlank()) destinations.add(normalizeMatchText(value))
+        if (destinationArray != null) {
+            for (i in 0 until destinationArray.length()) {
+                val value = normalizeMatchText(destinationArray.optString(i))
+                if (value.isNotBlank()) destinations.add(value)
+            }
         }
-        val primary = driver.optString("primary_destination").trim()
-        if (primary.isNotBlank()) destinations.add(normalizeMatchText(primary))
-        if (vehicle.isBlank() || destinations.isEmpty()) return "ابتدا نوع خودرو و مقصدهای خود را در پروفایل کامل کنید." to emptyList()
-        val loadsUrl = "$SUPABASE_URL/rest/v1/loads?select=id,origin,destination,cargo_type,vehicle_type,freight_amount,description,loading_type,loading_date&status=eq.published&assigned_driver_id=is.null&order=created_at.desc&limit=200"
-        loadsConnection = (URL(loadsUrl).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"; connectTimeout = 15000; readTimeout = 20000
-            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
-            setRequestProperty("Authorization", "Bearer $accessToken")
-            setRequestProperty("Accept", "application/json")
+        val primary = normalizeMatchText(driver.optString("primary_destination"))
+        if (primary.isNotBlank()) destinations.add(primary)
+        if (vehicle.isBlank() || destinations.isEmpty()) {
+            return "ابتدا نوع خودرو و حداقل یک مقصد را در پروفایل راننده ثبت کنید." to emptyList()
         }
-        val code = loadsConnection.responseCode
-        val stream = if (code in 200..299) loadsConnection.inputStream else loadsConnection.errorStream
-        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-        if (code !in 200..299) return "دریافت بارها ناموفق بود (کد $code)." to emptyList()
-        val rows = JSONArray(raw)
-        val matching = (0 until rows.length()).map { rows.getJSONObject(it) }.filter { item ->
-            normalizeVehicleType(item.optString("vehicle_type")).equals(normalizeVehicleType(vehicle), ignoreCase = true) &&
-                destinations.contains(normalizeMatchText(item.optString("destination")) )
-        }.map { item ->
-            MatchedLoad(
-                id = item.optString("id"),
-                origin = item.optString("origin", "تهران"),
-                destination = item.optString("destination"),
-                cargoType = item.optString("cargo_type"),
-                vehicleType = item.optString("vehicle_type"),
-                loadingType = item.optString("loading_type"),
-                freightAmount = item.optString("freight_amount", "0"),
-                description = item.optString("description").takeUnless { it == "null" }.orEmpty(),
-                loadingDate = item.optString("loading_date").takeUnless { it.isBlank() || it == "null" }.orEmpty()
-            )
-        }.filter { it.id.isNotBlank() }
-        (if (matching.isEmpty()) "در حال حاضر بار منتشرشده متناسب با خودرو و مقصدهای شما وجود ندارد." else "بارهای متناسب پیدا شد: ${matching.size} مورد. برای گرفتن بار، دکمه هر کارت را بزنید.") to matching
+
+        // Use the authenticated public-hall RPC, not a direct loads-table query.
+        // The RPC applies RLS-safe availability rules and excludes loads reserved
+        // by another driver or already assigned to a driver.
+        val hallResult = fetchPublicHallLoads(accessToken)
+        if (hallResult.second.isEmpty()) return hallResult.first to emptyList()
+
+        val matching = hallResult.second.filter { load ->
+            normalizeVehicleType(load.vehicleType) == vehicle &&
+                destinations.contains(normalizeMatchText(load.destination))
+        }
+        (if (matching.isEmpty()) {
+            "سالن بارها دریافت شد، اما باری با خودرو و مقصدهای ثبت‌شده شما مطابقت ندارد."
+        } else {
+            "بارهای متناسب پیدا شد: ${matching.size} مورد."
+        }) to matching
     } catch (_: Exception) {
-        "ارتباط با سامانه برقرار نشد. اینترنت را بررسی کنید." to emptyList()
+        "دریافت بارهای راننده با خطا روبه‌رو شد؛ دوباره تلاش کنید."
+            to emptyList()
     } finally {
         profileConnection?.disconnect()
-        loadsConnection?.disconnect()
     }
 }
 
