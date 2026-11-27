@@ -191,4 +191,77 @@ if [ "$launch_rc" -ne 0 ] || [ "$process_rc" -ne 0 ]; then
   exit 1
 fi
 
-echo "STARTUP_SMOKE_TEST_PASSED"
+
+# Exercise the role-selection UI instead of treating process startup as a full pass.
+# UIAutomator reads Compose accessibility nodes; taps are made by visible text,
+# not fixed screen coordinates, so the test works across emulator resolutions.
+dump_ui_hierarchy() {
+  timeout 30s adb shell uiautomator dump /sdcard/elambar-window.xml >/dev/null
+  adb pull /sdcard/elambar-window.xml /tmp/elambar-window.xml >/dev/null
+}
+tap_visible_text() {
+  local wanted="$1"
+  dump_ui_hierarchy
+  python3 - "$wanted" <<'PY'
+import sys, xml.etree.ElementTree as ET, re
+wanted = sys.argv[1]
+root = ET.parse("/tmp/elambar-window.xml").getroot()
+for node in root.iter("node"):
+    if node.attrib.get("text", "").strip() == wanted:
+        m = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds", ""))
+        if not m:
+            continue
+        x1,y1,x2,y2 = map(int,m.groups())
+        print(f"{(x1+x2)//2} {(y1+y2)//2}")
+        raise SystemExit(0)
+raise SystemExit(f"Visible UI text not found for tap: {wanted}")
+PY
+  local point
+  point="$(python3 - "$wanted" <<'PY'
+import sys, xml.etree.ElementTree as ET, re
+wanted = sys.argv[1]
+root = ET.parse("/tmp/elambar-window.xml").getroot()
+for node in root.iter("node"):
+    if node.attrib.get("text", "").strip() == wanted:
+        m = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds", ""))
+        if m:
+            x1,y1,x2,y2 = map(int,m.groups())
+            print(f"{(x1+x2)//2} {(y1+y2)//2}")
+            raise SystemExit(0)
+raise SystemExit(1)
+PY
+)"
+  read -r x y <<<"$point"
+  adb shell input tap "$x" "$y"
+  sleep 2
+}
+assert_visible_text() {
+  local wanted="$1"
+  dump_ui_hierarchy
+  python3 - "$wanted" <<'PY'
+import sys, xml.etree.ElementTree as ET
+wanted = sys.argv[1]
+root = ET.parse("/tmp/elambar-window.xml").getroot()
+visible = "\n".join((n.attrib.get("text","") + " " + n.attrib.get("content-desc","")) for n in root.iter("node"))
+if wanted not in visible:
+    print("Expected UI text not visible:", wanted)
+    print(visible)
+    raise SystemExit(1)
+print("Verified visible UI text:", wanted)
+PY
+}
+echo "===== ROLE SELECTION UI TEST ====="
+tap_visible_text "راننده"
+assert_visible_text "نام کاربری را با حروف"
+tap_visible_text "شرکت"
+assert_visible_text "نام کاربری را با حروف"
+tap_visible_text "ورود مدیر"
+assert_visible_text "فقط حساب‌های مدیریتی فعال"
+if ! adb shell pidof "$PACKAGE" >/dev/null; then
+  echo "App process exited during role-selection UI test."
+  adb logcat -d -v threadtime | grep -E -A 60 -B 12 "FATAL EXCEPTION|AndroidRuntime|Process: $PACKAGE" | tail -n 300 || true
+  dump_diagnostics
+  exit 1
+fi
+echo "ROLE_SELECTION_UI_TEST_PASSED"
+echo "STARTUP_AND_ROLE_SELECTION_SMOKE_TEST_PASSED"
