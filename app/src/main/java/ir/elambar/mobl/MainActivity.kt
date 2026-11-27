@@ -154,7 +154,14 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
-        checkForAppUpdates()
+        // Keep the first screen independent from update-server availability.
+        // Update discovery starts only after the login UI has had time to render.
+        lifecycleScope.launch {
+            delay(2500)
+            if (!isFinishing && !isDestroyed) {
+                runCatching { checkForAppUpdates() }
+            }
+        }
     }
 
     private fun authenticateBiometric(onResult: (Boolean) -> Unit) {
@@ -189,9 +196,9 @@ class MainActivity : FragmentActivity() {
         updateCheckInProgress = true
         updateCheckMessage = "در حال بررسی نسخه جدید..."
         lifecycleScope.launch {
-            val latest = withContext(Dispatchers.IO) { fetchAppUpdateManifest() }
-            updateCheckInProgress = false
-            val latestCode = latest?.optInt("versionCode", 0) ?: 0
+            try {
+                val latest = withContext(Dispatchers.IO) { fetchAppUpdateManifest() }
+                val latestCode = latest?.optInt("versionCode", 0) ?: 0
             val latestApkUrl = latest?.optString("apkUrl").orEmpty()
             val archiveHash = latest?.optString("archiveSha256").orEmpty()
             val apkHash = latest?.optString("apkSha256").orEmpty()
@@ -204,19 +211,35 @@ class MainActivity : FragmentActivity() {
             } else if (latestCode > BuildConfig.VERSION_CODE) {
                 updateCheckMessage = "نسخه جدید ${latest?.optString("versionName", "")} در دسترس است."
                 updateInfo = latest
-            } else {
-                updateCheckMessage = "برنامه شما به‌روز است."
+                } else {
+                    updateCheckMessage = "برنامه شما به‌روز است."
+                }
+            } catch (_: Exception) {
+                updateCheckMessage = "بررسی به‌روزرسانی فعلاً انجام نشد؛ برنامه قابل استفاده است."
+            } finally {
+                updateCheckInProgress = false
             }
         }
     }
 
     override fun onResume() {
         super.onResume()
-        val pendingId = updateDownloadId
-        if (pendingId > 0L) {
-            val permissionPending = getSharedPreferences("elambar_update", MODE_PRIVATE).getBoolean("install_permission_pending", false)
-            if (!permissionPending || Build.VERSION.SDK_INT < 26 || packageManager.canRequestPackageInstalls()) {
-                installDownloadedUpdate(pendingId)
+        // Never launch the package installer merely because the app was opened.
+        // Resume installation only when this app previously sent the user to the
+        // Android "install unknown apps" settings screen.
+        val prefs = getSharedPreferences("elambar_update", MODE_PRIVATE)
+        val permissionPending = prefs.getBoolean("install_permission_pending", false)
+        if (permissionPending && Build.VERSION.SDK_INT >= 26 &&
+            packageManager.canRequestPackageInstalls()) {
+            prefs.edit().putBoolean("install_permission_pending", false).apply()
+            val pendingId = updateDownloadId
+            if (pendingId > 0L) {
+                lifecycleScope.launch {
+                    delay(300)
+                    if (!isFinishing && !isDestroyed) {
+                        runCatching { installDownloadedUpdate(pendingId) }
+                    }
+                }
             }
         }
     }
