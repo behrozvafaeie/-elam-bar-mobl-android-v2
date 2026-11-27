@@ -99,7 +99,7 @@ install_and_verify() {
   local label="$3"
   echo "Installing $label (up to 1200 seconds)..."
   set +e
-  timeout 1200s adb install -r "$apk_path" 2>&1 | tee "$INSTALL_LOG"
+  # Use push-then-install mode instead of adb streaming. Older API 24 emulator images\n  # can hang indefinitely in the streaming install path even when Package Manager is ready.\n  timeout 1200s adb install --no-streaming -r "$apk_path" 2>&1 | tee "$INSTALL_LOG"
   local install_rc=${PIPESTATUS[0]}
   set -e
   if [ "$install_rc" -ne 0 ]; then
