@@ -128,7 +128,7 @@ adb shell am force-stop "$PACKAGE" || true
 echo "Installing 1.7.2 over the synthetic 1.7.1 baseline..."
 install_and_verify "$APK" 48 "in-place 1.7.2 update"
 echo "In-place update installation completed and package version verified."
-adb shell run-as "$PACKAGE" cat files/update_marker.txt | grep -Fx "keep-data-across-update-1.7.0-to-1.7.1"
+adb shell run-as "$PACKAGE" cat files/update_marker.txt | grep -Fx "keep-data-across-update-1.7.1-to-1.7.2"
 adb shell run-as "$PACKAGE" cat shared_prefs/update_test.xml | grep -F "keep-shared-preferences-across-update"
 echo "Private files and shared-preferences data survived the in-place update."
 
