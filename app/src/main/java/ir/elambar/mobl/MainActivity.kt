@@ -4049,8 +4049,7 @@ private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<Ma
             "بارهای متناسب پیدا شد: ${matching.size} مورد."
         }) to matching
     } catch (_: Exception) {
-        "دریافت بارهای راننده با خطا روبه‌رو شد؛ دوباره تلاش کنید."
-            to emptyList()
+        "دریافت بارهای راننده با خطا روبه‌رو شد؛ دوباره تلاش کنید." to emptyList()
     } finally {
         profileConnection?.disconnect()
     }
