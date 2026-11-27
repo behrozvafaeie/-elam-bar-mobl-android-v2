@@ -207,7 +207,7 @@ import sys, xml.etree.ElementTree as ET, re
 wanted = sys.argv[1]
 root = ET.parse("/tmp/elambar-window.xml").getroot()
 for node in root.iter("node"):
-    if node.attrib.get("text", "").strip() == wanted:
+    if wanted in (node.attrib.get("text", "") + " " + node.attrib.get("content-desc", "")).strip():
         m = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds", ""))
         if not m:
             continue
@@ -222,7 +222,7 @@ import sys, xml.etree.ElementTree as ET, re
 wanted = sys.argv[1]
 root = ET.parse("/tmp/elambar-window.xml").getroot()
 for node in root.iter("node"):
-    if node.attrib.get("text", "").strip() == wanted:
+    if wanted in (node.attrib.get("text", "") + " " + node.attrib.get("content-desc", "")).strip():
         m = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds", ""))
         if m:
             x1,y1,x2,y2 = map(int,m.groups())
