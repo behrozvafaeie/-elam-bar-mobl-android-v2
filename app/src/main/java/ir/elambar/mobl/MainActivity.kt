@@ -1287,7 +1287,15 @@ private fun ElaanBarApp(
                                     val result = withContext(Dispatchers.IO) { fetchAvailableLoadCompanyContact(userAccessToken, loadId) }
                                     publicHallMessage = result.first
                                     val contact = result.second
-                                    if (contact != null) publicHallReservations = publicHallReservations + (loadId to contact)
+                                    if (contact != null) {
+                                        publicHallReservations = publicHallReservations + (loadId to contact)
+                                        publicHallMessage = "شماره شرکت دریافت شد؛ در حال باز کردن تماس..."
+                                        runCatching {
+                                            context.startActivity(Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", contact.mobile, null)))
+                                        }.onFailure {
+                                            publicHallMessage = "شماره شرکت دریافت شد، اما باز کردن صفحه تماس ممکن نشد."
+                                        }
+                                    }
                                     reservingPublicHallLoadId = ""
                                 }
                             }
@@ -2862,7 +2870,7 @@ private fun PublicLoadHallScreen(
                             }
                         } else {
                             Button(enabled = acceptingLoadId.isBlank() && reservingLoadId.isBlank(), onClick = { onReserve(load.id) }, modifier = Modifier.fillMaxWidth()) {
-                                Text(if (reservingLoadId == load.id) "در حال رزرو شماره..." else "رزرو شماره شرکت و دریافت بار")
+                                Text(if (reservingLoadId == load.id) "در حال رزرو شماره..." else "گرفتن بار و تماس با شرکت")
                             }
                             if (reservation != null) Text("مهلت رزرو این بار تمام شده است؛ برای تلاش دوباره رزرو کنید.", style = MaterialTheme.typography.bodySmall)
                         }
