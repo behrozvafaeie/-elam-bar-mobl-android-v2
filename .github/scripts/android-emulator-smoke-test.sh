@@ -97,25 +97,41 @@ install_and_verify() {
   local apk_path="$1"
   local expected_version="$2"
   local label="$3"
-  echo "Installing $label (up to 1200 seconds)..."
+  local remote_apk="/data/local/tmp/elambar-${expected_version}.apk"
+  echo "Installing $label using explicit adb push + Package Manager (up to 1200 seconds)..."
+  : > "$INSTALL_LOG"
+
+  # Push the APK as a plain file first, then ask Android's own Package Manager
+  # to install it. This avoids adb install's streaming/non-streaming transport
+  # variations on older API 24-26 emulator images and preserves install output.
   set +e
-  # Use push-then-install mode instead of adb streaming. Older API 24 emulator images\n  # can hang indefinitely in the streaming install path even when Package Manager is ready.\n  timeout 1200s adb install --no-streaming -r "$apk_path" 2>&1 | tee "$INSTALL_LOG"
-  local install_rc=${PIPESTATUS[0]}
-  set -e
-  if [ "$install_rc" -ne 0 ]; then
-    echo "adb install returned $install_rc; checking whether Package Manager completed installation anyway..."
-    if ! timeout 60s adb shell dumpsys package "$PACKAGE" | grep -F "versionCode=$expected_version"; then
-      echo "$label installation did not complete."
-      dump_diagnostics
-      return 1
-    fi
-    echo "$label is installed despite the adb client timeout/exit."
+  timeout 1200s adb push "$apk_path" "$remote_apk" 2>&1 | tee -a "$INSTALL_LOG"
+  local push_rc=${PIPESTATUS[0]}
+  if [ "$push_rc" -eq 0 ]; then
+    timeout 1200s adb shell pm install -r "$remote_apk" 2>&1 | tee -a "$INSTALL_LOG"
+    local install_rc=${PIPESTATUS[0]}
+  else
+    local install_rc="$push_rc"
   fi
-  timeout 60s adb shell dumpsys package "$PACKAGE" | grep -F "versionCode=$expected_version" || {
-    echo "Installed package version does not match $expected_version."
+  timeout 30s adb shell rm -f "$remote_apk" >/dev/null 2>&1 || true
+  set -e
+
+  if [ "$install_rc" -ne 0 ]; then
+    echo "$label install command returned $install_rc; checking Package Manager state..."
+  fi
+  local package_dump
+  package_dump="$(timeout 60s adb shell dumpsys package "$PACKAGE" 2>&1 || true)"
+  if ! grep -Eq "versionCode[= ]${expected_version}([[:space:]]|$)" <<<"$package_dump"; then
+    echo "$label installation did not produce the expected package version $expected_version."
+    echo "$package_dump" | grep -E "versionCode|Package \[" | head -n 30 || true
     dump_diagnostics
     return 1
-  }
+  fi
+  if [ "$install_rc" -ne 0 ]; then
+    echo "$label package version is present despite the install command exit code."
+  else
+    echo "$label installed and versionCode=$expected_version verified."
+  fi
 }
 
 install_and_verify "$PREVIOUS_APK" 47 "baseline 1.7.1 APK"
