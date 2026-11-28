@@ -2396,7 +2396,6 @@ private fun ElaanBarApp(
                                     }, modifier = Modifier.fillMaxWidth()) {
                                         Text(if (loadPublishing) "در حال ثبت..." else "ثبت و انتشار بار")
                                     }
-                                }
                                 if (loadActionMessage.isNotBlank()) Text(loadActionMessage, color = MaterialTheme.colorScheme.secondary)
                                 if (companyHallExpanded) {
                                 Button(onClick = { companyHallExpanded = false; companyLoadPanelExpanded = true }, modifier = Modifier.fillMaxWidth()) {
@@ -2867,7 +2866,6 @@ private fun ElaanBarApp(
     }
 }
 
-}
 
 @Composable
 private fun PublicLoadHallScreen(
