@@ -845,7 +845,13 @@ private fun ElaanBarApp(
     }
     var soundEnabled by remember { mutableStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getBoolean("sound", true)) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val mainScrollState = rememberScrollState()
     var selectedPanel by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(adminLoggedIn, selectedPanel, showProfile) {
+        if (adminLoggedIn && selectedPanel == null && !showProfile) {
+            mainScrollState.scrollTo(0)
+        }
+    }
     var showSettings by remember { mutableStateOf(false) }
     var clockNowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var serverTimeOffsetMillis by remember { mutableLongStateOf(0L) }
@@ -1291,7 +1297,7 @@ private fun ElaanBarApp(
             }
         ) { padding ->
             Column(
-                modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
+                modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(mainScrollState).padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
