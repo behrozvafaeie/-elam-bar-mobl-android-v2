@@ -63,14 +63,16 @@ jobs:
       # The persistent signing key is restored only for the trusted, manually
       # dispatched release-validation path. Never expose cache contents to PR code.
       - name: Restore stable debug signing key (trusted dispatch only)
-        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/diagnostic/startup-crash-log-v1'
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/fix/android-8-minimum-from-1.7.4'
         uses: actions/cache/restore@v4
         with:
           path: /home/runner/.android/debug.keystore
           key: android-debug-keystore-v3-Linux
+          restore-keys: |
+            android-debug-keystore-v2-Linux
 
       - name: Create isolated temporary signing key (all untrusted/test runs)
-        if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/diagnostic/startup-crash-log-v1'
+        if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/fix/android-8-minimum-from-1.7.4'
         shell: bash
         run: |
           set -euo pipefail
@@ -79,7 +81,7 @@ jobs:
           keytool -genkeypair -v -keystore /home/runner/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Require the existing stable signing key
-        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/diagnostic/startup-crash-log-v1'
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/fix/android-8-minimum-from-1.7.4'
         shell: bash
         run: |
           set -euo pipefail
@@ -262,7 +264,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/diagnostic/startup-crash-log-v1'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/fix/android-8-minimum-from-1.7.4'
     runs-on: ubuntu-24.04
     steps:
       - name: Download tested APK
