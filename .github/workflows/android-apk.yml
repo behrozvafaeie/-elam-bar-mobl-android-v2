@@ -105,7 +105,7 @@ jobs:
           grep -F 'versionCode = 51' app/build.gradle.kts
           grep -F 'versionName = "1.7.4"' app/build.gradle.kts
           awk '/^[[:space:]]*PREPARE_JSON=/ && /versionCode:51,versionName:"1.7.4"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
-          awk '/^[[:space:]]*FINALIZE_JSON=/ && /versionCode:50,versionName:"1.7.4"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
+          awk '/^[[:space:]]*FINALIZE_JSON=/ && /versionCode:51,versionName:"1.7.4"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
           ! grep -E 'ELAM_TURN_(URL|USERNAME|PASSWORD)' .github/workflows/android-apk.yml
 
       - name: Build synthetic installed-1.7.4 baseline (same source; not historical APK)
@@ -120,7 +120,7 @@ jobs:
           from pathlib import Path
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          s = s.replace('versionCode = 50', 'versionCode = 50', 1)
+          s = s.replace('versionCode = 51', 'versionCode = 50', 1)
           s = s.replace('versionName = "1.7.4"', 'versionName = "1.7.4"', 1)
           if 'versionCode = 50' not in s or 'versionName = "1.7.4"' not in s:
               raise SystemExit("Could not create the test baseline version metadata")
@@ -130,7 +130,7 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk artifacts/previous/app-debug.apk
           restore_gradle
           trap - EXIT
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging artifacts/previous/app-debug.apk | grep -F "package: name='ir.elambar.mobl' versionCode='51' versionName='1.7.4'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging artifacts/previous/app-debug.apk | grep -F "package: name='ir.elambar.mobl' versionCode='50' versionName='1.7.4'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs artifacts/previous/app-debug.apk
           echo "Synthetic 1.7.4 baseline is built from this exact source tree and signed by the same persistent CI key; it does not represent the historical user-installed APK."
 
@@ -172,7 +172,7 @@ jobs:
         shell: bash
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='50' versionName='1.7.4'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='ir.elambar.mobl' versionCode='51' versionName='1.7.4'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs --verbose "$APK"
           keytool -list -v -keystore /home/runner/.android/debug.keystore -storepass android -alias androiddebugkey | grep -E "SHA256:"
           sha256sum "$APK"
@@ -189,7 +189,7 @@ jobs:
       - name: Upload baseline APK for update tests
         uses: actions/upload-artifact@v4
         with:
-          name: elam-bar-mobl-v1.7.3-debug-apk
+          name: elam-bar-mobl-v1.7.4-baseline-apk
           path: artifacts/previous/app-debug.apk
           if-no-files-found: error
           retention-days: 90
@@ -234,7 +234,7 @@ jobs:
       - name: Download synthetic lower-version baseline for in-place update test
         uses: actions/download-artifact@v4
         with:
-          name: elam-bar-mobl-v1.7.3-debug-apk
+          name: elam-bar-mobl-v1.7.4-baseline-apk
           path: previous
 
       - name: Install and launch APK on Android ${{ matrix.api-level }} emulator
@@ -290,7 +290,7 @@ jobs:
           }
 
           OIDC_TOKEN=$(get_oidc_token)
-          PREPARE_JSON=$(jq -n '{action:"prepare",versionCode:50,versionName:"1.7.4"}')
+          PREPARE_JSON=$(jq -n '{action:"prepare",versionCode:51,versionName:"1.7.4"}')
           PREPARE_RESULT=$(curl -fsS -X POST "https://sckcxtceybwtiecyxqsy.supabase.co/functions/v1/app-release-upload" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
@@ -305,7 +305,7 @@ jobs:
           ARCHIVE_SHA256=$(sha256sum "$ARCHIVE" | awk '{print $1}')
           APK_SHA256=$(sha256sum "$APK" | awk '{print $1}')
           OIDC_TOKEN=$(get_oidc_token)
-          FINALIZE_JSON=$(jq -n --arg archiveSha256 "$ARCHIVE_SHA256" --arg apkSha256 "$APK_SHA256" '{action:"finalize",versionCode:50,versionName:"1.7.4",archiveSha256:$archiveSha256,apkSha256:$apkSha256}')
+          FINALIZE_JSON=$(jq -n --arg archiveSha256 "$ARCHIVE_SHA256" --arg apkSha256 "$APK_SHA256" '{action:"finalize",versionCode:51,versionName:"1.7.4",archiveSha256:$archiveSha256,apkSha256:$apkSha256}')
           curl -fsS -X POST "https://sckcxtceybwtiecyxqsy.supabase.co/functions/v1/app-release-upload" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
