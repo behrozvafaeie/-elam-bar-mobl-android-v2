@@ -2331,34 +2331,74 @@ private fun ElaanBarApp(
                                             Text("برای ثبت بارهای بعدی، پس از انتشار از سالن اعلام بار گزینه «ثبت بار جدید» را بزنید.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                                         }
                                     }
-                                    LoadSectionDropdown("مقصد", loadDestinationExpanded, { loadDestinationExpanded = !loadDestinationExpanded }) {
-                                        OutlinedTextField(loadDestination, { loadDestination = it.take(1200) }, label = { Text("مقصد یا مقصدها (با ویرگول جدا کنید)") }, supportingText = { Text("مثال: اصفهان، شیراز، مشهد") }, singleLine = false, minLines = 1, maxLines = 3, modifier = Modifier.fillMaxWidth())
+                                    // Compact, consistent three-row/two-column load form.
+                                    // Compose uses RTL: first cell in each Row is on the right.
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        OutlinedTextField(
+                                            value = loadDestination,
+                                            onValueChange = { loadDestination = it.take(1200) },
+                                            label = { Text("مقصد") },
+                                            placeholder = { Text("شهر مقصد") },
+                                            supportingText = { Text("چند مقصد را با ویرگول جدا کنید") },
+                                            modifier = Modifier.weight(1f),
+                                            minLines = 1,
+                                            maxLines = 2
+                                        )
+                                        OutlinedTextField(
+                                            value = "تهران",
+                                            onValueChange = {},
+                                            readOnly = true,
+                                            label = { Text("مبدأ") },
+                                            modifier = Modifier.weight(1f),
+                                            singleLine = true
+                                        )
                                     }
-                                    LoadChoiceDropdown(
-                                        label = "نوع بار",
-                                        selected = loadCargoType,
-                                        options = listOf("مبل", "سرویس خواب", "نهارخوری", "اثاث منزل", "لوازم اداری", "سایر"),
-                                        onSelected = { loadCargoType = it }
-                                    )
-                                    Text("نوع ماشین", style = MaterialTheme.typography.titleSmall)
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        listOf("وانت مبلی", "کامیونت مبلی", "کامیون ۶ متری", "کامیون دربستی کار", "خاور مبلی پتو دار").forEach { v ->
-                                            FilterChip(selected = loadVehicleType == v, onClick = { loadVehicleType = v }, label = { Text(v) })
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Box(Modifier.weight(1f)) {
+                                            LoadChoiceDropdown(
+                                                label = "نوع بار",
+                                                selected = loadCargoType,
+                                                options = listOf("مبل", "سرویس خواب", "نهارخوری", "اثاث منزل", "لوازم اداری", "سایر"),
+                                                onSelected = { loadCargoType = it }
+                                            )
+                                        }
+                                        Box(Modifier.weight(1f)) {
+                                            LoadChoiceDropdown(
+                                                label = "نوع بارگیری",
+                                                selected = loadLoadingType,
+                                                options = listOf("دربست", "روباری", "نیم بار"),
+                                                onSelected = { loadLoadingType = it }
+                                            )
                                         }
                                     }
-                                    LoadChoiceDropdown(
-                                        label = "نوع اعلام بار",
-                                        selected = loadLoadingType,
-                                        options = listOf("روباری", "دربست", "نیم بار"),
-                                        onSelected = { loadLoadingType = it }
-                                    )
-                                    JalaliDatePickerField(selectedIsoDate = loadDateIso, onDateSelected = { loadDateIso = it }, label = "تاریخ بار")
-                                    LoadSectionDropdown("کرایه", loadPriceExpanded, { loadPriceExpanded = !loadPriceExpanded }) {
-                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            FilterChip(modifier = Modifier.fillMaxWidth(), selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
-                                            FilterChip(modifier = Modifier.fillMaxWidth(), selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Box(Modifier.weight(1f)) {
+                                            LoadChoiceDropdown(
+                                                label = "نوع کامیون",
+                                                selected = loadVehicleType,
+                                                options = listOf("کامیونت مبلی", "کامیون ۶ متری", "کامیون دربستی کار"),
+                                                onSelected = { loadVehicleType = it }
+                                            )
                                         }
-                                        if (loadPriceMode == "fixed") OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("مبلغ کرایه (تومان)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text("کرایه", style = MaterialTheme.typography.labelLarge)
+                                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                FilterChip(selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
+                                                FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ") })
+                                            }
+                                            if (loadPriceMode == "fixed") {
+                                                OutlinedTextField(
+                                                    value = loadFreightAmount,
+                                                    onValueChange = { loadFreightAmount = it.filter(Char::isDigit).take(18) },
+                                                    label = { Text("تومان") },
+                                                    singleLine = true,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
+                                        }
+                                    }
+                                    LoadSectionDropdown("تاریخ بار", loadDestinationExpanded, { loadDestinationExpanded = !loadDestinationExpanded }) {
+                                        JalaliDatePickerField(selectedIsoDate = loadDateIso, onDateSelected = { loadDateIso = it }, label = "تاریخ بار")
                                     }
                                     LoadSectionDropdown("توضیحات بار", loadDescriptionExpanded, { loadDescriptionExpanded = !loadDescriptionExpanded }) {
                                         OutlinedTextField(loadDescription, { loadDescription = it.take(3000) }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
