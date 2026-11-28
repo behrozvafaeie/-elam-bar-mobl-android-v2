@@ -7,6 +7,7 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <application
+        android:name=".ElambarApplication"
         android:allowBackup="false"
         android:icon="@drawable/elambar_app_icon"
         android:roundIcon="@drawable/elambar_app_icon"
