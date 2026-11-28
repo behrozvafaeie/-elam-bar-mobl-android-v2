@@ -2867,6 +2867,8 @@ private fun ElaanBarApp(
 }
 
 
+}
+
 @Composable
 private fun PublicLoadHallScreen(
     loads: List<MatchedLoad>,
