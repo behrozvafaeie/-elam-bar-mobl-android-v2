@@ -76,11 +76,7 @@ jobs:
           set -euo pipefail
           mkdir -p /home/runner/.android
           rm -f /home/runner/.android/debug.keystore
-          keytool -genkeypair -v \\
-            -keystore /home/runner/.android/debug.keystore \\
-            -storepass android -alias androiddebugkey -keypass android \\
-            -keyalg RSA -keysize 2048 -validity 10000 \\
-            -dname "CN=Android Debug,O=Android,C=US"
+          keytool -genkeypair -v -keystore /home/runner/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Require the existing stable signing key
         if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/diagnostic/startup-crash-log-v1'
