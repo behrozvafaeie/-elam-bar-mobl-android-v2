@@ -1,0 +1,60 @@
+name: Secure signing key backup
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  encrypted-backup:
+    if: github.ref == 'refs/heads/diagnostic/startup-crash-log-v1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Restore the existing v3 signing-key cache
+        uses: actions/cache/restore@v4
+        with:
+          path: /home/runner/.android/debug.keystore
+          key: android-debug-keystore-v3-Linux
+
+      - name: Verify the original signing certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYSTORE=/home/runner/.android/debug.keystore
+          test -s "$KEYSTORE"
+          ACTUAL=$(keytool -list -v -keystore "$KEYSTORE" -storepass android -alias androiddebugkey | awk -F': ' '/SHA256:/{gsub(":","",$2); print tolower($2); exit}')
+          EXPECTED=541e63e133a707d0ef1591411d984b2765d1b94f5ec580aba429d42a3890eb54
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::The restored signing key does not match the verified original."
+            exit 1
+          fi
+          echo "Original signing certificate fingerprint verified."
+
+      - name: Encrypt the keystore for private backup
+        shell: bash
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.KEYSTORE_BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BACKUP_PASSPHRASE:-}" ] || [ "${#BACKUP_PASSPHRASE}" -lt 32 ]; then
+            echo "::error::Add a strong KEYSTORE_BACKUP_PASSPHRASE repository secret (at least 32 characters) before running this workflow."
+            exit 1
+          fi
+          mkdir -p backup
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 600000 -md sha256 \
+            -pass env:BACKUP_PASSPHRASE \
+            -in /home/runner/.android/debug.keystore \
+            -out backup/android-debug-keystore-v3.enc
+          printf '%s\n' "SHA-256 certificate fingerprint: 541e63e133a707d0ef1591411d984b2765d1b94f5ec580aba429d42a3890eb54" > backup/CERTIFICATE-FINGERPRINT.txt
+          test -s backup/android-debug-keystore-v3.enc
+
+      - name: Upload encrypted backup only
+        uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-signing-key-backup
+          path: backup/
+          if-no-files-found: error
+          retention-days: 1

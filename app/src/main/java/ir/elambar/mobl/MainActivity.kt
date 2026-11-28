@@ -74,6 +74,8 @@ private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_rcJe7tZqCkHPgnAXZff
 
 class MainActivity : ComponentActivity() {
     private var updateInfo by mutableStateOf<JSONObject?>(null)
+    private var updateCheckMessage by mutableStateOf("")
+    private var updateCheckInProgress by mutableStateOf(false)
     private var updateDownloadId: Long
         get() = getSharedPreferences("elambar_update", MODE_PRIVATE).getLong("download_id", -1L)
         set(value) { getSharedPreferences("elambar_update", MODE_PRIVATE).edit().putLong("download_id", value).apply() }
@@ -109,7 +111,7 @@ class MainActivity : ComponentActivity() {
                 if (androidx.compose.foundation.isSystemInDarkTheme()) schemes[3] else schemes[0]
             } else schemes[palette]
             MaterialTheme(colorScheme = activeScheme) {
-                ElaanBarApp(palette) {
+                ElaanBarApp(palette, updateCheckMessage, updateCheckInProgress, onCheckForUpdates = { checkForAppUpdates() }) {
                     palette = (palette + 1) % 5
                     getSharedPreferences("elambar_ui", MODE_PRIVATE).edit().putInt("palette", palette).apply()
                 }
@@ -132,6 +134,9 @@ class MainActivity : ComponentActivity() {
                                 if (id > 0L) {
                                     updateDownloadId = id
                                     updateInfo = null
+                                    android.widget.Toast.makeText(this, "دریافت نسخه جدید آغاز شد؛ پس از دانلود، نصب با تأیید اندروید انجام می‌شود.", android.widget.Toast.LENGTH_LONG).show()
+                                } else {
+                                    android.widget.Toast.makeText(this, "شروع دریافت به‌روزرسانی ممکن نشد؛ دوباره تلاش کنید.", android.widget.Toast.LENGTH_LONG).show()
                                 }
                             }) { Text("دریافت و نصب") }
                         },
@@ -140,10 +145,31 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        checkForAppUpdates()
+    }
+
+    private fun checkForAppUpdates() {
+        if (updateCheckInProgress) return
+        updateCheckInProgress = true
+        updateCheckMessage = "در حال بررسی نسخه جدید..."
         lifecycleScope.launch {
             val latest = withContext(Dispatchers.IO) { fetchAppUpdateManifest() }
-            if (latest != null && latest.optInt("versionCode", 0) > BuildConfig.VERSION_CODE) {
+            updateCheckInProgress = false
+            val latestCode = latest?.optInt("versionCode", 0) ?: 0
+            val latestApkUrl = latest?.optString("apkUrl").orEmpty()
+            val archiveHash = latest?.optString("archiveSha256").orEmpty()
+            val apkHash = latest?.optString("apkSha256").orEmpty()
+            val validManifest = latestCode > 0 &&
+                latestApkUrl.startsWith("https://") &&
+                archiveHash.matches(Regex("^[a-fA-F0-9]{64}$")) &&
+                apkHash.matches(Regex("^[a-fA-F0-9]{64}$"))
+            if (!validManifest) {
+                updateCheckMessage = "اطلاعات نسخه از سرور دریافت نشد؛ بعداً دوباره تلاش کنید."
+            } else if (latestCode > BuildConfig.VERSION_CODE) {
+                updateCheckMessage = "نسخه جدید ${latest?.optString("versionName", "")} در دسترس است."
                 updateInfo = latest
+            } else {
+                updateCheckMessage = "برنامه شما به‌روز است."
             }
         }
     }
@@ -204,6 +230,9 @@ class MainActivity : ComponentActivity() {
             val status = it.getInt(statusIndex)
             if (status == DownloadManager.STATUS_FAILED) {
                 updateDownloadId = -1L
+                getSharedPreferences("elambar_update", MODE_PRIVATE).edit()
+                    .remove("expected_archive_sha256").remove("expected_apk_sha256")
+                    .putBoolean("install_permission_pending", false).apply()
                 android.widget.Toast.makeText(this, "دریافت به‌روزرسانی ناموفق بود؛ اینترنت را بررسی کنید.", android.widget.Toast.LENGTH_LONG).show()
                 return
             }
@@ -284,6 +313,14 @@ class MainActivity : ComponentActivity() {
         }.getOrDefault("")
         if (expectedApkHash.isBlank() || actualApkHash != expectedApkHash) {
             rejectUpdate("اعتبار فایل نصب تأیید نشد؛ بسته به‌روزرسانی حذف شد.")
+            return
+        }
+
+        val packageInfo = runCatching {
+            packageManager.getPackageArchiveInfo(extractedApk.absolutePath, 0)
+        }.getOrNull()
+        if (packageInfo == null || packageInfo.packageName != packageName || packageInfo.versionCode <= BuildConfig.VERSION_CODE) {
+            rejectUpdate("مشخصات فایل نصب با برنامه فعلی سازگار نیست؛ به‌روزرسانی لغو شد.")
             return
         }
 
@@ -450,7 +487,13 @@ private data class AcceptedLoadContact(val id: String, val destination: String, 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
+private fun ElaanBarApp(
+    palette: Int,
+    updateCheckMessage: String,
+    updateCheckInProgress: Boolean,
+    onCheckForUpdates: () -> Unit,
+    onNextPalette: () -> Unit
+) {
     var role by remember { mutableStateOf(UserRole.DRIVER) }
     var register by remember { mutableStateOf(false) }
     var firstName by remember { mutableStateOf("") }
@@ -529,7 +572,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
     var companyLoadPanelExpanded by remember { mutableStateOf(true) }
     var companyApprovalRefreshing by remember { mutableStateOf(false) }
     var companyHallExpanded by remember { mutableStateOf(false) }
-    var companyPanelV2Selected by remember { mutableStateOf(false) }
+    var companyPanelV2Selected by remember { mutableStateOf(true) }
     var showPublicHall by remember { mutableStateOf(false) }
     var adminLoadPanelExpanded by remember { mutableStateOf(false) }
     val loadDrafts = remember { androidx.compose.runtime.mutableStateListOf<LoadDraft>() }
@@ -1078,7 +1121,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                         modifier = Modifier.size(88.dp)
                     ) {
                         Image(
-                            painter = painterResource(id = R.drawable.ic_app_logo),
+                            painter = painterResource(id = R.drawable.elambar_logo),
                             contentDescription = "نشان اعلام بار مبل",
                             modifier = Modifier.fillMaxSize().padding(8.dp)
                         )
@@ -1123,6 +1166,11 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Text("تنظیمات برنامه", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                            Text("نسخه نصب‌شده: ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall)
+                            OutlinedButton(onClick = onCheckForUpdates, enabled = !updateCheckInProgress, modifier = Modifier.fillMaxWidth()) {
+                                Text(if (updateCheckInProgress) "در حال بررسی..." else "بررسی به‌روزرسانی برنامه")
+                            }
+                            if (updateCheckMessage.isNotBlank()) Text(updateCheckMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                             Text("پوسته و رنگ‌بندی", style = MaterialTheme.typography.titleMedium)
                             TextButton(onClick = onNextPalette, modifier = Modifier.fillMaxWidth()) {
                                 Text("پوسته فعلی: " + listOf("روشن", "سبز", "آبی", "تیره", "خودکار")[palette] + "  |  تغییر پوسته")
@@ -1920,7 +1968,7 @@ private fun ElaanBarApp(palette: Int, onNextPalette: () -> Unit) {
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                                 Image(
-                                                    painter = painterResource(id = R.drawable.ic_app_logo),
+                                                    painter = painterResource(id = R.drawable.elambar_logo),
                                                     contentDescription = "نشان کامیون اعلام بار مبل",
                                                     modifier = Modifier.size(48.dp)
                                                 )

@@ -9,7 +9,7 @@ if (!projectUrl || !serviceKey) throw new Error("Server configuration unavailabl
 const admin = createClient(projectUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 const githubJwks = createRemoteJWKSet(new URL("https://token.actions.githubusercontent.com/.well-known/jwks"));
 const expectedRepository = "behrozvafaeie/-elam-bar-mobl-android-v2";
-const expectedRef = "refs/heads/fix/load-status-edit-delete-logout-v1";
+const expectedRef = "refs/heads/diagnostic/startup-crash-log-v1";
 const expectedWorkflow = expectedRepository + "/.github/workflows/android-apk.yml@" + expectedRef;
 
 function json(body: unknown, status = 200) {
@@ -43,9 +43,10 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Invalid app version" }, 400);
     }
 
-    const releasePath = "elam-bar-mobl-latest.zip";
+    // Keep each version immutable so a failed publish cannot corrupt the previous live update URL.
+    const releasePath = "elam-bar-mobl-" + versionCode + ".zip";
     if (action === "prepare") {
-      const { data, error } = await admin.storage.from("app-releases").createSignedUploadUrl(releasePath, { upsert: true });
+      const { data, error } = await admin.storage.from("app-releases").createSignedUploadUrl(releasePath, { upsert: false });
       if (error || !data?.signedUrl || !data?.token) return json({ error: "Could not create signed APK upload URL" }, 500);
       return json({ signedUrl: data.signedUrl, path: releasePath, expiresIn: 7200 });
     }
