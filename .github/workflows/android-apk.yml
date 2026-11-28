@@ -27,8 +27,6 @@ on:
 
 permissions:
   contents: read
-  actions: write
-  id-token: write
 
 concurrency:
   group: android-apk-${{ github.ref }}
@@ -62,13 +60,30 @@ jobs:
       - name: Install Android build packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Restore stable debug signing key
-        uses: actions/cache@v4
+      # The persistent signing key is restored only for the trusted, manually
+      # dispatched release-validation path. Never expose cache contents to PR code.
+      - name: Restore stable debug signing key (trusted dispatch only)
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/diagnostic/startup-crash-log-v1'
+        uses: actions/cache/restore@v4
         with:
           path: /home/runner/.android/debug.keystore
           key: android-debug-keystore-v3-Linux
 
+      - name: Create isolated temporary signing key (all untrusted/test runs)
+        if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/diagnostic/startup-crash-log-v1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /home/runner/.android
+          rm -f /home/runner/.android/debug.keystore
+          keytool -genkeypair -v \\
+            -keystore /home/runner/.android/debug.keystore \\
+            -storepass android -alias androiddebugkey -keypass android \\
+            -keyalg RSA -keysize 2048 -validity 10000 \\
+            -dname "CN=Android Debug,O=Android,C=US"
+
       - name: Require the existing stable signing key
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/diagnostic/startup-crash-log-v1'
         shell: bash
         run: |
           set -euo pipefail
@@ -248,6 +263,9 @@ jobs:
   publish-release:
     name: Publish release after all emulator tests pass
     needs: [build, emulator-smoke-test]
+    permissions:
+      contents: read
+      id-token: write
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/diagnostic/startup-crash-log-v1'
     runs-on: ubuntu-24.04
     steps:
