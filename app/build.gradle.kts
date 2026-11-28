@@ -8,7 +8,7 @@ android {
     compileSdk = 35
     defaultConfig {
         applicationId = "ir.elambar.mobl"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 35
         versionCode = 50
         versionName = "1.7.4"
@@ -36,7 +36,7 @@ android {
         }
     }
     compileOptions {
-        // java.time is used by expiry and timestamp parsing; desugar it for minSdk 24.
+        // java.time is used by expiry and timestamp parsing; desugar it for minSdk 26.
         isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
