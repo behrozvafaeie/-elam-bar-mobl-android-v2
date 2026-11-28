@@ -6,7 +6,7 @@ name: Android APK
 # Build a same-source lower-version baseline so update tests never depend on expired historical artifacts.
 on:
   push:
-    branches: [ "main", "rebuild/v1.6.8-exact", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25", "fix/source-343-stabilization", "stable/source-343-baseline", "fix/post-merge-ci-stabilization", "feature/v1.5.1-load-draft-autosave", "release/v1.5.1-clean-candidate", "fix/load-status-edit-delete-logout-v1", "feature/company-panel-v2-isolated", "feature/company-panel-and-admin-contacts-v1", "feature/company-panel-v2-install-safe", "diagnostic/startup-crash-log-v1", "work/1.6.3-isolated-company-hall", "work/628-safe-changes" , "work/driver-load-reservation-15m"]
+    branches: [ "main", "rebuild/v1.6.8-exact", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25", "fix/source-343-stabilization", "stable/source-343-baseline", "fix/post-merge-ci-stabilization", "feature/v1.5.1-load-draft-autosave", "release/v1.5.1-clean-candidate", "fix/load-status-edit-delete-logout-v1", "feature/company-panel-v2-isolated", "feature/company-panel-and-admin-contacts-v1", "feature/company-panel-v2-install-safe", "diagnostic/startup-crash-log-v1", "work/1.6.3-isolated-company-hall", "work/628-safe-changes" , "work/driver-load-reservation-15m", "fix/android-8-minimum-from-1.7.4"]
     paths:
       - "app/**"
       - "supabase/**"
