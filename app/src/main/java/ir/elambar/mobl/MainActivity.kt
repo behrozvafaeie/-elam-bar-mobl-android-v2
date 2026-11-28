@@ -676,7 +676,6 @@ private fun ElaanBarApp(
     var companyLoadPanelExpanded by remember { mutableStateOf(true) }
     var companyApprovalRefreshing by remember { mutableStateOf(false) }
     var companyHallExpanded by remember { mutableStateOf(false) }
-    var companyPanelV2Selected by remember { mutableStateOf(true) }
     var showPublicHall by remember { mutableStateOf(false) }
     var adminLoadPanelExpanded by remember { mutableStateOf(false) }
     val loadDrafts = remember { androidx.compose.runtime.mutableStateListOf<LoadDraft>() }
@@ -2293,22 +2292,6 @@ private fun ElaanBarApp(
                         "approved" -> {
                             Text("حساب شما تأیید شده است.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
                             if (role == UserRole.COMPANY) {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    OutlinedButton(
-                                        onClick = { companyPanelV2Selected = false },
-                                        modifier = Modifier.weight(1f)
-                                    ) { Text("پنل فعلی") }
-                                    Button(
-                                        onClick = { companyPanelV2Selected = true },
-                                        modifier = Modifier.weight(1f)
-                                    ) { Text("پنل جدید") }
-                                }
-                                if (companyPanelV2Selected) {
-                                    CompanyPanelV2(
-                                        accessToken = userAccessToken,
-                                        onBackToOldPanel = { companyPanelV2Selected = false }
-                                    )
-                                } else {
 
                                     Box(
                                         Modifier.fillMaxWidth()
