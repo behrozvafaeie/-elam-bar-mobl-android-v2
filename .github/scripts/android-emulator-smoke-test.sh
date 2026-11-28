@@ -134,17 +134,17 @@ install_and_verify() {
   fi
 }
 
-install_and_verify "$PREVIOUS_APK" 48 "baseline 1.7.2 APK"
+install_and_verify "$PREVIOUS_APK" 49 "baseline 1.7.3 APK"
 echo "Writing a private app-data marker before update..."
 adb shell run-as "$PACKAGE" mkdir -p files shared_prefs
-printf '%s' 'keep-data-across-update-1.7.2-to-1.7.3' | adb shell run-as "$PACKAGE" tee files/update_marker.txt >/dev/null
+printf '%s' 'keep-data-across-update-1.7.3-to-1.7.4' | adb shell run-as "$PACKAGE" tee files/update_marker.txt >/dev/null
 printf '%s' '<?xml version="1.0" encoding="utf-8" standalone="yes" ?><map><string name="update_marker">keep-shared-preferences-across-update</string></map>' | adb shell run-as "$PACKAGE" tee shared_prefs/update_test.xml >/dev/null
 adb shell am force-stop "$PACKAGE" || true
 
 echo "Installing 1.7.3 over the synthetic 1.7.2 baseline..."
-install_and_verify "$APK" 49 "in-place 1.7.3 update"
+install_and_verify "$APK" 50 "in-place 1.7.4 update"
 echo "In-place update installation completed and package version verified."
-adb shell run-as "$PACKAGE" cat files/update_marker.txt | grep -Fx "keep-data-across-update-1.7.2-to-1.7.3"
+adb shell run-as "$PACKAGE" cat files/update_marker.txt | grep -Fx "keep-data-across-update-1.7.3-to-1.7.4"
 adb shell run-as "$PACKAGE" cat shared_prefs/update_test.xml | grep -F "keep-shared-preferences-across-update"
 echo "Private files and shared-preferences data survived the in-place update."
 
@@ -193,6 +193,11 @@ fi
 
 
 # Accessibility trees are inconsistent for Compose FilterChip nodes on some AOSP API 30+ images.
+dump_ui_hierarchy() {
+  timeout 30s adb shell uiautomator dump /sdcard/elambar-window.xml >/dev/null
+  adb pull /sdcard/elambar-window.xml /tmp/elambar-window.xml >/dev/null
+}
+
 # Process survival, absence of AndroidRuntime crashes, and ActivityManager's Displayed event
 # remain the authoritative startup checks. Keep the role-tree probe diagnostic-only so an
 # emulator accessibility bug is not misreported as an app crash.
