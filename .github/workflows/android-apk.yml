@@ -69,6 +69,7 @@ jobs:
           path: /home/runner/.android/debug.keystore
           key: android-debug-keystore-v3-Linux
           restore-keys: |
+            android-debug-keystore-v1-Linux
             android-debug-keystore-v2-Linux
 
       - name: Create isolated temporary signing key (all untrusted/test runs)
