@@ -34,6 +34,7 @@ import androidx.activity.compose.setContent
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -97,6 +98,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        showPendingCrashReport()
         val downloadFilter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(updateDownloadReceiver, downloadFilter, Context.RECEIVER_NOT_EXPORTED)
         else {
@@ -161,6 +163,34 @@ class MainActivity : FragmentActivity() {
             if (!isFinishing && !isDestroyed) {
                 runCatching { checkForAppUpdates() }
             }
+        }
+    }
+
+
+    private fun showPendingCrashReport() {
+        val report = StartupCrashReporter.pendingFile(this)
+        if (!report.isFile || report.length() == 0L) return
+        runCatching {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("گزارش بسته‌شدن قبلی برنامه")
+                .setMessage("برنامه در اجرای قبلی با خطا بسته شده است. برای پیدا کردن علت، لطفاً گزارش فنی را ارسال کنید. این گزارش شامل رمز عبور یا اطلاعات ورود شما نیست.")
+                .setPositiveButton("ارسال گزارش") { _, _ ->
+                    runCatching {
+                        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", report)
+                        val share = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, "گزارش خطای اعلام بار مبل")
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        startActivity(Intent.createChooser(share, "ارسال گزارش خطا"))
+                    }.onFailure {
+                        android.widget.Toast.makeText(this, "ارسال گزارش ممکن نشد.", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+                .setNegativeButton("ادامه برنامه", null)
+                .setCancelable(false)
+                .show()
         }
     }
 
