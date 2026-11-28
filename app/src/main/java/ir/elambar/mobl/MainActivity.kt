@@ -29,8 +29,12 @@ import javax.crypto.spec.GCMParameterSpec
 import java.security.KeyStore
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -66,13 +70,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Locale
 import java.util.UUID
 import java.net.URLEncoder
 
 private const val SUPABASE_URL = "https://sckcxtceybwtiecyxqsy.supabase.co"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_rcJe7tZqCkHPgnAXZffzUg_f9ixVbwg"
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private var updateInfo by mutableStateOf<JSONObject?>(null)
     private var updateCheckMessage by mutableStateOf("")
     private var updateCheckInProgress by mutableStateOf(false)
@@ -92,6 +98,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        showPendingCrashReport()
         val downloadFilter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(updateDownloadReceiver, downloadFilter, Context.RECEIVER_NOT_EXPORTED)
         else {
@@ -111,7 +118,11 @@ class MainActivity : ComponentActivity() {
                 if (androidx.compose.foundation.isSystemInDarkTheme()) schemes[3] else schemes[0]
             } else schemes[palette]
             MaterialTheme(colorScheme = activeScheme) {
-                ElaanBarApp(palette, updateCheckMessage, updateCheckInProgress, onCheckForUpdates = { checkForAppUpdates() }) {
+                ElaanBarApp(
+                    palette, updateCheckMessage, updateCheckInProgress,
+                    onCheckForUpdates = { checkForAppUpdates() },
+                    onBiometricAuth = { callback -> authenticateBiometric(callback) }
+                ) {
                     palette = (palette + 1) % 5
                     getSharedPreferences("elambar_ui", MODE_PRIVATE).edit().putInt("palette", palette).apply()
                 }
@@ -145,7 +156,69 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        checkForAppUpdates()
+        // Keep the first screen independent from update-server availability.
+        // Update discovery starts only after the login UI has had time to render.
+        lifecycleScope.launch {
+            delay(2500)
+            if (!isFinishing && !isDestroyed) {
+                runCatching { checkForAppUpdates() }
+            }
+        }
+    }
+
+
+    private fun showPendingCrashReport() {
+        val report = StartupCrashReporter.pendingFile(this)
+        if (!report.isFile || report.length() == 0L) return
+        runCatching {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("گزارش بسته‌شدن قبلی برنامه")
+                .setMessage("برنامه در اجرای قبلی با خطا بسته شده است. برای پیدا کردن علت، لطفاً گزارش فنی را ارسال کنید. این گزارش شامل رمز عبور یا اطلاعات ورود شما نیست.")
+                .setPositiveButton("ارسال گزارش") { _, _ ->
+                    runCatching {
+                        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", report)
+                        val share = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, "گزارش خطای اعلام بار مبل")
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        startActivity(Intent.createChooser(share, "ارسال گزارش خطا"))
+                    }.onFailure {
+                        android.widget.Toast.makeText(this, "ارسال گزارش ممکن نشد.", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+                .setNegativeButton("ادامه برنامه", null)
+                .setCancelable(false)
+                .show()
+        }
+    }
+
+    private fun authenticateBiometric(onResult: (Boolean) -> Unit) {
+        val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG
+        if (BiometricManager.from(this).canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
+            onResult(false)
+            return
+        }
+        val prompt = BiometricPrompt(
+            this,
+            ContextCompat.getMainExecutor(this),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    onResult(true)
+                }
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    onResult(false)
+                }
+            }
+        )
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("ورود امن به اعلام بار مبل")
+            .setSubtitle("برای بازیابی نشست قبلی، اثر انگشت خود را تأیید کنید.")
+            .setNegativeButtonText("لغو")
+            .setAllowedAuthenticators(authenticators)
+            .build()
+        prompt.authenticate(info)
     }
 
     private fun checkForAppUpdates() {
@@ -153,9 +226,9 @@ class MainActivity : ComponentActivity() {
         updateCheckInProgress = true
         updateCheckMessage = "در حال بررسی نسخه جدید..."
         lifecycleScope.launch {
-            val latest = withContext(Dispatchers.IO) { fetchAppUpdateManifest() }
-            updateCheckInProgress = false
-            val latestCode = latest?.optInt("versionCode", 0) ?: 0
+            try {
+                val latest = withContext(Dispatchers.IO) { fetchAppUpdateManifest() }
+                val latestCode = latest?.optInt("versionCode", 0) ?: 0
             val latestApkUrl = latest?.optString("apkUrl").orEmpty()
             val archiveHash = latest?.optString("archiveSha256").orEmpty()
             val apkHash = latest?.optString("apkSha256").orEmpty()
@@ -168,19 +241,35 @@ class MainActivity : ComponentActivity() {
             } else if (latestCode > BuildConfig.VERSION_CODE) {
                 updateCheckMessage = "نسخه جدید ${latest?.optString("versionName", "")} در دسترس است."
                 updateInfo = latest
-            } else {
-                updateCheckMessage = "برنامه شما به‌روز است."
+                } else {
+                    updateCheckMessage = "برنامه شما به‌روز است."
+                }
+            } catch (_: Exception) {
+                updateCheckMessage = "بررسی به‌روزرسانی فعلاً انجام نشد؛ برنامه قابل استفاده است."
+            } finally {
+                updateCheckInProgress = false
             }
         }
     }
 
     override fun onResume() {
         super.onResume()
-        val pendingId = updateDownloadId
-        if (pendingId > 0L) {
-            val permissionPending = getSharedPreferences("elambar_update", MODE_PRIVATE).getBoolean("install_permission_pending", false)
-            if (!permissionPending || Build.VERSION.SDK_INT < 26 || packageManager.canRequestPackageInstalls()) {
-                installDownloadedUpdate(pendingId)
+        // Never launch the package installer merely because the app was opened.
+        // Resume installation only when this app previously sent the user to the
+        // Android "install unknown apps" settings screen.
+        val prefs = getSharedPreferences("elambar_update", MODE_PRIVATE)
+        val permissionPending = prefs.getBoolean("install_permission_pending", false)
+        if (permissionPending && Build.VERSION.SDK_INT >= 26 &&
+            packageManager.canRequestPackageInstalls()) {
+            prefs.edit().putBoolean("install_permission_pending", false).apply()
+            val pendingId = updateDownloadId
+            if (pendingId > 0L) {
+                lifecycleScope.launch {
+                    delay(300)
+                    if (!isFinishing && !isDestroyed) {
+                        runCatching { installDownloadedUpdate(pendingId) }
+                    }
+                }
             }
         }
     }
@@ -369,7 +458,7 @@ private enum class UserRole(val label: String) {
 
 private data class AdminLoginResult(val success: Boolean, val message: String, val accessToken: String = "", val role: String = "", val refreshToken: String = "")
 private data class UserLoginResult(val success: Boolean, val message: String, val displayName: String = "", val status: String = "", val accessToken: String = "", val refreshToken: String = "", val photoUrl: String = "", val username: String = "")
-internal data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val priceMode: String, val freightAmount: String, val description: String)
+internal data class LoadDraft(val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val priceMode: String, val freightAmount: String, val description: String, val loadingDate: String = "")
 
 @Composable
 private fun LoadSectionDropdown(title: String, expanded: Boolean, onToggle: () -> Unit, content: @Composable () -> Unit) {
@@ -433,7 +522,8 @@ private fun encodeLoadDraftState(
     priceMode: String,
     freightAmount: String,
     description: String,
-    quantity: String
+    quantity: String,
+    loadingDate: String
 ): String {
     val rows = JSONArray()
     drafts.forEach { d ->
@@ -444,7 +534,8 @@ private fun encodeLoadDraftState(
             .put("loadingType", d.loadingType)
             .put("priceMode", d.priceMode)
             .put("freightAmount", d.freightAmount)
-            .put("description", d.description))
+            .put("description", d.description)
+            .put("loadingDate", d.loadingDate))
     }
     return JSONObject()
         .put("drafts", rows)
@@ -456,6 +547,7 @@ private fun encodeLoadDraftState(
         .put("freightAmount", freightAmount)
         .put("description", description)
         .put("quantity", quantity)
+        .put("loadingDate", loadingDate)
         .toString()
 }
 
@@ -475,15 +567,17 @@ private fun decodeLoadDraftState(raw: String): Pair<List<LoadDraft>, JSONObject?
                 row.optString("loadingType", "روباری"),
                 row.optString("priceMode", "fixed"),
                 row.optString("freightAmount", "0"),
-                row.optString("description")
+                row.optString("description"),
+                row.optString("loadingDate")
             )
         }
         drafts to root
     }.getOrElse { emptyList<LoadDraft>() to null }
 }
-private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "")
-private data class MatchedLoad(val id: String, val origin: String, val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String, val companyName: String = "", val companyMobile: String = "")
-private data class AcceptedLoadContact(val id: String, val destination: String, val companyName: String, val managerName: String, val mobile: String)
+private data class AdminRecord(val id: String, val title: String, val detail: String, val status: String, val mediaUrl: String = "", val username: String = "", val usernameError: String = "")
+// Driver cards include the scheduled loading date returned by the authenticated public-hall RPC.
+private data class MatchedLoad(val id: String, val origin: String, val destination: String, val cargoType: String, val vehicleType: String, val loadingType: String, val freightAmount: String, val description: String, val companyName: String = "", val companyMobile: String = "", val contactReservationExpiresAt: String = "", val loadingDate: String = "")
+private data class AcceptedLoadContact(val id: String, val destination: String, val companyName: String, val managerName: String, val mobile: String, val reservationExpiresAt: String = "")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -492,6 +586,7 @@ private fun ElaanBarApp(
     updateCheckMessage: String,
     updateCheckInProgress: Boolean,
     onCheckForUpdates: () -> Unit,
+    onBiometricAuth: ((Boolean) -> Unit) -> Unit,
     onNextPalette: () -> Unit
 ) {
     var role by remember { mutableStateOf(UserRole.DRIVER) }
@@ -531,6 +626,7 @@ private fun ElaanBarApp(
     var recoveryMessage by remember { mutableStateOf("") }
     var editProfileBirthDate by remember { mutableStateOf("") }
     var showProfile by remember { mutableStateOf(false) }
+    var showContacts by remember { mutableStateOf(false) }
     var showCommunication by remember { mutableStateOf(false) }
     var showChatRooms by remember { mutableStateOf(false) }
     var showStories by remember { mutableStateOf(false) }
@@ -545,7 +641,14 @@ private fun ElaanBarApp(
     var publicHallLoading by remember { mutableStateOf(false) }
     var acceptedLoadContacts by remember { mutableStateOf<List<AcceptedLoadContact>>(emptyList()) }
     var acceptedLoadContactsLoading by remember { mutableStateOf(false) }
+    var markingLoadedLoadId by remember { mutableStateOf("") }
+    var driverLoadActionMessage by remember { mutableStateOf("") }
     var acceptingLoadId by remember { mutableStateOf("") }
+    var publicHallReservations by remember { mutableStateOf<Map<String, AcceptedLoadContact>>(emptyMap()) }
+    var reservingPublicHallLoadIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var publicHallReservationMessages by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var loadingContactLoadIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var loadContactMessages by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var companyLoadsText by remember { mutableStateOf("برای مشاهده بارهای ثبت‌شده، بروزرسانی را بزنید.") }
     var companyLoadsLoading by remember { mutableStateOf(false) }
     var driverSearchDestination by remember { mutableStateOf("") }
@@ -559,6 +662,7 @@ private fun ElaanBarApp(
     var loadFreightAmount by remember { mutableStateOf("") }
     var loadPriceMode by remember { mutableStateOf("fixed") }
     var loadDescription by remember { mutableStateOf("") }
+    var loadDateIso by remember { mutableStateOf("") }
     var loadQuantity by remember { mutableStateOf("1") }
         var loadDestinationExpanded by remember { mutableStateOf(false) }
     var loadCargoExpanded by remember { mutableStateOf(false) }
@@ -572,7 +676,6 @@ private fun ElaanBarApp(
     var companyLoadPanelExpanded by remember { mutableStateOf(true) }
     var companyApprovalRefreshing by remember { mutableStateOf(false) }
     var companyHallExpanded by remember { mutableStateOf(false) }
-    var companyPanelV2Selected by remember { mutableStateOf(true) }
     var showPublicHall by remember { mutableStateOf(false) }
     var adminLoadPanelExpanded by remember { mutableStateOf(false) }
     val loadDrafts = remember { androidx.compose.runtime.mutableStateListOf<LoadDraft>() }
@@ -592,6 +695,7 @@ private fun ElaanBarApp(
     var loading by remember { mutableStateOf(false) }
     var adminLoggedIn by remember { mutableStateOf(false) }
     var adminRole by remember { mutableStateOf("") }
+    var adminUsername by remember { mutableStateOf("") }
     var adminAccessToken by remember { mutableStateOf("") }
     var loadedDraftOwner by remember { mutableStateOf("") }
     val activeDraftOwner = remember(userAccessToken, adminAccessToken, userLoggedIn, adminLoggedIn, role, adminRole) {
@@ -631,7 +735,36 @@ private fun ElaanBarApp(
     var adminMenuVisibleToOtherAdmins by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var biometricEnabled by remember { mutableStateOf(context.getSharedPreferences("elambar_security", Context.MODE_PRIVATE).getBoolean("biometric_enabled", false)) }
+    var biometricGatePassed by remember { mutableStateOf(!biometricEnabled) }
+    var biometricMessage by remember { mutableStateOf("") }
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    var pendingAdminDocumentUrl by remember { mutableStateOf("") }
+    val saveAdminDocumentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { destination ->
+        val sourceUrl = pendingAdminDocumentUrl
+        if (destination != null && sourceUrl.isNotBlank()) {
+            scope.launch {
+                val saved = withContext(Dispatchers.IO) {
+                    copySignedDocumentToUri(context, sourceUrl, destination)
+                }
+                android.widget.Toast.makeText(
+                    context,
+                    if (saved) "فایل مدرک ذخیره شد." else "ذخیره فایل انجام نشد؛ دوباره تلاش کنید.",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+        pendingAdminDocumentUrl = ""
+    }
+
+    LaunchedEffect(Unit) {
+        if (biometricEnabled) {
+            onBiometricAuth { success ->
+                biometricGatePassed = success
+                biometricMessage = if (success) "اثر انگشت تأیید شد." else "اثر انگشت تأیید نشد؛ می‌توانید با روش ورود قبلی وارد شوید."
+            }
+        }
+    }
 
     LaunchedEffect(activeDraftOwner) {
         loadedDraftOwner = ""
@@ -654,6 +787,7 @@ private fun ElaanBarApp(
                     loadFreightAmount = form.optString("freightAmount")
                     loadDescription = form.optString("description")
                     loadQuantity = form.optString("quantity", "1")
+                    loadDateIso = form.optString("loadingDate")
                 }
             } else {
                 loadDrafts.clear()
@@ -665,19 +799,20 @@ private fun ElaanBarApp(
                 loadFreightAmount = ""
                 loadDescription = ""
                 loadQuantity = "1"
+                loadDateIso = ""
             }
             loadedDraftOwner = activeDraftOwner
         }
     }
     LaunchedEffect(
         activeDraftOwner, loadedDraftOwner, loadDestination, loadCargoType, loadVehicleType,
-        loadLoadingType, loadPriceMode, loadFreightAmount, loadDescription, loadQuantity, loadDrafts.toList()
+        loadLoadingType, loadPriceMode, loadFreightAmount, loadDescription, loadQuantity, loadDateIso, loadDrafts.toList()
     ) {
         if (activeDraftOwner.isNotBlank() && loadedDraftOwner == activeDraftOwner) {
             delay(350)
             val snapshot = encodeLoadDraftState(
                 loadDrafts.toList(), loadDestination, loadCargoType, loadVehicleType,
-                loadLoadingType, loadPriceMode, loadFreightAmount, loadDescription, loadQuantity
+                loadLoadingType, loadPriceMode, loadFreightAmount, loadDescription, loadQuantity, loadDateIso
             )
             EncryptedDraftStore.save(context, activeDraftOwner, snapshot)
         }
@@ -710,7 +845,13 @@ private fun ElaanBarApp(
     }
     var soundEnabled by remember { mutableStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getBoolean("sound", true)) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val mainScrollState = rememberScrollState()
     var selectedPanel by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(adminLoggedIn, selectedPanel, showProfile) {
+        if (adminLoggedIn && selectedPanel == null && !showProfile) {
+            mainScrollState.scrollTo(0)
+        }
+    }
     var showSettings by remember { mutableStateOf(false) }
     var clockNowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var serverTimeOffsetMillis by remember { mutableLongStateOf(0L) }
@@ -720,13 +861,14 @@ private fun ElaanBarApp(
         "مدیریت مدارک", "گفتگوها", "شکایات", "گزارش‌ها", "تنظیمات کل برنامه"
     )
     BackHandler(
-        enabled = showStories || showChatRooms || showCommunication || showProfile || showSettings || showPublicHall || selectedPanel != null || companyLoadPanelExpanded || companyHallExpanded || drawerState.isOpen
+        enabled = showStories || showChatRooms || showCommunication || showProfile || showContacts || showSettings || showPublicHall || selectedPanel != null || companyLoadPanelExpanded || companyHallExpanded || drawerState.isOpen
     ) {
         when {
             showStories -> showStories = false
             showChatRooms -> showChatRooms = false
             showCommunication -> showCommunication = false
             showProfile -> showProfile = false
+            showContacts -> showContacts = false
             showSettings -> showSettings = false
             showPublicHall -> showPublicHall = false
             selectedPanel != null -> selectedPanel = null
@@ -774,6 +916,16 @@ private fun ElaanBarApp(
             if (role == UserRole.DRIVER && userStatus != "approved") showPublicHall = false
         }
     }
+    LaunchedEffect(userLoggedIn, role, userStatus, userAccessToken, showPublicHall) {
+        if (userLoggedIn && role == UserRole.DRIVER && userStatus == "approved" && userAccessToken.isNotBlank() && showPublicHall) {
+            while (true) {
+                delay(30_000)
+                val refreshed = withContext(Dispatchers.IO) { fetchPublicHallLoads(userAccessToken) }
+                publicHallMessage = refreshed.first
+                publicHallLoads = refreshed.second
+            }
+        }
+    }
     LaunchedEffect(Unit) {
         while (true) {
             val serverMillis = withContext(Dispatchers.IO) { fetchSupabaseServerTimeMillis() }
@@ -794,7 +946,8 @@ private fun ElaanBarApp(
     var textScale by remember { mutableFloatStateOf(context.getSharedPreferences("elambar_ui", Context.MODE_PRIVATE).getFloat("text_scale", 1.15f).coerceIn(0.9f, 1.35f)) }
     val currentDensity = androidx.compose.ui.platform.LocalDensity.current
     val scaledDensity = androidx.compose.ui.unit.Density(density = currentDensity.density, fontScale = textScale)
-    LaunchedEffect(Unit) {
+    LaunchedEffect(biometricGatePassed) {
+        if (!biometricGatePassed) return@LaunchedEffect
         val saved = DeviceSessionStore.load(context)
         if (saved != null) {
             val savedRole = when (saved.second) { "COMPANY" -> UserRole.COMPANY; "ADMIN" -> UserRole.ADMIN; else -> UserRole.DRIVER }
@@ -805,6 +958,7 @@ private fun ElaanBarApp(
                     adminLoggedIn = true
                     adminRole = restored.status
                     adminAccessToken = restored.accessToken
+                    adminUsername = withContext(Dispatchers.IO) { fetchMyAccountUsername(restored.accessToken) }
                     adminProfilePhotoUrl = withContext(Dispatchers.IO) { fetchAdminProfilePhoto(restored.accessToken) }
                     adminMenuVisibleToOtherAdmins = withContext(Dispatchers.IO) { fetchAdminMenuVisibility(restored.accessToken) }
                 } else {
@@ -850,7 +1004,7 @@ private fun ElaanBarApp(
                 } else {
                     DeviceSessionStore.clear(context)
                     if (savedRole == UserRole.ADMIN) {
-                        adminLoggedIn = false; adminAccessToken = ""; adminRole = ""
+                        adminLoggedIn = false; adminAccessToken = ""; adminRole = ""; adminUsername = ""
                     } else {
                         userLoggedIn = false; userAccessToken = ""
                     }
@@ -901,6 +1055,21 @@ private fun ElaanBarApp(
                         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("اعلام بار مبل", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
                             Text(if (adminLoggedIn) "پنل " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" } else if (userLoggedIn) "پنل کاربر" else "سامانه اعلام بار", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            if (userLoggedIn && username.isNotBlank()) {
+                                Text("نام کاربری شما: " + username, color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyMedium)
+                                TextButton(onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("نام کاربری", username))
+                                    message = "نام کاربری کپی شد."
+                                }) { Text("کپی نام کاربری", color = MaterialTheme.colorScheme.onPrimaryContainer) }
+                            } else if (adminLoggedIn) {
+                                Text("نام کاربری شما: " + adminUsername.ifBlank { "برای این حساب ثبت نشده است" }, color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyMedium)
+                                if (adminUsername.isNotBlank()) TextButton(onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("نام کاربری", adminUsername))
+                                    message = "نام کاربری کپی شد."
+                                }) { Text("کپی نام کاربری", color = MaterialTheme.colorScheme.onPrimaryContainer) }
+                            }
                         }
                     }
                     if (userLoggedIn || adminLoggedIn) {
@@ -908,6 +1077,24 @@ private fun ElaanBarApp(
                             label = { Text("پروفایل من") },
                             selected = showProfile,
                             onClick = { showPublicHall = false; showProfile = true; scope.launch { drawerState.close() } },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        NavigationDrawerItem(
+                            label = { Text("مخاطبین") },
+                            selected = showContacts,
+                            onClick = {
+                                showContacts = true
+                                showProfile = false
+                                showSettings = false
+                                showPublicHall = false
+                                showStories = false
+                                showChatRooms = false
+                                showCommunication = false
+                                selectedPanel = null
+                                companyLoadPanelExpanded = false
+                                companyHallExpanded = false
+                                scope.launch { drawerState.close() }
+                            },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -1083,10 +1270,11 @@ private fun ElaanBarApp(
                         }
                     },
                     navigationIcon = {
-                        if (showProfile || showSettings || showPublicHall || selectedPanel != null || companyLoadPanelExpanded || companyHallExpanded) {
+                        if (showProfile || showContacts || showSettings || showPublicHall || selectedPanel != null || companyLoadPanelExpanded || companyHallExpanded) {
                             IconButton(onClick = {
                                 when {
                                     showProfile -> showProfile = false
+                                    showContacts -> showContacts = false
                                     showSettings -> showSettings = false
                                     showPublicHall -> showPublicHall = false
                                     selectedPanel != null -> selectedPanel = null
@@ -1109,10 +1297,13 @@ private fun ElaanBarApp(
             }
         ) { padding ->
             Column(
-                modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
+                modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(mainScrollState).padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                if (biometricEnabled && !biometricGatePassed && !userLoggedIn && !adminLoggedIn && biometricMessage.isNotBlank()) {
+                    Text(biometricMessage, color = MaterialTheme.colorScheme.secondary, textAlign = TextAlign.Center)
+                }
                 if (!(userLoggedIn && role == UserRole.COMPANY && !showProfile && !showPublicHall)) {
                     Spacer(Modifier.height(12.dp))
                     Surface(
@@ -1135,6 +1326,10 @@ private fun ElaanBarApp(
                         message = publicHallMessage,
                         loading = publicHallLoading,
                         acceptingLoadId = acceptingLoadId,
+                        reservingLoadIds = reservingPublicHallLoadIds,
+                        reservationMessages = publicHallReservationMessages,
+                        reservations = publicHallReservations,
+                        nowMillis = clockNowMillis,
                         canAccept = userLoggedIn && role == UserRole.DRIVER && userStatus == "approved",
                         onRefresh = {
                             publicHallLoading = true
@@ -1146,17 +1341,71 @@ private fun ElaanBarApp(
                                 publicHallLoading = false
                             }
                         },
+                        onReserve = { loadId ->
+                            if (loadId !in reservingPublicHallLoadIds && acceptingLoadId.isBlank()) {
+                                reservingPublicHallLoadIds = reservingPublicHallLoadIds + loadId
+                                publicHallReservationMessages = publicHallReservationMessages - loadId
+                                scope.launch {
+                                    val result = withContext(Dispatchers.IO) { fetchAvailableLoadCompanyContact(userAccessToken, loadId) }
+                                    publicHallMessage = result.first
+                                    val contact = result.second
+                                    if (contact != null) {
+                                        publicHallReservations = publicHallReservations + (loadId to contact)
+                                        publicHallReservationMessages = publicHallReservationMessages - loadId
+                                        publicHallMessage = "شماره شرکت دریافت شد؛ در حال باز کردن تماس..."
+                                        runCatching {
+                                            context.startActivity(Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", contact.mobile, null)))
+                                        }.onFailure {
+                                            publicHallMessage = "شماره شرکت دریافت شد، اما باز کردن صفحه تماس ممکن نشد."
+                                        }
+                                    } else {
+                                        publicHallReservationMessages = publicHallReservationMessages + (loadId to result.first)
+                                    }
+                                    reservingPublicHallLoadIds = reservingPublicHallLoadIds - loadId
+                                }
+                            }
+                        },
                         onAccept = { loadId ->
-                            acceptingLoadId = loadId
-                            scope.launch {
-                                val accepted = withContext(Dispatchers.IO) { acceptDriverLoad(userAccessToken, loadId) }
-                                publicHallMessage = accepted
-                                val refreshed = withContext(Dispatchers.IO) { fetchPublicHallLoads(userAccessToken) }
-                                publicHallLoads = refreshed.second
-                                if (refreshed.first.isNotBlank()) publicHallMessage += "\\n" + refreshed.first
-                                acceptingLoadId = ""
+                            val reservation = publicHallReservations[loadId]
+                            if (reservation != null && isLoadContactReservationActive(reservation.reservationExpiresAt, clockNowMillis)) {
+                                acceptingLoadId = loadId
+                                scope.launch {
+                                    val accepted = withContext(Dispatchers.IO) { acceptDriverLoad(userAccessToken, loadId) }
+                                    publicHallMessage = accepted
+                                    if (accepted.startsWith("بار با موفقیت")) {
+                                        publicHallReservations = publicHallReservations - loadId
+                                        acceptedLoadContactsLoading = true
+                                        acceptedLoadContacts = withContext(Dispatchers.IO) { fetchAcceptedLoadContacts(userAccessToken) }
+                                        acceptedLoadContactsLoading = false
+                                    }
+                                    val refreshed = withContext(Dispatchers.IO) { fetchPublicHallLoads(userAccessToken) }
+                                    publicHallLoads = refreshed.second
+                                    if (refreshed.first.isNotBlank()) publicHallMessage += "\\n" + refreshed.first
+                                    acceptingLoadId = ""
+                                }
+                            } else {
+                                publicHallReservations = publicHallReservations - loadId
+                                publicHallMessage = "مهلت رزرو تمام شده است؛ شماره شرکت را دوباره رزرو کنید."
+                            }
+                        },
+                        onDecline = { loadId ->
+                            if (acceptingLoadId.isBlank()) {
+                                acceptingLoadId = loadId
+                                scope.launch {
+                                    publicHallMessage = withContext(Dispatchers.IO) { declineDriverLoadReservation(userAccessToken, loadId) }
+                                    publicHallReservations = publicHallReservations - loadId
+                                    val refreshed = withContext(Dispatchers.IO) { fetchPublicHallLoads(userAccessToken) }
+                                    publicHallLoads = refreshed.second
+                                    acceptingLoadId = ""
+                                }
                             }
                         }
+                    )
+                } else if (showContacts && (userLoggedIn || adminLoggedIn)) {
+                    ContactsScreen(
+                        accessToken = if (adminLoggedIn) adminAccessToken else userAccessToken,
+                        role = if (adminLoggedIn) adminRole else role.name,
+                        onBack = { showContacts = false }
                     )
                 } else if (showSettings) {
                     HorizontalDivider()
@@ -1175,6 +1424,35 @@ private fun ElaanBarApp(
                             TextButton(onClick = onNextPalette, modifier = Modifier.fillMaxWidth()) {
                                 Text("پوسته فعلی: " + listOf("روشن", "سبز", "آبی", "تیره", "خودکار")[palette] + "  |  تغییر پوسته")
                             }
+                            HorizontalDivider()
+                            Text("قفل اثر انگشت", style = MaterialTheme.typography.titleMedium)
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(if (biometricEnabled) "ورود با اثر انگشت روشن" else "ورود با اثر انگشت خاموش")
+                                Switch(
+                                    checked = biometricEnabled,
+                                    onCheckedChange = { enabled ->
+                                        if (enabled) {
+                                            biometricMessage = "اثر انگشت را برای فعال‌سازی تأیید کنید."
+                                            onBiometricAuth { success ->
+                                                if (success) {
+                                                    biometricEnabled = true
+                                                    biometricGatePassed = true
+                                                    context.getSharedPreferences("elambar_security", Context.MODE_PRIVATE).edit().putBoolean("biometric_enabled", true).apply()
+                                                    biometricMessage = "قفل اثر انگشت فعال شد."
+                                                } else {
+                                                    biometricMessage = "فعال‌سازی انجام نشد؛ حسگر و اثر انگشت ثبت‌شده را بررسی کنید."
+                                                }
+                                            }
+                                        } else {
+                                            biometricEnabled = false
+                                            biometricGatePassed = true
+                                            context.getSharedPreferences("elambar_security", Context.MODE_PRIVATE).edit().putBoolean("biometric_enabled", false).apply()
+                                            biometricMessage = "ورود با اثر انگشت غیرفعال شد."
+                                        }
+                                    }
+                                )
+                            }
+                            if (biometricMessage.isNotBlank()) Text(biometricMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                             HorizontalDivider()
                             Text("اعلان و صدا", style = MaterialTheme.typography.titleMedium)
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -1371,6 +1649,8 @@ private fun ElaanBarApp(
                             }
                             Text("پروفایل مدیر", style = MaterialTheme.typography.headlineSmall)
                             Text(when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }, style = MaterialTheme.typography.titleMedium)
+                            if (adminUsername.isNotBlank()) Text("نام کاربری: $adminUsername", style = MaterialTheme.typography.bodyMedium)
+                            else Text("نام کاربری: برای این حساب ثبت نشده است", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                             if (email.isNotBlank()) Text(email, style = MaterialTheme.typography.bodyMedium)
                             Button(enabled = !profilePhotoUploading, onClick = { photoPicker.launch("image/*") }) {
                                 Text(if (profilePhotoUploading) "در حال بارگذاری تصویر..." else if (adminProfilePhotoUrl.isBlank()) "انتخاب عکس از گالری" else "تغییر عکس پروفایل")
@@ -1385,6 +1665,9 @@ private fun ElaanBarApp(
                     Text("پنل مدیریت", fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
                     Text("خوش آمدید؛ سطح دسترسی: " + when (adminRole) { "super_admin" -> "مدیر ارشد اصلی"; "senior_admin" -> "ادمین ارشد"; else -> "ادمین عادی" }, textAlign = TextAlign.Center)
                     if (selectedPanel == null) {
+                        Text("پنل اعلام بار مدیر ارشد", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                        AdminLoadManagement(accessToken = adminAccessToken)
+                        HorizontalDivider()
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
@@ -1400,6 +1683,21 @@ private fun ElaanBarApp(
                             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                 Text("اعلام بار و مدیریت بارها", style = MaterialTheme.typography.titleLarge)
                                 Text("ثبت بار جدید و مدیریت بارهای منتشرشده", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        if (adminRole == "super_admin") {
+                            AdminDashboard(accessToken = adminAccessToken) { panel ->
+                                selectedPanel = panel
+                                adminPanelData = ""
+                                adminActionMessage = ""
+                                adminPanelLoading = true
+                                scope.launch {
+                                    adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, panel) }
+                                    if (panel == "مدیریت رانندگان" || panel == "مدیریت شرکت‌ها" || panel == "مدیریت مدارک") {
+                                        adminRecords = withContext(Dispatchers.IO) { fetchAdminRecords(adminAccessToken, panel) }
+                                    }
+                                    adminPanelLoading = false
+                                }
                             }
                         }
                     } else {
@@ -1483,6 +1781,13 @@ private fun ElaanBarApp(
                                     }
                                     HorizontalDivider()
                                     Text("فهرست مدیران سامانه", style = MaterialTheme.typography.titleMedium)
+                                    OutlinedTextField(
+                                        value = adminStatusReason,
+                                        onValueChange = { adminStatusReason = it.take(500) },
+                                        label = { Text("دلیل مسدودسازی مدیر (حداقل ۳ نویسه)") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        maxLines = 2
+                                    )
                                     if (managedAdmins.isEmpty()) {
                                         Text("فهرست مدیران دریافت نشد یا هنوز مدیری ثبت نشده است.", style = MaterialTheme.typography.bodySmall)
                                     }
@@ -1498,7 +1803,8 @@ private fun ElaanBarApp(
                                                 if (account.role == "super_admin") {
                                                     Text("حساب اصلی قابل تغییر نیست.", color = MaterialTheme.colorScheme.primary)
                                                 } else {
-                                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Text("وضعیت: " + if (account.isBlocked) "مسدود" else "فعال")
+                                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                                         OutlinedButton(
                                                             enabled = !adminManageBusy && account.role != "admin",
                                                             onClick = {
@@ -1509,7 +1815,7 @@ private fun ElaanBarApp(
                                                                     adminManageBusy = false
                                                                 }
                                                             },
-                                                            modifier = Modifier.weight(1f)
+                                                            modifier = Modifier.fillMaxWidth()
                                                         ) { Text("ادمین عادی") }
                                                         OutlinedButton(
                                                             enabled = !adminManageBusy && account.role != "senior_admin",
@@ -1521,8 +1827,25 @@ private fun ElaanBarApp(
                                                                     adminManageBusy = false
                                                                 }
                                                             },
-                                                            modifier = Modifier.weight(1f)
+                                                            modifier = Modifier.fillMaxWidth()
                                                         ) { Text("ادمین ارشد") }
+                                                    }
+                                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                        OutlinedButton(enabled = !adminManageBusy, onClick = {
+                                                            adminManageBusy = true
+                                                            scope.launch {
+                                                                adminActionMessage = withContext(Dispatchers.IO) { setAdminUserBlocked(adminAccessToken, account.userId, !account.isBlocked, adminStatusReason) }
+                                                                managedAdmins = withContext(Dispatchers.IO) { fetchAdminUsers(adminAccessToken) }
+                                                                adminManageBusy = false
+                                                            }
+                                                        }, modifier = Modifier.fillMaxWidth()) { Text(if (account.isBlocked) "رفع مسدودی" else "مسدودسازی") }
+                                                        OutlinedButton(enabled = !adminManageBusy, onClick = {
+                                                            adminManageBusy = true
+                                                            scope.launch {
+                                                                adminActionMessage = withContext(Dispatchers.IO) { forceLogoutMember(adminAccessToken, account.userId) }
+                                                                adminManageBusy = false
+                                                            }
+                                                        }, modifier = Modifier.fillMaxWidth()) { Text("اخراج از همه دستگاه‌ها") }
                                                     }
                                                 }
                                             }
@@ -1556,7 +1879,6 @@ private fun ElaanBarApp(
                                     Text("تغییر این گزینه برای همه مدیران دیگر اعمال می‌شود و در گزارش مدیریتی ثبت خواهد شد.", style = MaterialTheme.typography.bodySmall)
                                 }
                                 if (selectedPanel == "مدیریت بارها") {
-                                    AdminLoadManagement(accessToken = adminAccessToken)
                                     HorizontalDivider()
                                     OutlinedButton(onClick = { adminLoadPanelExpanded = !adminLoadPanelExpanded }, modifier = Modifier.fillMaxWidth()) {
                                         Text(if (adminLoadPanelExpanded) "بستن فرم اعلام بار مدیریت ▲" else "باز کردن فرم اعلام بار مدیریت ▼")
@@ -1585,10 +1907,11 @@ private fun ElaanBarApp(
                                         options = listOf("روباری", "دربست", "نیم بار"),
                                         onSelected = { loadLoadingType = it }
                                     )
+                                    JalaliDatePickerField(selectedIsoDate = loadDateIso, onDateSelected = { loadDateIso = it }, label = "تاریخ بار")
                                     LoadSectionDropdown("کرایه", loadPriceExpanded, { loadPriceExpanded = !loadPriceExpanded }) {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
-                                            FilterChip(selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
+                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            FilterChip(modifier = Modifier.fillMaxWidth(), selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
+                                            FilterChip(modifier = Modifier.fillMaxWidth(), selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
                                         }
                                         if (loadPriceMode == "fixed") OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("مبلغ کرایه (تومان)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                     }
@@ -1602,7 +1925,7 @@ private fun ElaanBarApp(
                                         if (loadDestination.trim().length < 2 || loadCargoType.trim().length < 2 || (loadPriceMode == "fixed" && (loadFreightAmount.isBlank() || loadFreightAmount.toLongOrNull() == null || loadFreightAmount.toLong() <= 0))) {
                                             adminActionMessage = "مقصد، نوع بار و کرایه را کامل کنید."
                                         } else {
-                                            loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", (if (loadQuantity.isNotBlank()) "تعداد: ${loadQuantity.trim()}\n" else "") + loadDescription.trim()))
+                                            loadDrafts.add(LoadDraft(loadDestination.trim(), loadCargoType.trim(), loadVehicleType, loadLoadingType, loadPriceMode, if (loadPriceMode == "fixed") loadFreightAmount else "0", (if (loadQuantity.isNotBlank()) "تعداد: ${loadQuantity.trim()}\n" else "") + loadDescription.trim(), loadDateIso))
                                             loadDestination = ""
                                             loadDescription = ""
                                             loadQuantity = "1"
@@ -1630,6 +1953,7 @@ private fun ElaanBarApp(
                                                 adminActionMessage = result
                                                 if (result.startsWith("ثبت شد")) {
                                                     loadDrafts.clear()
+                                                    loadDateIso = ""
                                                     adminPanelData = withContext(Dispatchers.IO) { fetchAdminPanelData(adminAccessToken, "مدیریت بارها") }
                                                 }
                                             }
@@ -1648,8 +1972,33 @@ private fun ElaanBarApp(
                                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                                 Text(record.title, style = MaterialTheme.typography.titleSmall)
                                                 Text(record.detail, style = MaterialTheme.typography.bodySmall)
+                                                if (adminLoggedIn && adminRole == "super_admin" && selectedPanel != "مدیریت مدارک") {
+                                                    Text(
+                                                        "نام کاربری: " + record.username.ifBlank { "دریافت نشد یا ثبت نشده است" },
+                                                        style = MaterialTheme.typography.bodySmall
+                                                    )
+                                                    if (record.usernameError.isNotBlank()) {
+                                                        Text("خطای دریافت نام کاربری: " + record.usernameError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                                    }
+                                                    if (record.username.isNotBlank()) {
+                                                        TextButton(onClick = {
+                                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("نام کاربری", record.username))
+                                                            adminActionMessage = "نام کاربری کپی شد."
+                                                        }) { Text("کپی نام کاربری") }
+                                                    }
+                                                }
                                                 Text("وضعیت: ${record.status}")
-                                                if (selectedPanel == "مدیریت مدارک" && record.mediaUrl.isNotBlank()) {
+                                                if (adminLoggedIn && adminRole == "super_admin" && selectedPanel != "مدیریت مدارک") {
+                                                    OutlinedButton(enabled = !adminPanelLoading, onClick = {
+                                                        adminPanelLoading = true
+                                                        scope.launch {
+                                                            adminActionMessage = withContext(Dispatchers.IO) { forceLogoutMember(adminAccessToken, record.id) }
+                                                            adminPanelLoading = false
+                                                        }
+                                                    }, modifier = Modifier.fillMaxWidth()) { Text("اخراج از همه دستگاه‌ها") }
+                                                }
+                                                if (selectedPanel == "مدیریت مدارک" && adminLoggedIn && adminRole == "super_admin" && record.mediaUrl.isNotBlank()) {
                                                     val lowerUrl = record.mediaUrl.substringBefore("?").lowercase()
                                                     if (lowerUrl.endsWith(".jpg") || lowerUrl.endsWith(".jpeg") || lowerUrl.endsWith(".png") || lowerUrl.endsWith(".webp")) {
                                                         AsyncImage(model = record.mediaUrl, contentDescription = "مدرک راننده", modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp))
@@ -1658,6 +2007,17 @@ private fun ElaanBarApp(
                                                     }
                                                 }
                                                 if (selectedPanel == "مدیریت مدارک") {
+                                                    if (adminLoggedIn && adminRole == "super_admin" && record.mediaUrl.isNotBlank()) {
+                                                        OutlinedButton(
+                                                            onClick = {
+                                                                pendingAdminDocumentUrl = record.mediaUrl
+                                                                val extension = record.mediaUrl.substringBefore("?").substringAfterLast('.', "").takeIf { it.matches(Regex("[A-Za-z0-9]{2,5}")) } ?: "file"
+                                                                val safeName = record.title.replace(Regex("[^A-Za-z0-9_-]"), "_").take(48).ifBlank { "document" }
+                                                                saveAdminDocumentLauncher.launch("$safeName.$extension")
+                                                            },
+                                                            modifier = Modifier.fillMaxWidth()
+                                                        ) { Text("دانلود مدرک") }
+                                                    }
                                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                         if (record.status != "approved") {
                                                             Button(onClick = {
@@ -1681,7 +2041,7 @@ private fun ElaanBarApp(
                                                         }
                                                     }
                                                 } else {
-                                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                                     if (record.status != "approved") {
                                                         Button(onClick = {
                                                             adminPanelLoading = true
@@ -1702,7 +2062,7 @@ private fun ElaanBarApp(
                                                         }) { Text("رد درخواست") }
                                                     }
                                                     }
-                                                    if (record.status != "blocked") {
+                                                    if (adminRole == "super_admin" && record.status != "blocked") {
                                                         OutlinedButton(onClick = {
                                                             adminPanelLoading = true
                                                             scope.launch {
@@ -1712,7 +2072,7 @@ private fun ElaanBarApp(
                                                             }
                                                         }) { Text("مسدودسازی") }
                                                     }
-                                                    if (record.status == "blocked") {
+                                                    if (adminRole == "super_admin" && record.status == "blocked") {
                                                         Button(onClick = {
                                                             adminPanelLoading = true
                                                             scope.launch {
@@ -1938,22 +2298,6 @@ private fun ElaanBarApp(
                         "approved" -> {
                             Text("حساب شما تأیید شده است.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
                             if (role == UserRole.COMPANY) {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    OutlinedButton(
-                                        onClick = { companyPanelV2Selected = false },
-                                        modifier = Modifier.weight(1f)
-                                    ) { Text("پنل فعلی") }
-                                    Button(
-                                        onClick = { companyPanelV2Selected = true },
-                                        modifier = Modifier.weight(1f)
-                                    ) { Text("پنل جدید") }
-                                }
-                                if (companyPanelV2Selected) {
-                                    CompanyPanelV2(
-                                        accessToken = userAccessToken,
-                                        onBackToOldPanel = { companyPanelV2Selected = false }
-                                    )
-                                } else {
 
                                     Box(
                                         Modifier.fillMaxWidth()
@@ -2008,10 +2352,11 @@ private fun ElaanBarApp(
                                         options = listOf("روباری", "دربست", "نیم بار"),
                                         onSelected = { loadLoadingType = it }
                                     )
+                                    JalaliDatePickerField(selectedIsoDate = loadDateIso, onDateSelected = { loadDateIso = it }, label = "تاریخ بار")
                                     LoadSectionDropdown("کرایه", loadPriceExpanded, { loadPriceExpanded = !loadPriceExpanded }) {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            FilterChip(selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
-                                            FilterChip(selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
+                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            FilterChip(modifier = Modifier.fillMaxWidth(), selected = loadPriceMode == "fixed", onClick = { loadPriceMode = "fixed" }, label = { Text("مبلغ مشخص") })
+                                            FilterChip(modifier = Modifier.fillMaxWidth(), selected = loadPriceMode == "negotiable", onClick = { loadPriceMode = "negotiable" }, label = { Text("توافقی") })
                                         }
                                         if (loadPriceMode == "fixed") OutlinedTextField(loadFreightAmount, { loadFreightAmount = it.filter(Char::isDigit).take(18) }, label = { Text("مبلغ کرایه (تومان)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                                     }
@@ -2034,7 +2379,7 @@ private fun ElaanBarApp(
                                                     destination, loadCargoType.trim(), loadVehicleType,
                                                     loadLoadingType, loadPriceMode,
                                                     if (loadPriceMode == "fixed") loadFreightAmount else "0",
-                                                    loadDescription.trim()
+                                                    loadDescription.trim(), loadDateIso
                                                 )
                                             }
                                             scope.launch {
@@ -2048,6 +2393,7 @@ private fun ElaanBarApp(
                                                     loadDestination = ""
                                                     loadFreightAmount = ""
                                                     loadDescription = ""
+                                                    loadDateIso = ""
                                                     companyLoadPanelExpanded = false
                                                     companyHallExpanded = true
                                                 }
@@ -2056,7 +2402,6 @@ private fun ElaanBarApp(
                                     }, modifier = Modifier.fillMaxWidth()) {
                                         Text(if (loadPublishing) "در حال ثبت..." else "ثبت و انتشار بار")
                                     }
-                                }
                                 if (loadActionMessage.isNotBlank()) Text(loadActionMessage, color = MaterialTheme.colorScheme.secondary)
                                 if (companyHallExpanded) {
                                 Button(onClick = { companyHallExpanded = false; companyLoadPanelExpanded = true }, modifier = Modifier.fillMaxWidth()) {
@@ -2115,19 +2460,33 @@ private fun ElaanBarApp(
                                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                             Text("تهران ← ${load.destination}", style = MaterialTheme.typography.titleMedium)
                                             Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
+                                            Text("تاریخ بار: " + formatJalaliDate(load.loadingDate), style = MaterialTheme.typography.bodySmall)
                                             Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
                                             if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")
-                                            if (load.companyMobile.isNotBlank()) {
-                                                Text("شماره تماس: ${load.companyMobile}")
-                                                OutlinedButton(
-                                                    onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${load.companyMobile}"))) },
-                                                    modifier = Modifier.fillMaxWidth()
-                                                ) { Text("تماس با شرکت") }
+                                            if (load.companyMobile.isNotBlank() && isLoadContactReservationActive(load.contactReservationExpiresAt, clockNowMillis)) {
+                                                Text("شماره شرکت: ${load.companyMobile}", style = MaterialTheme.typography.bodyMedium)
+                                                OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${load.companyMobile}"))) }, modifier = Modifier.fillMaxWidth()) { Text("تماس با شرکت برای هماهنگی") }
                                             } else {
-                                                Text("پس از دریافت بار، امکان تماس با شرکت در بخش بارهای گرفته‌شده فعال می‌شود.", style = MaterialTheme.typography.bodySmall)
+                                                OutlinedButton(enabled = load.id !in loadingContactLoadIds, onClick = {
+                                                    loadingContactLoadIds = loadingContactLoadIds + load.id
+                                                    loadContactMessages = loadContactMessages - load.id
+                                                    scope.launch {
+                                                        val result = withContext(Dispatchers.IO) { fetchAvailableLoadCompanyContact(userAccessToken, load.id) }
+                                                        if (result.second != null) {
+                                                            publicHallLoads = publicHallLoads.map { item -> if (item.id == load.id) item.copy(companyName = result.second!!.companyName, companyMobile = result.second!!.mobile, contactReservationExpiresAt = result.second!!.reservationExpiresAt) else item }
+                                                            loadContactMessages = loadContactMessages - load.id
+                                                        } else {
+                                                            loadContactMessages = loadContactMessages + (load.id to result.first)
+                                                        }
+                                                        loadingContactLoadIds = loadingContactLoadIds - load.id
+                                                    }
+                                                }, modifier = Modifier.fillMaxWidth()) { Text(if (load.id in loadingContactLoadIds) "در حال دریافت شماره..." else "نمایش شماره شرکت و تماس") }
+                                                loadContactMessages[load.id]?.takeIf { it.isNotBlank() }?.let {
+                                                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                                }
                                             }
                                             if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
-                                            Button(enabled = acceptingLoadId.isBlank(), onClick = {
+                                            Button(enabled = acceptingLoadId.isBlank() && isLoadContactReservationActive(load.contactReservationExpiresAt, clockNowMillis), onClick = {
                                                 acceptingLoadId = load.id
                                                 scope.launch {
                                                     val accepted = withContext(Dispatchers.IO) { acceptDriverLoad(userAccessToken, load.id) }
@@ -2138,8 +2497,17 @@ private fun ElaanBarApp(
                                                     acceptingLoadId = ""
                                                 }
                                             }, modifier = Modifier.fillMaxWidth()) {
-                                                Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "درخواست دریافت این بار")
+                                                Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "ثبت دریافت بار پس از هماهنگی")
                                             }
+                                            OutlinedButton(enabled = acceptingLoadId.isBlank() && isLoadContactReservationActive(load.contactReservationExpiresAt, clockNowMillis), onClick = {
+                                                acceptingLoadId = load.id
+                                                scope.launch {
+                                                    publicHallMessage = withContext(Dispatchers.IO) { declineDriverLoadReservation(userAccessToken, load.id) }
+                                                    val refreshed = withContext(Dispatchers.IO) { fetchPublicHallLoads(userAccessToken) }
+                                                    publicHallLoads = refreshed.second
+                                                    acceptingLoadId = ""
+                                                }
+                                            }, modifier = Modifier.fillMaxWidth()) { Text("رد بار و بازگرداندن به سالن") }
                                         }
                                     }
                                 }
@@ -2163,9 +2531,32 @@ private fun ElaanBarApp(
                                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                             Text("تهران ← ${load.destination}", style = MaterialTheme.typography.titleMedium)
                                             Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
+                                            Text("تاریخ بار: " + formatJalaliDate(load.loadingDate), style = MaterialTheme.typography.bodySmall)
                                             Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
+                                            if (load.companyMobile.isNotBlank()) {
+                                                Text("شماره شرکت: ${load.companyMobile}", style = MaterialTheme.typography.bodyMedium)
+                                                OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${load.companyMobile}"))) }, modifier = Modifier.fillMaxWidth()) { Text("تماس با شرکت برای هماهنگی") }
+                                            } else {
+                                                OutlinedButton(enabled = load.id !in loadingContactLoadIds, onClick = {
+                                                    loadingContactLoadIds = loadingContactLoadIds + load.id
+                                                    loadContactMessages = loadContactMessages - load.id
+                                                    scope.launch {
+                                                        val result = withContext(Dispatchers.IO) { fetchAvailableLoadCompanyContact(userAccessToken, load.id) }
+                                                        if (result.second != null) {
+                                                            matchedLoads = matchedLoads.map { item -> if (item.id == load.id) item.copy(companyName = result.second!!.companyName, companyMobile = result.second!!.mobile, contactReservationExpiresAt = result.second!!.reservationExpiresAt) else item }
+                                                            loadContactMessages = loadContactMessages - load.id
+                                                        } else {
+                                                            loadContactMessages = loadContactMessages + (load.id to result.first)
+                                                        }
+                                                        loadingContactLoadIds = loadingContactLoadIds - load.id
+                                                    }
+                                                }, modifier = Modifier.fillMaxWidth()) { Text(if (load.id in loadingContactLoadIds) "در حال دریافت شماره..." else "نمایش شماره شرکت و تماس") }
+                                                loadContactMessages[load.id]?.takeIf { it.isNotBlank() }?.let {
+                                                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                                }
+                                            }
                                             if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
-                                            Button(enabled = acceptingLoadId.isBlank(), onClick = {
+                                            Button(enabled = acceptingLoadId.isBlank() && isLoadContactReservationActive(load.contactReservationExpiresAt, clockNowMillis), onClick = {
                                                 acceptingLoadId = load.id
                                                 scope.launch {
                                                     val accepted = withContext(Dispatchers.IO) { acceptDriverLoad(userAccessToken, load.id) }
@@ -2178,13 +2569,24 @@ private fun ElaanBarApp(
                                                     acceptingLoadId = ""
                                                 }
                                             }, modifier = Modifier.fillMaxWidth()) {
-                                                Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "گرفتن این بار")
+                                                Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "ثبت دریافت بار پس از هماهنگی")
                                             }
+                                            OutlinedButton(enabled = acceptingLoadId.isBlank() && isLoadContactReservationActive(load.contactReservationExpiresAt, clockNowMillis), onClick = {
+                                                acceptingLoadId = load.id
+                                                scope.launch {
+                                                    matchedLoadsText = withContext(Dispatchers.IO) { declineDriverLoadReservation(userAccessToken, load.id) }
+                                                    val refreshed = withContext(Dispatchers.IO) { fetchMatchedLoadsDetailed(userAccessToken) }
+                                                    matchedLoads = refreshed.second
+                                                    matchedLoadsText += "\\n" + refreshed.first
+                                                    acceptingLoadId = ""
+                                                }
+                                            }, modifier = Modifier.fillMaxWidth()) { Text("رد بار و بازگرداندن به سالن") }
                                         }
                                     }
                                 }
                                 HorizontalDivider()
                                 Text("بارهایی که شما گرفته‌اید", style = MaterialTheme.typography.titleMedium)
+                                if (driverLoadActionMessage.isNotBlank()) Text(driverLoadActionMessage, color = MaterialTheme.colorScheme.secondary)
                                 if (acceptedLoadContactsLoading) {
                                     CircularProgressIndicator()
                                 } else if (acceptedLoadContacts.isEmpty()) {
@@ -2202,7 +2604,23 @@ private fun ElaanBarApp(
                                                         context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + accepted.mobile)))
                                                     },
                                                     modifier = Modifier.fillMaxWidth()
-                                                ) { Text(if (accepted.mobile.isBlank()) "اطلاعات تماس در دسترس نیست" else "تماس با شرکت") }
+                                                ) { Text(if (accepted.mobile.isBlank()) "اطلاعات تماس در دسترس نیست" else "تماس با باربری") }
+                                                Button(
+                                                    enabled = markingLoadedLoadId.isBlank(),
+                                                    onClick = {
+                                                        markingLoadedLoadId = accepted.id
+                                                        driverLoadActionMessage = ""
+                                                        scope.launch {
+                                                            val result = withContext(Dispatchers.IO) { markDriverLoadInTransit(userAccessToken, accepted.id) }
+                                                            driverLoadActionMessage = result
+                                                            acceptedLoadContactsLoading = true
+                                                            acceptedLoadContacts = withContext(Dispatchers.IO) { fetchAcceptedLoadContacts(userAccessToken) }
+                                                            acceptedLoadContactsLoading = false
+                                                            markingLoadedLoadId = ""
+                                                        }
+                                                    },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) { Text(if (markingLoadedLoadId == accepted.id) "در حال ثبت بارگیری..." else "ثبت بارگیری و حرکت از مبدأ") }
                                             }
                                         }
                                     }
@@ -2355,6 +2773,7 @@ private fun ElaanBarApp(
                                             if (result.success) {
                                                 adminAccessToken = result.accessToken
                                                 adminRole = result.role
+                                                adminUsername = withContext(Dispatchers.IO) { fetchMyAccountUsername(result.accessToken) }
                                                 adminLoggedIn = true
                                                 DeviceSessionStore.save(context, result.refreshToken, "ADMIN")
                                                 adminProfilePhotoUrl = withContext(Dispatchers.IO) { fetchAdminProfilePhoto(result.accessToken) }
@@ -2453,6 +2872,7 @@ private fun ElaanBarApp(
     }
 }
 
+
 }
 
 @Composable
@@ -2461,14 +2881,20 @@ private fun PublicLoadHallScreen(
     message: String,
     loading: Boolean,
     acceptingLoadId: String,
+    reservingLoadIds: Set<String>,
+    reservationMessages: Map<String, String>,
+    reservations: Map<String, AcceptedLoadContact>,
+    nowMillis: Long,
     canAccept: Boolean,
     onRefresh: () -> Unit,
-    onAccept: (String) -> Unit
+    onReserve: (String) -> Unit,
+    onAccept: (String) -> Unit,
+    onDecline: (String) -> Unit
 ) {
     val context = LocalContext.current
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("سالن عمومی اعلام بار", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-        Text("بارهای منتشرشده برای همه کاربران واردشده قابل مشاهده است. شماره تماس شرکت نیز در هر آگهی نمایش داده می‌شود.", style = MaterialTheme.typography.bodySmall)
+        Text("بارهای منتشرشده قابل مشاهده است. راننده پس از رزرو ۱۵ دقیقه‌ای، شماره شرکت را می‌بیند و می‌تواند هماهنگ کند.", style = MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick = onRefresh, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
             Text(if (loading) "در حال بروزرسانی سالن..." else "بروزرسانی سالن عمومی")
         }
@@ -2479,6 +2905,7 @@ private fun PublicLoadHallScreen(
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("${load.origin} ← ${load.destination}", style = MaterialTheme.typography.titleMedium)
                     Text("${load.cargoType} | ${load.vehicleType} | ${load.loadingType}")
+                                            Text("تاریخ بار: " + formatJalaliDate(load.loadingDate), style = MaterialTheme.typography.bodySmall)
                     Text(if (load.freightAmount == "0") "کرایه: توافقی / اعلام‌نشده" else "کرایه: ${load.freightAmount} تومان")
                     if (load.companyName.isNotBlank()) Text("شرکت: ${load.companyName}")
                     if (load.companyMobile.isNotBlank()) {
@@ -2488,12 +2915,33 @@ private fun PublicLoadHallScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("تماس با شرکت") }
                     } else {
-                        Text("پس از دریافت بار، امکان تماس با شرکت در بخش بارهای گرفته‌شده فعال می‌شود.", style = MaterialTheme.typography.bodySmall)
+                        Text("برای دیدن شماره تماس، ابتدا رزرو ۱۵ دقیقه‌ای این بار را انجام دهید.", style = MaterialTheme.typography.bodySmall)
                     }
                     if (load.description.isNotBlank()) Text(load.description, style = MaterialTheme.typography.bodySmall)
                     if (canAccept) {
-                        Button(enabled = acceptingLoadId.isBlank(), onClick = { onAccept(load.id) }, modifier = Modifier.fillMaxWidth()) {
-                            Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "درخواست دریافت این بار")
+                        val reservation = reservations[load.id]
+                        val reservationActive = reservation != null && isLoadContactReservationActive(reservation.reservationExpiresAt, nowMillis)
+                        if (reservationActive && reservation != null) {
+                            Text("شماره شرکت: ${reservation.mobile}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                            Text("مهلت هماهنگی تا: ${reservation.reservationExpiresAt}", style = MaterialTheme.typography.bodySmall)
+                            OutlinedButton(
+                                onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${reservation.mobile}"))) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("تماس با شرکت") }
+                            Button(enabled = acceptingLoadId.isBlank(), onClick = { onAccept(load.id) }, modifier = Modifier.fillMaxWidth()) {
+                                Text(if (acceptingLoadId == load.id) "در حال ثبت..." else "تأیید دریافت بار پس از هماهنگی")
+                            }
+                            OutlinedButton(enabled = acceptingLoadId.isBlank(), onClick = { onDecline(load.id) }, modifier = Modifier.fillMaxWidth()) {
+                                Text("رد بار و آزادسازی رزرو")
+                            }
+                        } else {
+                            Button(enabled = acceptingLoadId.isBlank() && load.id !in reservingLoadIds, onClick = { onReserve(load.id) }, modifier = Modifier.fillMaxWidth()) {
+                                Text(if (load.id in reservingLoadIds) "در حال رزرو شماره..." else "گرفتن بار و تماس با شرکت")
+                            }
+                            reservationMessages[load.id]?.takeIf { it.isNotBlank() }?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                            }
+                            if (reservation != null) Text("مهلت رزرو این بار تمام شده است؛ برای تلاش دوباره رزرو کنید.", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -2513,8 +2961,7 @@ private fun fetchSupabaseServerTimeMillis(): Long? {
         }
         connection.connect()
         val dateHeader = connection.getHeaderField("Date") ?: return null
-        java.time.ZonedDateTime.parse(dateHeader, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME)
-            .toInstant().toEpochMilli()
+        SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", Locale.US).parse(dateHeader)?.time ?: return null
     } catch (_: Exception) {
         null
     } finally {
@@ -2894,13 +3341,24 @@ private fun restoreDeviceSession(refreshToken: String, role: UserRole): UserLogi
         val status = p.optString("status")
         if (status !in listOf("pending", "approved")) return UserLoginResult(false, "دسترسی حساب فعال نیست.")
         val name = if (role == UserRole.COMPANY) p.optString("company_name").ifBlank { p.optString("first_name") + " " + p.optString("last_name") } else (p.optString("first_name") + " " + p.optString("last_name")).trim()
-        UserLoginResult(true, "نشست قبلی بازیابی شد.", name, status, access, fresh, profilePhotoPublicUrl(p.optString("profile_photo_path")), user.optJSONObject("user_metadata")?.optString("username").orEmpty())
+        UserLoginResult(true, "نشست قبلی بازیابی شد.", name, status, access, fresh, profilePhotoPublicUrl(p.optString("profile_photo_path")), fetchMyAccountUsername(access))
     } catch (_: Exception) {
         UserLoginResult(false, "ارتباط با سامانه برقرار نشد.")
     } finally {
         auth?.disconnect()
         profile?.disconnect()
     }
+}
+
+
+private fun fetchMyAccountUsername(accessToken: String): String {
+    if (accessToken.isBlank()) return ""
+    val (code, body) = adminRpc(accessToken, "get_my_account_username", JSONObject())
+    if (code !in 200..299) return ""
+    return runCatching {
+        val rows = JSONArray(body)
+        if (rows.length() > 0) rows.getJSONObject(0).optString("username").trim() else ""
+    }.getOrDefault("")
 }
 
 private data class AdminAccount(
@@ -2910,7 +3368,7 @@ private data class AdminAccount(
     val isBlocked: Boolean = false
 )
 
-private fun adminRpc(accessToken: String, functionName: String, body: JSONObject): Pair<Int, String> {
+internal fun adminRpc(accessToken: String, functionName: String, body: JSONObject): Pair<Int, String> {
     var connection: HttpURLConnection? = null
     return try {
         connection = (URL("$SUPABASE_URL/rest/v1/rpc/$functionName").openConnection() as HttpURLConnection).apply {
@@ -2986,6 +3444,13 @@ private fun forceLogoutMember(accessToken: String, userId: String): String {
         val count = body.trim().trim(34.toChar()).toIntOrNull()
         "دستور خروج اجباری ثبت شد؛ نشست‌های فعال باطل شدند" + (count?.let { " (تعداد نشست: $it)." } ?: ".")
     } else "خروج اجباری انجام نشد؛ فقط مدیر ارشد اصلی مجاز است یا حساب هدف معتبر نیست."
+}
+
+private fun setAdminUserBlocked(accessToken: String, userId: String, blocked: Boolean, reason: String): String {
+    if (blocked && reason.trim().length < 3) return "برای مسدودسازی مدیر، دلیل حداقل سه نویسه‌ای وارد کنید."
+    val (code, body) = adminRpc(accessToken, "admin_set_blocked", JSONObject().put("p_target_user_id", userId).put("p_blocked", blocked).put("p_reason", if (blocked) reason.trim() else JSONObject.NULL))
+    return if (code in 200..299) { if (blocked) "دسترسی مدیر مسدود شد." else "دسترسی مدیر دوباره فعال شد." }
+    else "تغییر وضعیت مدیر انجام نشد؛ مجوز مدیر ارشد اصلی را بررسی کنید."
 }
 
 private fun fetchAdminPanelData(accessToken: String, panel: String): String {
@@ -3388,7 +3853,7 @@ private fun authenticateUser(username: String, password: String, role: UserRole)
                 status = status,
                 accessToken = accessToken,
                 refreshToken = refreshToken,
-                username = user.optJSONObject("user_metadata")?.optString("username").orEmpty().ifBlank { username }
+                username = fetchMyAccountUsername(accessToken).ifBlank { username }
             )
             else -> UserLoginResult(false, "وضعیت حساب در سامانه معتبر نیست.")
         }
@@ -3415,7 +3880,8 @@ internal fun publishLoadBatch(accessToken: String, drafts: List<LoadDraft>, publ
                 .put("loading_type", d.loadingType)
                 .put("price_mode", d.priceMode)
                 .put("freight_amount", d.freightAmount)
-                .put("description", d.description))
+                .put("description", d.description)
+                .put("loading_date", d.loadingDate.takeIf { it.isNotBlank() } ?: JSONObject.NULL))
         }
         val body = JSONObject()
             .put("p_items", items)
@@ -3525,8 +3991,13 @@ private fun normalizeMatchText(value: String): String =
         .replace('ي', 'ی')
         .replace('ى', 'ی')
         .replace('ك', 'ک')
-        .replace("\\u200c", " ")
+        .replace('ـ', ' ')
+        .replace('\u200c', ' ')
+        .replace('\u200d', ' ')
+        .replace(Regex("[\\u064B-\\u065F\\u0670]"), "")
+        .replace(Regex("[،,؛;.!؟?]+"), " ")
         .replace(Regex("\\s+"), " ")
+        .trim()
         .lowercase()
 
 private fun normalizeVehicleType(value: String): String {
@@ -3540,67 +4011,66 @@ private fun normalizeVehicleType(value: String): String {
 private fun fetchMatchedLoadsDetailed(accessToken: String): Pair<String, List<MatchedLoad>> {
     if (accessToken.isBlank()) return "نشست ورود معتبر نیست؛ دوباره وارد شوید." to emptyList()
     var profileConnection: HttpURLConnection? = null
-    var loadsConnection: HttpURLConnection? = null
     return try {
-        val payload = accessToken.split(".").getOrNull(1) ?: return "نشست ورود نامعتبر است." to emptyList()
+        val payload = accessToken.split(".").getOrNull(1)
+            ?: return "نشست ورود نامعتبر است." to emptyList()
         val decoded = Base64.decode(payload, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
         val userId = JSONObject(String(decoded, Charsets.UTF_8)).optString("sub")
         if (userId.isBlank()) return "شناسه راننده از نشست دریافت نشد." to emptyList()
+
         val profileUrl = "$SUPABASE_URL/rest/v1/drivers?select=vehicle_type,primary_destination,destinations&id=eq.$userId&limit=1"
         profileConnection = (URL(profileUrl).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"; connectTimeout = 15000; readTimeout = 15000
+            requestMethod = "GET"
+            connectTimeout = 15000
+            readTimeout = 15000
             setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
             setRequestProperty("Authorization", "Bearer $accessToken")
             setRequestProperty("Accept", "application/json")
         }
         val profileCode = profileConnection.responseCode
         val profileStream = if (profileCode in 200..299) profileConnection.inputStream else profileConnection.errorStream
-        val profileRows = JSONArray(profileStream?.bufferedReader()?.use { it.readText() }.orEmpty())
-        if (profileCode !in 200..299 || profileRows.length() == 0) return "اطلاعات خودرو و مقصد راننده دریافت نشد." to emptyList()
+        val profileRaw = profileStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (profileCode !in 200..299) {
+            return "دریافت پروفایل راننده ناموفق بود (کد $profileCode)." to emptyList()
+        }
+        val profileRows = JSONArray(profileRaw)
+        if (profileRows.length() == 0) return "پروفایل راننده پیدا نشد؛ اطلاعات حساب را بررسی کنید." to emptyList()
+
         val driver = profileRows.getJSONObject(0)
-        val vehicle = driver.optString("vehicle_type").trim()
+        val vehicle = normalizeVehicleType(driver.optString("vehicle_type"))
         val destinations = mutableSetOf<String>()
         val destinationArray = driver.optJSONArray("destinations")
-        if (destinationArray != null) for (i in 0 until destinationArray.length()) {
-            val value = destinationArray.optString(i).trim()
-            if (value.isNotBlank()) destinations.add(normalizeMatchText(value))
+        if (destinationArray != null) {
+            for (i in 0 until destinationArray.length()) {
+                val value = normalizeMatchText(destinationArray.optString(i))
+                if (value.isNotBlank()) destinations.add(value)
+            }
         }
-        val primary = driver.optString("primary_destination").trim()
-        if (primary.isNotBlank()) destinations.add(normalizeMatchText(primary))
-        if (vehicle.isBlank() || destinations.isEmpty()) return "ابتدا نوع خودرو و مقصدهای خود را در پروفایل کامل کنید." to emptyList()
-        val loadsUrl = "$SUPABASE_URL/rest/v1/loads?select=id,origin,destination,cargo_type,vehicle_type,freight_amount,description,loading_type&status=eq.published&assigned_driver_id=is.null&order=created_at.desc&limit=200"
-        loadsConnection = (URL(loadsUrl).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"; connectTimeout = 15000; readTimeout = 20000
-            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
-            setRequestProperty("Authorization", "Bearer $accessToken")
-            setRequestProperty("Accept", "application/json")
+        val primary = normalizeMatchText(driver.optString("primary_destination"))
+        if (primary.isNotBlank()) destinations.add(primary)
+        if (vehicle.isBlank() || destinations.isEmpty()) {
+            return "ابتدا نوع خودرو و حداقل یک مقصد را در پروفایل راننده ثبت کنید." to emptyList()
         }
-        val code = loadsConnection.responseCode
-        val stream = if (code in 200..299) loadsConnection.inputStream else loadsConnection.errorStream
-        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-        if (code !in 200..299) return "دریافت بارها ناموفق بود (کد $code)." to emptyList()
-        val rows = JSONArray(raw)
-        val matching = (0 until rows.length()).map { rows.getJSONObject(it) }.filter { item ->
-            normalizeVehicleType(item.optString("vehicle_type")).equals(normalizeVehicleType(vehicle), ignoreCase = true) &&
-                destinations.contains(normalizeMatchText(item.optString("destination")) )
-        }.map { item ->
-            MatchedLoad(
-                id = item.optString("id"),
-                origin = item.optString("origin", "تهران"),
-                destination = item.optString("destination"),
-                cargoType = item.optString("cargo_type"),
-                vehicleType = item.optString("vehicle_type"),
-                loadingType = item.optString("loading_type"),
-                freightAmount = item.optString("freight_amount", "0"),
-                description = item.optString("description").takeUnless { it == "null" }.orEmpty()
-            )
-        }.filter { it.id.isNotBlank() }
-        (if (matching.isEmpty()) "در حال حاضر بار منتشرشده متناسب با خودرو و مقصدهای شما وجود ندارد." else "بارهای متناسب پیدا شد: ${matching.size} مورد. برای گرفتن بار، دکمه هر کارت را بزنید.") to matching
+
+        // Use the authenticated public-hall RPC, not a direct loads-table query.
+        // The RPC applies RLS-safe availability rules and excludes loads reserved
+        // by another driver or already assigned to a driver.
+        val hallResult = fetchPublicHallLoads(accessToken)
+        if (hallResult.second.isEmpty()) return hallResult.first to emptyList()
+
+        val matching = hallResult.second.filter { load ->
+            normalizeVehicleType(load.vehicleType) == vehicle &&
+                destinations.contains(normalizeMatchText(load.destination))
+        }
+        (if (matching.isEmpty()) {
+            "سالن بارها دریافت شد، اما باری با خودرو و مقصدهای ثبت‌شده شما مطابقت ندارد."
+        } else {
+            "بارهای متناسب پیدا شد: ${matching.size} مورد."
+        }) to matching
     } catch (_: Exception) {
-        "ارتباط با سامانه برقرار نشد. اینترنت را بررسی کنید." to emptyList()
+        "دریافت بارهای راننده با خطا روبه‌رو شد؛ دوباره تلاش کنید." to emptyList()
     } finally {
         profileConnection?.disconnect()
-        loadsConnection?.disconnect()
     }
 }
 
@@ -3636,7 +4106,8 @@ private fun fetchPublicHallLoads(accessToken: String): Pair<String, List<Matched
                 freightAmount = item.optString("freight_amount", "0"),
                 description = item.optString("description").takeUnless { it == "null" }.orEmpty(),
                 companyName = item.optString("company_name").takeUnless { it == "null" }.orEmpty(),
-                companyMobile = item.optString("company_mobile").takeUnless { it == "null" }.orEmpty()
+                companyMobile = "",
+                loadingDate = item.optString("loading_date").takeUnless { it.isBlank() || it == "null" }.orEmpty()
             )
         }.filter { it.id.isNotBlank() }
         (if (loads.isEmpty()) "در حال حاضر بار منتشرشده‌ای در سالن عمومی وجود ندارد." else "${loads.size} بار منتشرشده در سالن عمومی موجود است.") to loads
@@ -3750,6 +4221,101 @@ private fun fetchMatchedLoads(accessToken: String): String {
 }
 
 
+private fun fetchAvailableLoadCompanyContact(accessToken: String, loadId: String): Pair<String, AcceptedLoadContact?> {
+    if (accessToken.isBlank() || loadId.isBlank()) return "نشست یا بار معتبر نیست." to null
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL("$SUPABASE_URL/rest/v1/rpc/driver_reserve_load_contact").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"; connectTimeout = 12000; readTimeout = 15000; doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        connection.outputStream.use { it.write(JSONObject().put("p_load_id", loadId).toString().toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code !in 200..299) {
+            val detail = runCatching { JSONObject(raw).optString("message") }.getOrDefault("")
+            return ("دریافت شماره شرکت انجام نشد." + if (detail.isNotBlank()) " $detail" else " لطفاً دوباره تلاش کنید.") to null
+        }
+        val rows = JSONArray(raw)
+        if (rows.length() == 0) return "اطلاعات تماس این بار در دسترس نیست یا بار قبلاً گرفته شده است." to null
+        val row = rows.getJSONObject(0)
+        val mobile = row.optString("mobile").trim()
+        if (mobile.isBlank() || mobile == "null") return "شماره تماس برای این شرکت ثبت نشده است." to null
+        "شماره شرکت برای ۱۵ دقیقه به نام شما رزرو شد." to AcceptedLoadContact(loadId, "", row.optString("company_name"), row.optString("manager_name"), mobile, row.optString("reservation_expires_at"))
+    } catch (_: Exception) {
+        "ارتباط با سامانه برقرار نشد؛ اینترنت را بررسی کنید." to null
+    } finally { connection?.disconnect() }
+}
+
+private fun markDriverLoadInTransit(accessToken: String, loadId: String): String {
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL("$SUPABASE_URL/rest/v1/rpc/driver_mark_load_in_transit").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 20000
+            doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        connection.outputStream.use {
+            it.write(JSONObject().put("p_load_id", loadId).toString().toByteArray(Charsets.UTF_8))
+        }
+        val code = connection.responseCode
+        if (code in 200..299) {
+            "بارگیری ثبت شد؛ بار از فهرست فعال شرکت به سابقه منتقل شد."
+        } else {
+            val stream = connection.errorStream
+            val detail = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            "ثبت بارگیری انجام نشد (کد $code). " + detail.take(220)
+        }
+    } catch (e: Exception) {
+        "ارتباط با سامانه برقرار نشد؛ وضعیت بار را دوباره بررسی کنید."
+    } finally {
+        connection?.disconnect()
+    }
+}
+
+private fun declineDriverLoadReservation(accessToken: String, loadId: String): String {
+    if (accessToken.isBlank() || loadId.isBlank()) return "نشست یا شناسه بار معتبر نیست."
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL("$SUPABASE_URL/rest/v1/rpc/driver_decline_load_reservation").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"; connectTimeout = 12000; readTimeout = 15000; doOutput = true
+            setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        connection.outputStream.use { it.write(JSONObject().put("p_load_id", loadId).toString().toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code !in 200..299) {
+            val detail = runCatching { JSONObject(raw).optString("message") }.getOrDefault("")
+            "آزادسازی بار انجام نشد." + if (detail.isNotBlank()) " $detail" else ""
+        } else if (raw.trim().equals("true", ignoreCase = true)) {
+            "بار رد شد و دوباره به سالن اعلام بار برگشت."
+        } else {
+            "این بار دیگر به نام شما رزرو نیست یا مهلت رزرو آن تمام شده است."
+        }
+    } catch (_: Exception) {
+        "ارتباط با سامانه برقرار نشد؛ وضعیت بار را دوباره بررسی کنید."
+    } finally { connection?.disconnect() }
+}
+
+private fun isLoadContactReservationActive(expiresAt: String, nowMillis: Long): Boolean {
+    if (expiresAt.isBlank()) return false
+    val expiry = runCatching { java.time.Instant.parse(expiresAt).toEpochMilli() }.getOrNull() ?: return false
+    return expiry > nowMillis
+}
+
 private fun fetchAcceptedLoadContacts(accessToken: String): List<AcceptedLoadContact> {
     if (accessToken.isBlank()) return emptyList()
     var connection: HttpURLConnection? = null
@@ -3860,6 +4426,32 @@ private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRec
         "مدیریت شرکت‌ها" -> "companies"
         else -> return emptyList()
     }
+    // Usernames are intentionally not readable from the client table. Fetch them
+    // through a server-side RPC that returns data only to the primary super admin.
+    var usernameError = ""
+    val usernameByUserId = try {
+        val (usernameCode, usernameBody) = adminRpc(accessToken, "admin_list_account_usernames", JSONObject())
+        if (usernameCode !in 200..299) {
+            usernameError = runCatching {
+                val error = JSONObject(usernameBody)
+                error.optString("message").ifBlank { error.optString("hint") }.ifBlank { "خطای HTTP $usernameCode" }
+            }.getOrDefault("خطای HTTP $usernameCode")
+            emptyMap<String, String>()
+        } else {
+            val usernameRows = JSONArray(usernameBody)
+            buildMap {
+                for (i in 0 until usernameRows.length()) {
+                    val row = usernameRows.getJSONObject(i)
+                    val userId = row.optString("user_id")
+                    val value = row.optString("username")
+                    if (userId.isNotBlank() && value.isNotBlank()) put(userId, value)
+                }
+            }
+        }
+    } catch (error: Exception) {
+        usernameError = error.message?.take(180).orEmpty().ifBlank { "خطای ارتباط با فهرست نام‌های کاربری" }
+        emptyMap()
+    }
     var connection: HttpURLConnection? = null
     return try {
         val select = if (table == "drivers") "id,first_name,last_name,full_name,mobile,vehicle_type,primary_destination,status"
@@ -3883,7 +4475,7 @@ private fun fetchAdminRecords(accessToken: String, panel: String): List<AdminRec
             val detail = if (table == "drivers")
                 item.optString("mobile") + " | " + item.optString("vehicle_type") + " | " + item.optString("primary_destination")
             else item.optString("manager_name") + " | " + item.optString("mobile")
-            AdminRecord(item.optString("id"), title, detail, item.optString("status"))
+            AdminRecord(item.optString("id"), title, detail, item.optString("status"), username = usernameByUserId[item.optString("id")].orEmpty(), usernameError = usernameError)
         }
     } catch (_: Exception) { emptyList() }
     finally { connection?.disconnect() }
@@ -3909,6 +4501,28 @@ private fun createSignedDriverDocumentUrl(accessToken: String, path: String, buc
         if (signed.isBlank()) "" else if (signed.startsWith("http")) signed else SUPABASE_URL + signed
     } catch (_: Exception) { "" }
     finally { connection?.disconnect() }
+}
+
+private fun copySignedDocumentToUri(context: Context, signedUrl: String, destination: Uri): Boolean {
+    if (!signedUrl.startsWith(SUPABASE_URL + "/storage/v1/object/sign/")) return false
+    var connection: HttpURLConnection? = null
+    return try {
+        connection = (URL(signedUrl).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15000
+            readTimeout = 60000
+            instanceFollowRedirects = true
+        }
+        if (connection.responseCode !in 200..299) return false
+        val output = context.contentResolver.openOutputStream(destination, "w") ?: return false
+        output.use { target -> connection.inputStream.use { input -> input.copyTo(target) } }
+        true
+    } catch (_: Exception) {
+        runCatching { context.contentResolver.delete(destination, null, null) }
+        false
+    } finally {
+        connection?.disconnect()
+    }
 }
 
 private fun updateDriverDocumentStatus(accessToken: String, id: String, status: String): String {
