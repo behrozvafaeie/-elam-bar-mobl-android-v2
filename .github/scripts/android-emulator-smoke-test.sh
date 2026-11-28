@@ -144,7 +144,7 @@ adb shell am force-stop "$PACKAGE" || true
 echo "Installing corrected 1.7.4 over the installed 1.7.4 baseline..."
 install_and_verify "$APK" 51 "in-place corrected 1.7.4 update"
 echo "In-place update installation completed and package version verified."
-adb shell run-as "$PACKAGE" cat files/update_marker.txt | grep -Fx "keep-data-across-update-1.7.3-to-1.7.4"
+adb shell run-as "$PACKAGE" cat files/update_marker.txt | grep -Fx "keep-data-across-update-1.7.4-to-1.7.4-update"
 adb shell run-as "$PACKAGE" cat shared_prefs/update_test.xml | grep -F "keep-shared-preferences-across-update"
 echo "Private files and shared-preferences data survived the in-place update."
 
