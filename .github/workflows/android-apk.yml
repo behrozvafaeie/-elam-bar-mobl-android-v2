@@ -6,7 +6,7 @@ name: Android APK
 # Build a same-source lower-version baseline so update tests never depend on expired historical artifacts.
 on:
   push:
-    branches: [ "main", "rebuild/v1.6.8-exact", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25", "fix/source-343-stabilization", "stable/source-343-baseline", "fix/post-merge-ci-stabilization", "feature/v1.5.1-load-draft-autosave", "release/v1.5.1-clean-candidate", "fix/load-status-edit-delete-logout-v1", "feature/company-panel-v2-isolated", "feature/company-panel-and-admin-contacts-v1", "feature/company-panel-v2-install-safe", "diagnostic/startup-crash-log-v1", "work/1.6.3-isolated-company-hall", "work/628-safe-changes" , "work/driver-load-reservation-15m"]
+    branches: [ "main", "rebuild/v1.6.8-exact", "stable/base-run-165", "work/source-166", "work/source-184", "work/source-185", "work/source-186", "work/release-hardening-1.0.22", "fix/driver-available-loads-filter", "design/tarp-truck-menu-v1-0-24", "feature/confirmed-user-rules-v1-0-25", "fix/source-343-stabilization", "stable/source-343-baseline", "fix/post-merge-ci-stabilization", "feature/v1.5.1-load-draft-autosave", "release/v1.5.1-clean-candidate", "fix/load-status-edit-delete-logout-v1", "feature/company-panel-v2-isolated", "feature/company-panel-and-admin-contacts-v1", "feature/company-panel-v2-install-safe", "diagnostic/startup-crash-log-v1", "work/1.6.3-isolated-company-hall", "work/628-safe-changes" ]
     paths:
       - "app/**"
       - "supabase/**"
@@ -40,8 +40,26 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - name: Checkout
+      - name: Checkout PR #21 workflow context
         uses: actions/checkout@v4
+
+      - name: Checkout exact Android 8 / 1.7.4 candidate source
+        uses: actions/checkout@v4
+        with:
+          ref: da769b72bd45ed21596f0d947d64d2bc8415d8ad
+          path: candidate-source
+
+      - name: Switch build workspace to candidate source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/elambar-candidate-source"
+          cp -a candidate-source/. "$RUNNER_TEMP/elambar-candidate-source/"
+          rsync -a --delete --exclude='/.git/' "$RUNNER_TEMP/elambar-candidate-source/" ./
+          rm -rf candidate-source
+          grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
+          grep -F 'versionCode = 51' app/build.gradle.kts
+          grep -F 'versionName = "1.7.4"' app/build.gradle.kts
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -62,13 +80,15 @@ jobs:
       - name: Install Android build packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Restore stable debug signing key
+      - name: Restore stable debug signing key (PR #21 only)
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 21
         uses: actions/cache@v4
         with:
           path: /home/runner/.android/debug.keystore
           key: android-debug-keystore-v3-Linux
 
-      - name: Require the existing stable signing key
+      - name: Require the existing stable signing key (PR #21 only)
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 21
         shell: bash
         run: |
           set -euo pipefail
@@ -91,10 +111,10 @@ jobs:
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 50' app/build.gradle.kts
+          grep -F 'versionCode = 51' app/build.gradle.kts
           grep -F 'versionName = "1.7.4"' app/build.gradle.kts
-          awk '/^[[:space:]]*PREPARE_JSON=/ && /versionCode:50,versionName:"1.7.4"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
-          awk '/^[[:space:]]*FINALIZE_JSON=/ && /versionCode:50,versionName:"1.7.4"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
+          awk '/^[[:space:]]*PREPARE_JSON=/ && /versionCode:51,versionName:"1.7.4"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
+          awk '/^[[:space:]]*FINALIZE_JSON=/ && /versionCode:51,versionName:"1.7.4"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
           ! grep -E 'ELAM_TURN_(URL|USERNAME|PASSWORD)' .github/workflows/android-apk.yml
 
       - name: Build synthetic 1.7.3-compatible baseline (same source; not historical APK)
@@ -109,9 +129,9 @@ jobs:
           from pathlib import Path
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          s = s.replace('versionCode = 50', 'versionCode = 49', 1)
-          s = s.replace('versionName = "1.7.4"', 'versionName = "1.7.3"', 1)
-          if 'versionCode = 49' not in s or 'versionName = "1.7.3"' not in s:
+          s = s.replace('versionCode = 51', 'versionCode = 50', 1)
+          s = s.replace('versionName = "1.7.4"', 'versionName = "1.7.4"', 1)
+          if 'versionCode = 50' not in s or 'versionName = "1.7.4"' not in s:
               raise SystemExit("Could not create the test baseline version metadata")
           p.write_text(s)
           PY
@@ -119,7 +139,7 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk artifacts/previous/app-debug.apk
           restore_gradle
           trap - EXIT
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging artifacts/previous/app-debug.apk | grep -F "package: name='ir.elambar.mobl' versionCode='49' versionName='1.7.3'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging artifacts/previous/app-debug.apk | grep -F "package: name='ir.elambar.mobl' versionCode='50' versionName='1.7.4'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs artifacts/previous/app-debug.apk
           echo "Synthetic baseline is built from this exact source tree and signed by the same persistent CI key; it does not represent the historical user-installed APK."
 
@@ -178,7 +198,7 @@ jobs:
       - name: Upload baseline APK for update tests
         uses: actions/upload-artifact@v4
         with:
-          name: elam-bar-mobl-v1.7.3-debug-apk
+          name: elam-bar-mobl-v1.7.4-baseline-apk
           path: artifacts/previous/app-debug.apk
           if-no-files-found: error
           retention-days: 90
@@ -188,7 +208,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          git archive --format=zip --output=artifacts/elam-bar-mobl-v1.7.4-source.zip HEAD
+          zip -qr artifacts/elam-bar-mobl-v1.7.4-source.zip . -x ".git/*"
           test -s artifacts/elam-bar-mobl-v1.7.4-source.zip
           unzip -t artifacts/elam-bar-mobl-v1.7.4-source.zip
 
@@ -209,10 +229,12 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
-        api-level: [24, 25, 26, 28, 29, 30, 31, 32, 33, 34, 35]
+        api-level: [26, 28, 35]
     steps:
-      - name: Checkout diagnostic source and smoke-test script
+      - name: Checkout exact candidate source and smoke-test script
         uses: actions/checkout@v4
+        with:
+          ref: da769b72bd45ed21596f0d947d64d2bc8415d8ad
 
       - name: Download built APK
         uses: actions/download-artifact@v4
@@ -223,7 +245,7 @@ jobs:
       - name: Download synthetic lower-version baseline for in-place update test
         uses: actions/download-artifact@v4
         with:
-          name: elam-bar-mobl-v1.7.3-debug-apk
+          name: elam-bar-mobl-v1.7.4-baseline-apk
           path: previous
 
       - name: Install and launch APK on Android ${{ matrix.api-level }} emulator
@@ -276,7 +298,7 @@ jobs:
           }
 
           OIDC_TOKEN=$(get_oidc_token)
-          PREPARE_JSON=$(jq -n '{action:"prepare",versionCode:50,versionName:"1.7.4"}')
+          PREPARE_JSON=$(jq -n '{action:"prepare",versionCode:51,versionName:"1.7.4"}')
           PREPARE_RESULT=$(curl -fsS -X POST "https://sckcxtceybwtiecyxqsy.supabase.co/functions/v1/app-release-upload" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
@@ -291,7 +313,7 @@ jobs:
           ARCHIVE_SHA256=$(sha256sum "$ARCHIVE" | awk '{print $1}')
           APK_SHA256=$(sha256sum "$APK" | awk '{print $1}')
           OIDC_TOKEN=$(get_oidc_token)
-          FINALIZE_JSON=$(jq -n --arg archiveSha256 "$ARCHIVE_SHA256" --arg apkSha256 "$APK_SHA256" '{action:"finalize",versionCode:50,versionName:"1.7.4",archiveSha256:$archiveSha256,apkSha256:$apkSha256}')
+          FINALIZE_JSON=$(jq -n --arg archiveSha256 "$ARCHIVE_SHA256" --arg apkSha256 "$APK_SHA256" '{action:"finalize",versionCode:51,versionName:"1.7.4",archiveSha256:$archiveSha256,apkSha256:$apkSha256}')
           curl -fsS -X POST "https://sckcxtceybwtiecyxqsy.supabase.co/functions/v1/app-release-upload" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
