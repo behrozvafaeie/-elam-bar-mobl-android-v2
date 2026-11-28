@@ -46,7 +46,7 @@ jobs:
       - name: Checkout exact Android 8 / 1.7.4 candidate source
         uses: actions/checkout@v4
         with:
-          ref: da769b72bd45ed21596f0d947d64d2bc8415d8ad
+          ref: 7b052f10119584a20bc61372db1b6eeec37ab922
           path: candidate-source
 
       - name: Switch build workspace to candidate source
@@ -234,7 +234,7 @@ jobs:
       - name: Checkout exact candidate source and smoke-test script
         uses: actions/checkout@v4
         with:
-          ref: da769b72bd45ed21596f0d947d64d2bc8415d8ad
+          ref: 7b052f10119584a20bc61372db1b6eeec37ab922
 
       - name: Download built APK
         uses: actions/download-artifact@v4
