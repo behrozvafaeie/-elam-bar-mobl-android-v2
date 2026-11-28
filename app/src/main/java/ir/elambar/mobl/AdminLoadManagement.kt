@@ -51,7 +51,8 @@ private data class AdminLoadItem(
     val description: String,
     val status: String,
     val assignedDriverId: String?,
-    val publisherType: String
+    val publisherType: String,
+    val loadingDate: String?
 )
 
 private data class AdminLoadDraft(
@@ -60,7 +61,8 @@ private data class AdminLoadDraft(
     val vehicleType: String,
     val loadingType: String,
     val freightAmount: String,
-    val description: String
+    val description: String,
+    val loadingDate: String = ""
 )
 
 private class AdminLoadRepository(private val token: String) {
@@ -95,13 +97,19 @@ private class AdminLoadRepository(private val token: String) {
 
     fun list(): Pair<String?, List<AdminLoadItem>> {
         if (token.isBlank()) return "نشست مدیر معتبر نیست؛ دوباره وارد شوید." to emptyList()
-        val query = "loads?select=id,origin,destination,cargo_type,vehicle_type,loading_type,freight_amount,description,status,assigned_driver_id,publisher_type&order=created_at.desc&limit=200"
-        val (code, body) = request("GET", query)
-        if (code !in 200..299) return "دریافت فهرست بارها ناموفق بود (کد $code). مجوز مشاهده بارها را بررسی کنید." to emptyList()
         return runCatching {
-            val rows = JSONArray(body)
-            null to (0 until rows.length()).map { i ->
-                val row = rows.getJSONObject(i)
+            val allRows = mutableListOf<JSONObject>()
+            var offset = 0
+            while (true) {
+                val query = "loads?select=id,origin,destination,cargo_type,vehicle_type,loading_type,freight_amount,description,status,assigned_driver_id,publisher_type,loading_date&order=created_at.desc&limit=200&offset=$offset"
+                val (code, body) = request("GET", query)
+                if (code !in 200..299) return "دریافت فهرست بارها ناموفق بود (کد $code). مجوز مشاهده بارها را بررسی کنید." to emptyList()
+                val page = JSONArray(body)
+                for (i in 0 until page.length()) allRows.add(page.getJSONObject(i))
+                if (page.length() < 200) break
+                offset += 200
+            }
+            null to allRows.map { row ->
                 AdminLoadItem(
                     id = row.optString("id"),
                     origin = row.optString("origin", "تهران"),
@@ -113,7 +121,8 @@ private class AdminLoadRepository(private val token: String) {
                     description = row.optString("description").takeUnless { it == "null" }.orEmpty(),
                     status = row.optString("status"),
                     assignedDriverId = row.optString("assigned_driver_id").takeIf { it.isNotBlank() && it != "null" },
-                    publisherType = row.optString("publisher_type")
+                    publisherType = row.optString("publisher_type"),
+                    loadingDate = row.optString("loading_date").takeUnless { it.isBlank() || it == "null" }
                 )
             }
         }.getOrElse { "پاسخ فهرست بارها قابل خواندن نیست." to emptyList() }
@@ -122,7 +131,11 @@ private class AdminLoadRepository(private val token: String) {
     fun update(item: AdminLoadItem, draft: AdminLoadDraft): String {
         if (item.status != "published" || item.assignedDriverId != null) return "ویرایش جزئیات فقط پیش از انتخاب راننده مجاز است."
         if (draft.destination.trim().length !in 2..100 || draft.cargoType.trim().length !in 2..160) return "مقصد یا نوع بار معتبر نیست."
-        val vehicles = setOf("کامیونت مبلی", "کامیونت روباری کار", "کامیون ۶ متری", "وانت")
+        val vehicles = setOf(
+            "وانت مبلی", "کامیونت مبلی", "کامیونت روباری کار", "کامیون ۶ متری",
+            "وانت", "کامیون دربستی کار", "خاور مبلی پتو دار", "خاور مبلی پتو‌دار",
+            "کامیون بزرگ", "سایر خودروهای مبلی"
+        )
         if (draft.vehicleType !in vehicles) return "نوع خودرو معتبر نیست."
         if (draft.loadingType !in setOf("روباری", "دربست", "نیم بار")) return "نوع بارگیری معتبر نیست."
         val digits = buildString {
@@ -143,6 +156,7 @@ private class AdminLoadRepository(private val token: String) {
             .put("loading_type", draft.loadingType)
             .put("freight_amount", amount)
             .put("description", draft.description.trim().take(3000))
+            .put("loading_date", draft.loadingDate.takeIf { it.isNotBlank() } ?: JSONObject.NULL)
         val (code, response) = request("PATCH", "loads?id=eq." + enc(item.id) + "&status=eq.published&assigned_driver_id=is.null", body)
         if (code !in 200..299) return "ویرایش از طرف سرور رد شد (کد $code)."
         return if (runCatching { JSONArray(response).length() }.getOrDefault(0) > 0) "تغییرات بار ذخیره شد." else "بار برای ویرایش پیدا نشد یا وضعیت آن تغییر کرده است."
@@ -172,7 +186,7 @@ private class AdminLoadRepository(private val token: String) {
 private fun adminLoadStatusLabel(status: String): String = when (status) {
     "published" -> "در انتظار راننده"
     "driver_selected" -> "راننده انتخاب شد"
-    "in_transit" -> "بارگیری شد / در مسیر"
+    "in_transit" -> "بار ردشده (بارگیری شد / در مسیر)"
     "delivered" -> "تحویل شد"
     "settled" -> "تسویه شد"
     "cancelled" -> "لغوشده"
@@ -192,6 +206,7 @@ internal fun AdminLoadManagement(accessToken: String) {
     var deleting by remember { mutableStateOf<AdminLoadItem?>(null) }
     var selectedStatus by remember { mutableStateOf("") }
     var statusMenu by remember { mutableStateOf(false) }
+    var historyDateFilter by remember { mutableStateOf("") }
 
     fun refresh() {
         busy = true
@@ -209,13 +224,15 @@ internal fun AdminLoadManagement(accessToken: String) {
             Text("فهرست همه بارها", style = MaterialTheme.typography.titleMedium)
             TextButton(enabled = !busy, onClick = { refresh() }) { Text("بروزرسانی") }
         }
+        JalaliDatePickerField(selectedIsoDate = historyDateFilter, onDateSelected = { historyDateFilter = it }, label = "فیلتر تاریخ سوابق")
         Text("لغو بار در این بخش به‌صورت نرم‌افزاری انجام می‌شود و سابقه آن حفظ خواهد شد.", style = MaterialTheme.typography.bodySmall)
         if (busy) CircularProgressIndicator()
-        items.forEach { item ->
+        items.filter { historyDateFilter.isBlank() || it.loadingDate == historyDateFilter }.forEach { item ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(item.origin + " ← " + item.destination, style = MaterialTheme.typography.titleMedium)
                     Text(item.cargoType + " | " + item.vehicleType + " | " + item.loadingType)
+                    Text("تاریخ بار: " + formatJalaliDate(item.loadingDate), style = MaterialTheme.typography.bodySmall)
                     Text(if (item.freightAmount == 0L) "کرایه: توافقی" else "کرایه: " + item.freightAmount + " تومان")
                     Text("وضعیت: " + adminLoadStatusLabel(item.status))
                     Text(if (item.assignedDriverId == null) "راننده: انتخاب نشده" else "راننده: اختصاص یافته")
@@ -224,7 +241,7 @@ internal fun AdminLoadManagement(accessToken: String) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(enabled = !busy && item.status == "published" && item.assignedDriverId == null, onClick = {
                             editing = item
-                            draft = AdminLoadDraft(item.destination, item.cargoType, item.vehicleType, item.loadingType, if (item.freightAmount == 0L) "" else item.freightAmount.toString(), item.description)
+                            draft = AdminLoadDraft(item.destination, item.cargoType, item.vehicleType, item.loadingType, if (item.freightAmount == 0L) "" else item.freightAmount.toString(), item.description, item.loadingDate.orEmpty())
                         }) { Text("ویرایش") }
                         Spacer(Modifier.width(4.dp))
                         TextButton(enabled = !busy && item.status == "published" && item.assignedDriverId == null, onClick = { deleting = item }) { Text("لغو بار") }
@@ -250,6 +267,7 @@ internal fun AdminLoadManagement(accessToken: String) {
                     OutlinedTextField(draft.cargoType, { draft = draft.copy(cargoType = it.take(160)) }, label = { Text("نوع بار") }, singleLine = true)
                     OutlinedTextField(draft.vehicleType, { draft = draft.copy(vehicleType = it.take(100)) }, label = { Text("نوع خودرو") }, singleLine = true)
                     OutlinedTextField(draft.loadingType, { draft = draft.copy(loadingType = it.take(40)) }, label = { Text("نوع بارگیری") }, singleLine = true)
+                    JalaliDatePickerField(selectedIsoDate = draft.loadingDate, onDateSelected = { draft = draft.copy(loadingDate = it) }, label = "تاریخ بار")
                     OutlinedTextField(draft.freightAmount, { draft = draft.copy(freightAmount = it.take(18)) }, label = { Text("کرایه تومان؛ خالی یعنی توافقی") }, singleLine = true)
                     OutlinedTextField(draft.description, { draft = draft.copy(description = it.take(3000)) }, label = { Text("توضیحات") }, minLines = 2)
                 }

@@ -160,6 +160,41 @@ Deno.serve(async(req:Request)=>{
    await admin.from("account_password_recovery_otps").update({consumed_at:new Date().toISOString()}).eq("id",row.id);
    return out({message:"رمز عبور با موفقیت بازیابی و تغییر کرد."},200,origin);
   }
+  if(action==="admin_reset_password"){
+   const bearer=req.headers.get("authorization")??"";
+   const token=bearer.replace(/^Bearer\s+/i,"").trim();
+   if(!token)return out({error:"نشست مدیر معتبر نیست؛ دوباره وارد شوید."},401,origin);
+   const {data:verified,error:verifyError}=await auth.auth.getUser(token);
+   const actor=verified.user;
+   if(verifyError||!actor?.id)return out({error:"نشست مدیر منقضی شده است."},401,origin);
+   const {data:actorAdmin,error:actorError}=await admin.from("admin_users").select("role,is_blocked").eq("user_id",actor.id).maybeSingle();
+   if(actorError||!actorAdmin||actorAdmin.role!=="super_admin"||actorAdmin.is_blocked)return out({error:"فقط مدیر ارشد اصلی مجاز به تغییر رمز کاربران است."},403,origin);
+   const targetUserId=String(b.target_user_id??"").trim();
+   const newPassword=String(b.new_password??"");
+   if(!/^[0-9a-fA-F-]{36}$/.test(targetUserId))return out({error:"شناسه کاربر معتبر نیست."},400,origin);
+   if(newPassword.length<8||newPassword.length>72)return out({error:"رمز جدید باید حداقل ۸ و حداکثر ۷۲ نویسه باشد."},400,origin);
+   const {data:targetAdmin,error:targetAdminError}=await admin.from("admin_users").select("role").eq("user_id",targetUserId).maybeSingle();
+   if(targetAdminError)return out({error:"بررسی حساب مقصد انجام نشد."},500,origin);
+   if(targetAdmin?.role==="super_admin")return out({error:"رمز حساب مدیر ارشد اصلی از این بخش قابل تغییر نیست."},403,origin);
+   const [{data:driver,error:driverError},{data:company,error:companyError}] = await Promise.all([
+    admin.from("drivers").select("id").eq("id",targetUserId).maybeSingle(),
+    admin.from("companies").select("id").eq("id",targetUserId).maybeSingle()
+   ]);
+   if(driverError||companyError)return out({error:"بررسی نوع حساب مقصد انجام نشد."},500,origin);
+   if(!targetAdmin&&!driver&&!company)return out({error:"حساب کاربری مقصد پیدا نشد."},404,origin);
+   const {data:targetResult,error:targetError}=await admin.auth.admin.getUserById(targetUserId);
+   if(targetError||!targetResult.user)return out({error:"حساب احراز هویت مقصد پیدا نشد."},404,origin);
+   const {error:passwordError}=await admin.auth.admin.updateUserById(targetUserId,{password:newPassword});
+   if(passwordError)return out({error:"تغییر رمز انجام نشد؛ رمز انتخابی را بررسی کنید."},500,origin);
+   const {error:auditError}=await admin.from("admin_audit_logs").insert({
+    actor_user_id:actor.id,
+    target_user_id:targetUserId,
+    action:"admin_reset_member_password",
+    details:{method:"primary_super_admin",password_logged:false}
+   });
+   if(auditError)return out({error:"رمز تغییر کرد اما ثبت گزارش مدیریتی انجام نشد؛ گزارش امنیتی باید بررسی شود."},500,origin);
+   return out({message:"رمز عبور کاربر با موفقیت تغییر کرد. کاربر باید با رمز جدید وارد شود."},200,origin);
+  }
   if(action==="update_profile"){
    const bearer=req.headers.get("authorization")??"";
    const token=bearer.replace(/^Bearer\s+/i,"").trim();
