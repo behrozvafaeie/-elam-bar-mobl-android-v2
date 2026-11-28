@@ -102,13 +102,13 @@ jobs:
         shell: bash
         run: |
           grep -F 'applicationId = "ir.elambar.mobl"' app/build.gradle.kts
-          grep -F 'versionCode = 50' app/build.gradle.kts
+          grep -F 'versionCode = 51' app/build.gradle.kts
           grep -F 'versionName = "1.7.4"' app/build.gradle.kts
-          awk '/^[[:space:]]*PREPARE_JSON=/ && /versionCode:50,versionName:"1.7.4"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
+          awk '/^[[:space:]]*PREPARE_JSON=/ && /versionCode:51,versionName:"1.7.4"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
           awk '/^[[:space:]]*FINALIZE_JSON=/ && /versionCode:50,versionName:"1.7.4"/ { found=1 } END { exit !found }' .github/workflows/android-apk.yml
           ! grep -E 'ELAM_TURN_(URL|USERNAME|PASSWORD)' .github/workflows/android-apk.yml
 
-      - name: Build synthetic 1.7.3-compatible baseline (same source; not historical APK)
+      - name: Build synthetic installed-1.7.4 baseline (same source; not historical APK)
         shell: bash
         run: |
           set -euo pipefail
@@ -120,9 +120,9 @@ jobs:
           from pathlib import Path
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          s = s.replace('versionCode = 50', 'versionCode = 49', 1)
-          s = s.replace('versionName = "1.7.4"', 'versionName = "1.7.3"', 1)
-          if 'versionCode = 49' not in s or 'versionName = "1.7.3"' not in s:
+          s = s.replace('versionCode = 50', 'versionCode = 50', 1)
+          s = s.replace('versionName = "1.7.4"', 'versionName = "1.7.4"', 1)
+          if 'versionCode = 50' not in s or 'versionName = "1.7.4"' not in s:
               raise SystemExit("Could not create the test baseline version metadata")
           p.write_text(s)
           PY
@@ -130,9 +130,9 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk artifacts/previous/app-debug.apk
           restore_gradle
           trap - EXIT
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging artifacts/previous/app-debug.apk | grep -F "package: name='ir.elambar.mobl' versionCode='49' versionName='1.7.3'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging artifacts/previous/app-debug.apk | grep -F "package: name='ir.elambar.mobl' versionCode='51' versionName='1.7.4'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs artifacts/previous/app-debug.apk
-          echo "Synthetic baseline is built from this exact source tree and signed by the same persistent CI key; it does not represent the historical user-installed APK."
+          echo "Synthetic 1.7.4 baseline is built from this exact source tree and signed by the same persistent CI key; it does not represent the historical user-installed APK."
 
       - name: Build debug APK (retry transient Maven errors)
         shell: bash
