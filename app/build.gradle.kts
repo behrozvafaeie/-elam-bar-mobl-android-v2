@@ -10,8 +10,8 @@ android {
         applicationId = "ir.elambar.mobl"
         minSdk = 24
         targetSdk = 35
-        versionCode = 49
-        versionName = "1.7.3"
+        versionCode = 50
+        versionName = "1.7.4"
         // Stable package identity: preserve applicationId across every update.
         // Do not embed long-lived TURN credentials in an APK. A future call release
         // must obtain short-lived TURN credentials from an authenticated server endpoint.
